@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<carrier_config>
+    <int name="qns.sos_transport_type_int" value="2" />
+    <string-array name="qns.ims_cellular_allowed_rat_string_array" num="1">
+        <item value="LTE" />
+    </string-array>
+</carrier_config>

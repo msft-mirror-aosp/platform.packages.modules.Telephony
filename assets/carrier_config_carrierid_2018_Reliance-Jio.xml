@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<carrier_config>
+    <int name="qns.sos_transport_type_int" value="2" />
+    <string-array name="qns.ims_cellular_allowed_rat_string_array" num="1">
+        <item value="LTE" />
+    </string-array>
+    <int-array name="qns.idle_eutran_rsrp_int_array" num="3">
+        <item value="65535"/>
+        <item value="65535"/>
+        <item value="-117"/>
+    </int-array>
+    <int-array name="qns.voice_eutran_rsrp_int_array" num="3">
+        <item value="-110"/>
+        <item value="-117"/>
+        <item value="-115"/>
+    </int-array>
+    <int-array name="qns.video_eutran_rsrp_int_array" num="3">
+        <item value="65535"/>
+        <item value="65535"/>
+        <item value="-117"/>
+    </int-array>
+    <int-array name="qns.idle_wifi_rssi_int_array" num="2">
+        <item value="-75"/>
+        <item value="-85"/>
+    </int-array>
+    <int-array name="qns.voice_wifi_rssi_int_array" num="2">
+        <item value="-75"/>
+        <item value="-85"/>
+    </int-array>
+    <int-array name="qns.video_wifi_rssi_int_array" num="2">
+        <item value="-75"/>
+        <item value="-85"/>
+    </int-array>
+    <int-array name="qns.ho_restrict_time_with_low_rtp_quality_int_array" num="2">
+        <item value="60000"/>
+        <item value="60000"/>
+    </int-array>
+    <boolean name="qns.roam_transport_type_selection_without_signal_strength_bool" value="true" />
+    <string-array name="qns.condition_rove_in_voice_wifi_pref_home_string_array" num="1">
+        <item value="Condition:EUTRAN_BAD"/>
+    </string-array>
+    <string-array name="qns.condition_rove_out_voice_wifi_pref_home_string_array" num="2">
+        <item value="Condition:EUTRAN_GOOD"/>
+        <item value="Condition:IWLAN_BAD,EUTRAN_TOLERABLE"/>
+    </string-array>
+    <string-array name="qns.condition_rove_out_video_wifi_pref_home_string_array" num="1">
+        <item value="Condition:IWLAN_BAD,EUTRAN_TOLERABLE"/>
+    </string-array>
+</carrier_config>
