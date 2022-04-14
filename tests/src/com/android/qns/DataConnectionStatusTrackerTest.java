@@ -76,7 +76,6 @@ public class DataConnectionStatusTrackerTest {
     @Mock protected ConnectivityManager mockConnectivityManager;
     @Mock protected SubscriptionManager mockSubscriptionManager;
     @Mock protected WifiManager mockWifiManager;
-    @Mock protected Resources mResources;
     protected DataConnectionStatusTracker mDataConnectionStatusTracker;
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = 1;
     DataConnectionChangedInfo dcStatus;
@@ -147,10 +146,6 @@ public class DataConnectionStatusTrackerTest {
         when(mContext.getSystemService(ConnectivityManager.class))
                 .thenReturn(mockConnectivityManager);
         when(mContext.getSystemService(WifiManager.class)).thenReturn(mockWifiManager);
-        when(mContext.getResources()).thenReturn(mResources);
-        when(mResources.getBoolean(
-                        com.android.internal.R.bool.config_force_enable_telephony_new_data_stack))
-                .thenReturn(true);
         ht.start();
         waitUntilReady();
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(

@@ -63,7 +63,6 @@ public abstract class QnsTest {
     @Mock protected ImsMmTelManager mockImsMmTelManager;
     @Mock protected SubscriptionInfo mockSubscriptionInfo;
     @Mock protected WifiInfo mockWifiInfo;
-    @Mock protected Resources mockResources;
 
     private boolean mReady = false;
     private boolean mNewDataStackEnabled = true;
@@ -90,8 +89,6 @@ public abstract class QnsTest {
         when(mockContext.getSystemService(CountryDetector.class)).thenReturn(mockCountryDetector);
         when(mockContext.getSharedPreferences(anyString(), anyInt()))
                 .thenReturn(mockSharedPreferences);
-
-        when(mockContext.getResources()).thenReturn(mockResources);
     }
 
     private void stubManagers() {
@@ -114,13 +111,6 @@ public abstract class QnsTest {
 
     private void stubOthers() {
         when(mockWifiInfo.getRssi()).thenReturn(-65);
-        when(mockResources.getBoolean(
-                com.android.internal.R.bool.config_force_enable_telephony_new_data_stack))
-                .thenAnswer((i) -> mNewDataStackEnabled);
-    }
-
-    protected void enableNewDataStack(boolean enable) {
-        mNewDataStackEnabled = enable;
     }
 
     private void addPermissions() {
