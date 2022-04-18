@@ -93,6 +93,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Mock private QnsProvisioningListener mQnsProvisioningListener;
     @Mock private QnsTelephonyListener qnsTelephonyListener;
     @Mock private ImsStatusListener qnsImsStatusListener;
+    @Mock private WifiBackhaulMonitor mMockWifiBackhaulMonitor;
     private AccessNetworkEvaluator ane;
     private Handler mHandler;
     private Handler mEvaluatorHandler;
@@ -148,7 +149,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
         mHandlerThread.start();
         mHandler = new AneHandler();
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
@@ -667,7 +669,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
 
         when(configManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false);
         when(configManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
@@ -779,7 +782,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
 
         ApnSetting apnSettingForCellular =
                 new ApnSetting.Builder()
@@ -825,7 +829,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
         QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
@@ -1026,7 +1031,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
 
         waitFor(100);
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
@@ -1394,7 +1400,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
         AccessNetworkEvaluator aneIms =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
@@ -1410,7 +1417,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener);
+                        qnsImsStatusListener,
+                        mMockWifiBackhaulMonitor);
 
         List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
         satisfiedAccessNetworkTypes.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);

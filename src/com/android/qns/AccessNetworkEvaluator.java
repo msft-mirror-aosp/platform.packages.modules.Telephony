@@ -63,6 +63,7 @@ public class AccessNetworkEvaluator {
     private static final int EVENT_PROVISIONING_INFO_CHANGED = EVENT_BASE + 8;
     private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
+    private static final int EVENT_WIFI_RTT_STATUS_CHANGED = EVENT_BASE + 11;
     private static final int EVALUATE_SPECIFIC_REASON_NONE = 0;
     private static final int EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE = 1;
     protected final int mSlotIndex;
@@ -82,6 +83,7 @@ public class AccessNetworkEvaluator {
     protected AlternativeEventListener mAltEventListener;
     protected QnsProvisioningListener mQnsProvisioningListener;
     protected ImsStatusListener mImsStatusListener;
+    protected WifiBackhaulMonitor mWifiBackhaulMonitor;
 
     protected int mCellularAccessNetworkType = AccessNetworkType.UNKNOWN;
     protected boolean mCellularAvailable = false;
@@ -105,6 +107,7 @@ public class AccessNetworkEvaluator {
     private Map<PreCondition, List<AccessNetworkSelectionPolicy>> mAnspPolicyMap = null;
     private ThresholdListener listener;
     private boolean mInitialized = false;
+    private boolean mIsRttCheckSuccess = false;
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();
 
@@ -139,6 +142,7 @@ public class AccessNetworkEvaluator {
                 new DataConnectionStatusTracker(
                         mContext, mHandlerThread.getLooper(), mSlotIndex, mApnType);
         mImsStatusListener = ImsStatusListener.getInstance(context, slotIndex);
+        mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(mContext, mSlotIndex);
 
         // Pre-Conditions
         mCellularNetworkStatusTracker =
@@ -184,7 +188,8 @@ public class AccessNetworkEvaluator {
             QnsEventDispatcher qnsEventDispatcher,
             AlternativeEventListener altEventListener,
             QnsProvisioningListener qnsProvisioningListener,
-            ImsStatusListener qnsImsStateListener) {
+            ImsStatusListener qnsImsStateListener,
+            WifiBackhaulMonitor wifiBackhaulMonitor) {
         LOG_TAG =
                 QnsConstants.QNS_TAG
                         + "_"
@@ -208,6 +213,7 @@ public class AccessNetworkEvaluator {
         mAltEventListener = altEventListener;
         mQnsProvisioningListener = qnsProvisioningListener;
         mImsStatusListener = qnsImsStateListener;
+        mWifiBackhaulMonitor = wifiBackhaulMonitor;
         mHandlerThread = new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mApnType);
         mHandlerThread.start();
         mHandler = new EvaluatorEventHandler(mHandlerThread.getLooper());
@@ -224,6 +230,14 @@ public class AccessNetworkEvaluator {
         mConfigManager.setQnsProvisioningInfo(mLastProvisioningInfo);
         mHandler.post(() -> buildAccessNetworkSelectionPolicy(true));
         mRestrictManager.clearRestrictions();
+        if (mApnType == ApnSetting.TYPE_IMS) {
+            if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
+                mWifiBackhaulMonitor.registerForRttStatusChange(
+                        mHandler, EVENT_WIFI_RTT_STATUS_CHANGED);
+            } else {
+                mWifiBackhaulMonitor.clearAll();
+            }
+        }
         reportQualifiedNetwork(getInitialAccessNetworkTypes());
         initLastNotifiedQualifiedNetwork();
         unregisterThresholdToQualityMonitor();
@@ -238,6 +252,7 @@ public class AccessNetworkEvaluator {
         mQualifiedNetworksChangedRegistrants.removeAll();
         mDataConnectionStatusTracker.close();
         mRestrictManager.close();
+        mWifiBackhaulMonitor.close();
     }
 
     public void registerForQualifiedNetworksChanged(Handler h, int what) {
@@ -347,6 +362,10 @@ public class AccessNetworkEvaluator {
         if (mApnType == ApnSetting.TYPE_IMS) {
             mAltEventListener.registerTryWfcConnectionStateListener(
                     mHandler, EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED, null);
+            if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
+                mWifiBackhaulMonitor.registerForRttStatusChange(
+                        mHandler, EVENT_WIFI_RTT_STATUS_CHANGED);
+            }
         }
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(
                 mHandler, EVENT_PROVISIONING_INFO_CHANGED, null, true);
@@ -379,6 +398,9 @@ public class AccessNetworkEvaluator {
         mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
         if (mApnType == ApnSetting.TYPE_IMS || mApnType == ApnSetting.TYPE_EMERGENCY) {
             mAltEventListener.unregisterCallTypeChangedListener(mApnType, mHandler);
+            if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
+                mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
+            }
         }
         if (mApnType == ApnSetting.TYPE_EMERGENCY) {
             mAltEventListener.unregisterEmergencyPreferredTransportTypeChanged();
@@ -854,6 +876,16 @@ public class AccessNetworkEvaluator {
         evaluate();
     }
 
+    private void onRttStatusChanged(boolean result) {
+        log("onRttStatusChanged status: " + result);
+        if (result != mIsRttCheckSuccess) {
+            mIsRttCheckSuccess = result;
+            if (mIsRttCheckSuccess) {
+                evaluate();
+            }
+        }
+    }
+
     protected boolean isWfcEnabled() {
 
         // TODO remove for debug logging...
@@ -1101,6 +1133,11 @@ public class AccessNetworkEvaluator {
                                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN, isAllowedForIwlan);
         log(" availability Iwlan:" + availabilityIwlan + " Cellular:" + availabilityCellular);
 
+        if (mWifiBackhaulMonitor.isRttCheckEnabled() && mApnType == ApnSetting.TYPE_IMS) {
+            mWifiBackhaulMonitor.setCellularAvailable(
+                    availabilityCellular
+                            && isAccessNetworkAllowed(mCellularAccessNetworkType, mApnType));
+        }
         // QualifiedNetworksService checks AccessNetworkSelectionPolicy only in the case both
         // networks(cellular and iwlan) are available. If only one network is available, no
         // evaluation is run. Available network of accessNetworkType will be reported immediately.
@@ -1366,6 +1403,17 @@ public class AccessNetworkEvaluator {
 
         if (equalsLastNotifiedQualifiedNetwork(supportAccessNetworkTypes)) {
             return;
+        } else {
+            if (mApnType == ApnSetting.TYPE_IMS && mWifiBackhaulMonitor.isRttCheckEnabled()) {
+                if (supportAccessNetworkTypes.contains(AccessNetworkType.IWLAN)) {
+                    if (!isRttSuccess()) {
+                        mWifiBackhaulMonitor.requestRttCheck();
+                        return;
+                    }
+                } else {
+                    mIsRttCheckSuccess = false;
+                }
+            }
         }
 
         updateLastNotifiedQualifiedNetwork(supportAccessNetworkTypes);
@@ -1528,6 +1576,11 @@ public class AccessNetworkEvaluator {
                 return AccessNetworkType.IWLAN;
         }
         return mCellularAccessNetworkType;
+    }
+
+    private boolean isRttSuccess() {
+        return !isAccessNetworkAllowed(mCellularAccessNetworkType, ApnSetting.TYPE_IMS)
+                || mIsRttCheckSuccess;
     }
 
     private List<Integer> evaluateAccessNetworkSelectionPolicy(
@@ -1812,6 +1865,9 @@ public class AccessNetworkEvaluator {
                     break;
                 case QnsEventDispatcher.QNS_EVENT_SIM_ABSENT:
                     onSimAbsent();
+                    break;
+                case EVENT_WIFI_RTT_STATUS_CHANGED:
+                    onRttStatusChanged((boolean) ar.result);
                     break;
                 default:
                     log("never reach here msg=" + message.what);
