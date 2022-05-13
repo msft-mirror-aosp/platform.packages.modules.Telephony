@@ -143,6 +143,7 @@ public class ImsStatusListenerTest extends QnsTest {
 
     @Test
     public void testNotifyImsRegistrationChangedEventOnRegistered() {
+        assertFalse(mImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
         ImsRegistrationAttributes attr =
                 new ImsRegistrationAttributes.Builder(ImsRegistrationImplBase.REGISTRATION_TECH_LTE)
                         .build();
@@ -158,6 +159,10 @@ public class ImsStatusListenerTest extends QnsTest {
         assertNotNull(bean);
         assertEquals(QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, msg.what);
         assertEquals(AccessNetworkConstants.TRANSPORT_TYPE_WWAN, bean.getTransportType());
+        assertTrue(mImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+        assertFalse(
+                mImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
     }
 
     @Test
@@ -201,5 +206,6 @@ public class ImsStatusListenerTest extends QnsTest {
         verify(mockImsMmTelManager)
                 .unregisterImsRegistrationCallback(
                         any(RegistrationManager.RegistrationCallback.class));
+        assertFalse(mImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
     }
 }

@@ -69,7 +69,6 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public class RestrictManagerTest extends QnsTest {
@@ -1421,7 +1420,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                         RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
-        mTestLooper.moveTimeForward(11000);
+        mTestLooper.moveTimeForward(10000);
         mTestLooper.dispatchAll();
         assertFalse(
                 mRestrictManager.hasRestrictionType(
@@ -1717,13 +1716,8 @@ public class RestrictManagerTest extends QnsTest {
                                 DataConnectionStatusTracker.STATE_CONNECTED,
                                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN),
                         null);
-        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
-        mLatch.await(2, TimeUnit.SECONDS);
-        Message msg = mTestLooper.nextMessage();
-        assertNotNull(msg);
-        assertNotNull(msg.obj);
-        AsyncResult ar = (AsyncResult) msg.obj;
-        assertNotNull(ar);
+        mRestrictManager.mHandler.handleMessage(
+                Message.obtain(mRestrictManager.mHandler, 3001, asyncResult));
 
         // Receive Handover started over Wwan
         asyncResult =
@@ -1734,30 +1728,12 @@ public class RestrictManagerTest extends QnsTest {
                                 DataConnectionStatusTracker.STATE_HANDOVER,
                                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN),
                         null);
-        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
-        mLatch.await(2, TimeUnit.SECONDS);
-        msg = mTestLooper.nextMessage();
-        assertNotNull(msg);
-        assertNotNull(msg.obj);
-        ar = (AsyncResult) msg.obj;
-        assertNotNull(ar);
+        mRestrictManager.mHandler.handleMessage(
+                Message.obtain(mRestrictManager.mHandler, 3001, asyncResult));
 
-        // Receive Handover Success over Wwan
-        asyncResult =
-                new AsyncResult(
-                        null,
-                        new DataConnectionStatusTracker.DataConnectionChangedInfo(
-                                EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
-                                DataConnectionStatusTracker.STATE_CONNECTED,
-                                AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
-                        null);
-        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
-        mLatch.await(2, TimeUnit.SECONDS);
-        msg = mTestLooper.nextMessage();
-        assertNotNull(msg);
-        assertNotNull(msg.obj);
-        ar = (AsyncResult) msg.obj;
-        assertNotNull(ar);
+        // start Guarding operation of Source Rat during HO in progress
+        mRestrictManager.hasRestrictionType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING);
     }
 
     @Test

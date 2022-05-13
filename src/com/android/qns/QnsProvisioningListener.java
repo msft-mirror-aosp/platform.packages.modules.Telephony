@@ -30,6 +30,8 @@ import android.telephony.ims.ProvisioningManager;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +53,8 @@ public class QnsProvisioningListener {
     private final int mSlotIndex;
     private final QnsProvisioningInfo mProvisioningInfo;
     private final QnsEventDispatcher mQnsEventDispatcher;
-    private final QnsProvisioningHandler mQnsProvisioningHandler;
+    @VisibleForTesting QnsProvisioningHandler mQnsProvisioningHandler;
+
     private final QnsProvisioningCallback mQnsProvisioningCallback;
     private final RegistrantList mRegistrantList;
     protected IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
@@ -71,7 +74,6 @@ public class QnsProvisioningListener {
         HandlerThread handlerThread = new HandlerThread(LOG_TAG);
         handlerThread.start();
         mQnsProvisioningHandler = new QnsProvisioningHandler(handlerThread.getLooper());
-
         mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotIndex);
         List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED);
@@ -426,7 +428,8 @@ public class QnsProvisioningListener {
         }
     }
 
-    private class QnsProvisioningHandler extends Handler {
+    @VisibleForTesting
+    class QnsProvisioningHandler extends Handler {
         private int mRetryRegisterProvisioningCallbackCount;
 
         public QnsProvisioningHandler(Looper looper) {

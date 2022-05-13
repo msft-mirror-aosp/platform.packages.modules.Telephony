@@ -16,10 +16,16 @@
 
 package com.android.qns;
 
+import static android.telephony.NrVopsSupportInfo.NR_STATUS_VOPS_3GPP_SUPPORTED;
+
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+import static com.android.qns.QualityMonitor.EVENT_SUBSCRIPTION_ID_CHANGED;
+
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import android.content.Context;
 import android.net.LinkProperties;
 import android.os.AsyncResult;
 import android.os.Handler;
@@ -30,6 +36,7 @@ import android.telephony.AccessNetworkConstants;
 import android.telephony.BarringInfo;
 import android.telephony.LteVopsSupportInfo;
 import android.telephony.NetworkRegistrationInfo;
+import android.telephony.NrVopsSupportInfo;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.ServiceState;
 import android.telephony.SubscriptionManager;
@@ -46,6 +53,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.util.concurrent.Executor;
 
@@ -55,6 +63,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     private static final int CONDITIONAL_BARRING_FACTOR = 100;
     private static final int CONDITIONAL_BARRING_TIME = 20;
     QnsTelephonyListener mQtListener;
+    MockitoSession mStaticMockSession;
 
     Handler h;
     HandlerThread mHandlerThread =
@@ -71,7 +80,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-
+        mStaticMockSession = mockitoSession().mockStatic(QnsUtils.class).startMocking();
         doAnswer(invocation -> null)
                 .when(mockSubscriptionManager)
                 .addOnSubscriptionsChangedListener(
@@ -85,7 +94,10 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     @After
     public void tearDown() {
-        mQtListener.close();
+        mStaticMockSession.finishMocking();
+
+        if (mQtListener != null) mQtListener.close();
+
         if (mHandlerThread != null) {
             mHandlerThread.quit();
         }
@@ -146,7 +158,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         assertFalse(qtInfo.isCoverage());
         assertFalse(qtInfo.isCellularAvailable());
 
-        testOnCellularServiceStateChanged();
+        testOnCellularServiceStateChangedWithLteVopsOnHome();
 
         qtInfo = mQtListener.getLastQnsTelephonyInfo();
         assertEquals(ServiceState.STATE_IN_SERVICE, qtInfo.getDataRegState());
@@ -192,8 +204,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         .setFailCause(27)
                         .build();
 
-        mQtListener.onPreciseDataConnectionStateChanged(connectionStateXcap);
-        mQtListener.onPreciseDataConnectionStateChanged(connectionStateIms);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionStateXcap);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionStateIms);
 
         output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
         assertNotEquals(connectionStateXcap, output);
@@ -236,18 +248,19 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         .setLinkProperties(new LinkProperties())
                         .setFailCause(0)
                         .build();
-        mQtListener.onPreciseDataConnectionStateChanged(connectedStateIms);
-        mQtListener.onPreciseDataConnectionStateChanged(handoverStateIms);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectedStateIms);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(handoverStateIms);
 
         mQtListener.close();
 
         mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
 
-        mQtListener.onPreciseDataConnectionStateChanged(handoverStateIms);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(handoverStateIms);
         output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
         assertNull(output);
 
-        mQtListener.onPreciseDataConnectionStateChanged(connectedStateIms);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectedStateIms);
+
         output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
         assertNull(output);
     }
@@ -373,6 +386,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     @Test
     public void testStartTelephonyListener() {
+        mQtListener.mSubscriptionsChangeListener.onSubscriptionsChanged();
         mQtListener.startTelephonyListener(1);
         verify(mockTelephonyManager, atLeastOnce())
                 .registerTelephonyCallback(
@@ -386,33 +400,46 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     }
 
     @Test
-    public void testOnCellularServiceStateChanged() {
-        ServiceState ss = new ServiceState();
+    public void testRegisterSubscriptionsIDChangedListener() {
+        lenient()
+                .when(QnsUtils.getSubId(isA(Context.class), anyInt()))
+                .thenReturn(-1)
+                .thenReturn(1);
+        mQtListener.registerSubscriptionIdListener(h, EVENT_SUBSCRIPTION_ID_CHANGED, null);
+        mQtListener.mSubscriptionsChangeListener.onSubscriptionsChanged();
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+
+        mQtListener.mSubscriptionsChangeListener.onSubscriptionsChanged();
+        msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(EVENT_SUBSCRIPTION_ID_CHANGED, msg.what);
+
+        mQtListener.mSubscriptionsChangeListener.onSubscriptionsChanged();
+        msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    public void testUnregisterSubscriptionsIDChanged() {
+        lenient().when(QnsUtils.getSubId(sMockContext, 0)).thenReturn(0);
+        mQtListener.registerSubscriptionIdListener(h, EVENT_SUBSCRIPTION_ID_CHANGED, null);
+        mQtListener.unregisterSubscriptionIdChanged(h);
+        mQtListener.mSubscriptionsChangeListener.onSubscriptionsChanged();
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    public void testOnCellularServiceStateChangedWithLteVopsOnHome() {
         VopsSupportInfo vopsSupportInfo =
                 new LteVopsSupportInfo(
                         LteVopsSupportInfo.LTE_STATUS_SUPPORTED,
                         LteVopsSupportInfo.LTE_STATUS_SUPPORTED);
-        NetworkRegistrationInfo nri =
-                new NetworkRegistrationInfo(
-                        NetworkRegistrationInfo.DOMAIN_PS,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                        NetworkRegistrationInfo.REGISTRATION_STATE_HOME,
-                        TelephonyManager.NETWORK_TYPE_LTE,
-                        0,
-                        false,
-                        null,
-                        null,
-                        "00101",
-                        10,
-                        false,
-                        true,
-                        true,
-                        vopsSupportInfo);
-        ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
-        ss.addNetworkRegistrationInfo(nri);
-        ss.setVoiceRegState(ServiceState.STATE_IN_SERVICE);
-
-        mQtListener.onServiceStateChanged(ss);
+        setOnCellularServiceStateChangedWithLteVopsOn(
+                vopsSupportInfo,
+                NetworkRegistrationInfo.DOMAIN_PS,
+                NetworkRegistrationInfo.REGISTRATION_STATE_HOME);
 
         assertEquals(
                 ServiceState.STATE_IN_SERVICE,
@@ -433,7 +460,137 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getVoiceBarring());
         assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsEmergencySupport());
         assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsSupport());
+    }
+
+    @Test
+    public void testOnCellularServiceStateChangedWithLteVopsOnRoam() {
+        VopsSupportInfo vopsSupportInfo =
+                new LteVopsSupportInfo(
+                        LteVopsSupportInfo.LTE_STATUS_SUPPORTED,
+                        LteVopsSupportInfo.LTE_STATUS_SUPPORTED);
+        setOnCellularServiceStateChangedWithLteVopsOn(
+                vopsSupportInfo,
+                NetworkRegistrationInfo.DOMAIN_PS,
+                NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING);
+
+        assertEquals(
+                ServiceState.STATE_IN_SERVICE,
+                mQtListener.mLastQnsTelephonyInfoIms.getDataRegState());
+        assertEquals(
+                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getDataTech());
+        assertEquals(
+                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getVoiceTech());
+        assertEquals("00101", mQtListener.mLastQnsTelephonyInfoIms.getRegisteredPlmn());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.isCoverage());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.isCellularAvailable());
+        assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getEmergencyBarring());
+        assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getVoiceBarring());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsEmergencySupport());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsSupport());
+    }
+
+    @Test
+    public void testOnCellularServiceStateChangedWithNrVopsOn() {
+        VopsSupportInfo vopsSupportInfo =
+                new NrVopsSupportInfo(
+                        NR_STATUS_VOPS_3GPP_SUPPORTED,
+                        NR_STATUS_VOPS_3GPP_SUPPORTED,
+                        NR_STATUS_VOPS_3GPP_SUPPORTED);
+        validateOnCellularServiceStateChangedWithNrVopsOn(vopsSupportInfo);
+    }
+
+    @Test
+    public void testOnCellularServiceStateChangedWithLteVopsOff() {
+        testOnCellularServiceStateChangedWithLteVopsOnHome();
+
+        // Update Vops Information
+        ServiceState ss = new ServiceState();
+        VopsSupportInfo vopsSupportInfo =
+                new LteVopsSupportInfo(
+                        LteVopsSupportInfo.LTE_STATUS_NOT_SUPPORTED,
+                        LteVopsSupportInfo.LTE_STATUS_NOT_SUPPORTED);
+        NetworkRegistrationInfo nri =
+                new NetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_PS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        NetworkRegistrationInfo.REGISTRATION_STATE_HOME,
+                        TelephonyManager.NETWORK_TYPE_LTE,
+                        0,
+                        false,
+                        null,
+                        null,
+                        "00101",
+                        10,
+                        false,
+                        true,
+                        true,
+                        vopsSupportInfo);
+        ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        ss.addNetworkRegistrationInfo(nri);
+        ss.setVoiceRegState(ServiceState.STATE_IN_SERVICE);
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsEmergencySupport());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsSupport());
+        mQtListener.mTelephonyListener.onServiceStateChanged(ss);
+
+        // Validate Vops Updated information
+        assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getVopsEmergencySupport());
+        assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getVopsSupport());
+    }
+
+    private void setOnCellularServiceStateChangedWithLteVopsOn(
+            VopsSupportInfo vopsSupportInfo, int domain, int coverage) {
+        ServiceState ss = new ServiceState();
+        NetworkRegistrationInfo nri =
+                new NetworkRegistrationInfo(
+                        domain,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        coverage,
+                        TelephonyManager.NETWORK_TYPE_LTE,
+                        0,
+                        false,
+                        null,
+                        null,
+                        "00101",
+                        10,
+                        false,
+                        true,
+                        true,
+                        vopsSupportInfo);
+        ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        ss.addNetworkRegistrationInfo(nri);
+        ss.setVoiceRegState(ServiceState.STATE_IN_SERVICE);
+        mQtListener.mTelephonyListener.onServiceStateChanged(ss);
         assertEquals(ss, mQtListener.mLastServiceState);
+    }
+
+    private void validateOnCellularServiceStateChangedWithNrVopsOn(
+            VopsSupportInfo vopsSupportInfo) {
+        ServiceState ss = new ServiceState();
+        NetworkRegistrationInfo nri =
+                new NetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_PS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        NetworkRegistrationInfo.REGISTRATION_STATE_HOME,
+                        TelephonyManager.NETWORK_TYPE_NR,
+                        0,
+                        false,
+                        null,
+                        null,
+                        "00101",
+                        10,
+                        false,
+                        true,
+                        true,
+                        vopsSupportInfo);
+        ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_NR);
+        ss.addNetworkRegistrationInfo(nri);
+        ss.setVoiceRegState(ServiceState.STATE_IN_SERVICE);
+        mQtListener.mTelephonyListener.onServiceStateChanged(ss);
+
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsEmergencySupport());
+        assertTrue(mQtListener.mLastQnsTelephonyInfoIms.getVopsSupport());
     }
 
     @Test
@@ -443,22 +600,29 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         ServiceState ss = new ServiceState();
         ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN);
         ss.setVoiceRegState(ServiceState.STATE_POWER_OFF);
-        mQtListener.onServiceStateChanged(ss);
 
+        mQtListener.mTelephonyListener.onServiceStateChanged(ss);
         assertTrue(mQtListener.isAirplaneModeEnabled());
     }
 
     @Test
     public void testIsSupportVoPS() {
         assertFalse(mQtListener.isSupportVoPS());
-        testOnCellularServiceStateChanged();
+        testOnCellularServiceStateChangedWithLteVopsOnHome();
         assertTrue(mQtListener.isSupportVoPS());
+    }
+
+    @Test
+    public void testIsSupportVopsWithNullRegistrationInfo() {
+        ServiceState ss = new ServiceState();
+        ss.addNetworkRegistrationInfo(null);
+        assertFalse(mQtListener.isSupportVoPS());
     }
 
     @Test
     public void testIsSupportEmergencyService() {
         assertFalse(mQtListener.isSupportEmergencyService());
-        testOnCellularServiceStateChanged();
+        testOnCellularServiceStateChangedWithLteVopsOnHome();
         assertTrue(mQtListener.isSupportEmergencyService());
     }
 
@@ -486,7 +650,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
         mQtListener.registerPreciseDataConnectionStateChanged(
                 ApnSetting.TYPE_XCAP, h, 1, null, false);
-        mQtListener.onPreciseDataConnectionStateChanged(connectionState);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionState);
 
         Message msg = mTestLooper.nextMessage();
         assertNull(msg); // connection state is for IMS, but XCAP registered. So not notified.
@@ -510,7 +674,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
         mQtListener.registerPreciseDataConnectionStateChanged(
                 ApnSetting.TYPE_IMS, h, 1, null, false);
-        mQtListener.onPreciseDataConnectionStateChanged(connectionState);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionState);
 
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
@@ -522,22 +686,22 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testIsVoiceBarring() {
         BarringInfo barringInfo = setupBarringInfo(true, false);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
         assertTrue(mQtListener.isVoiceBarring());
 
         barringInfo = setupBarringInfo(false, false);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
         assertFalse(mQtListener.isVoiceBarring());
     }
 
     @Test
     public void testIsEmergencyBarring() {
         BarringInfo barringInfo = setupBarringInfo(false, true);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
         assertTrue(mQtListener.isEmergencyBarring());
 
         barringInfo = setupBarringInfo(false, false);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
         assertFalse(mQtListener.isEmergencyBarring());
     }
 
@@ -546,7 +710,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(true, true);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
 
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
@@ -561,7 +725,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(true, false);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
 
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
@@ -576,7 +740,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(false, true);
-        mQtListener.onBarringInfoChanged(barringInfo);
+        mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
 
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
@@ -637,7 +801,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                     TelephonyManager.CALL_STATE_OFFHOOK
                 };
         for (int state : callStates) {
-            mQtListener.onCallStateChanged(state);
+            mQtListener.mTelephonyListener.onCallStateChanged(state);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
             assertEquals(state, (int) ((AsyncResult) msg.obj).result);
@@ -656,7 +820,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                     TelephonyManager.SRVCC_STATE_HANDOVER_CANCELED
                 };
         for (int state : srvccStates) {
-            mQtListener.onSrvccStateChanged(state);
+            mQtListener.mTelephonyListener.onSrvccStateChanged(state);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
             assertEquals(state, (int) ((AsyncResult) msg.obj).result);

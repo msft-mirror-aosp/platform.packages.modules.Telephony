@@ -129,7 +129,7 @@ public class QnsEventDispatcher {
     private Uri mWfcModeUri;
     private Uri mWfcRoamingEnabledUri;
     private Uri mWfcRoamingModeUri;
-    private UserSettingObserver mUserSettingObserver;
+    @VisibleForTesting UserSettingObserver mUserSettingObserver;
     private HandlerThread mUserSettingHandlerThread;
     boolean mLastWfcEnabledByPlatform = false;
     boolean mLastCrossSimCallingEnabled = false;
@@ -681,7 +681,8 @@ public class QnsEventDispatcher {
         }
     }
 
-    private class UserSettingObserver extends ContentObserver {
+    @VisibleForTesting
+    class UserSettingObserver extends ContentObserver {
         UserSettingObserver(Handler h) {
             super(h);
         }
@@ -693,8 +694,7 @@ public class QnsEventDispatcher {
         }
     }
 
-    @VisibleForTesting
-    synchronized void onUserSettingChanged(Uri uri) {
+    private synchronized void onUserSettingChanged(Uri uri) {
         if (mCrossSimCallingUri.equals(uri)) {
             notifyCurrentSetting(uri, false);
         } else if (mWfcEnabledUri.equals(uri)) {

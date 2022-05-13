@@ -43,6 +43,8 @@ import android.telephony.data.ApnSetting;
 import android.util.Log;
 import android.util.SparseArray;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
@@ -76,11 +78,12 @@ public class QnsTelephonyListener {
     protected HashMap<Integer, PreciseDataConnectionState> mLastPreciseDataConnectionState =
             new HashMap<>();
     private int mSubId;
-    private TelephonyListener mTelephonyListener;
+    @VisibleForTesting TelephonyListener mTelephonyListener;
     private int mCoverage;
     @Annotation.CallState private int mCallState;
 
-    private final SubscriptionManager.OnSubscriptionsChangedListener mSubscriptionsChangeListener =
+    @VisibleForTesting
+    final SubscriptionManager.OnSubscriptionsChangedListener mSubscriptionsChangeListener =
             new SubscriptionManager.OnSubscriptionsChangedListener() {
                 @Override
                 public void onSubscriptionsChanged() {

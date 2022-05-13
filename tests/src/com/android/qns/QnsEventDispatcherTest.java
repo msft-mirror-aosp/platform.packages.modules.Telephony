@@ -18,8 +18,12 @@ package com.android.qns;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -371,8 +375,6 @@ public class QnsEventDispatcherTest {
 
     @Test
     public void testNotifyImmeditatelyWfcSettingsWithDisabledStatus() {
-        lenient().when(QnsUtils.isWfcEnabledByPlatform(mMockContext, 0)).thenReturn(true);
-
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_DISABLED)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_DISABLED)))
@@ -389,6 +391,59 @@ public class QnsEventDispatcherTest {
         // WFC settings Disable Case
         verify(mMockMessage, times(1)).sendToTarget();
         verify(mMockMessage1, times(1)).sendToTarget();
+        verify(mMockMessage2, times(1)).sendToTarget();
+    }
+
+    @Test
+    public void testNotifyImmeditatelyWfcSettingsWithEnabledStatus() {
+        setEnabledStatusForWfcSettingsCrossSimSettings();
+
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED)))
+                .thenReturn(mMockMessage1);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED)))
+                .thenReturn(mMockMessage2);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // WFC settings Enabled Case
+        verify(mMockMessage, times(1)).sendToTarget();
+        verify(mMockMessage1, times(1)).sendToTarget();
+        verify(mMockMessage2, times(1)).sendToTarget();
+    }
+
+    @Test
+    public void testNotifyImmeditatelyDifferentWfcModes() {
+        setEnabledStatusForWfcSettingsCrossSimSettings();
+        lenient()
+                .when(QnsUtils.getWfcMode(isA(Context.class), anyInt(), anyBoolean()))
+                .thenReturn(1)
+                .thenReturn(2);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_CELLULAR_PREFERRED)))
+                .thenReturn(mMockMessage1);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED)))
+                .thenReturn(mMockMessage2);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_CELLULAR_PREFERRED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // WFC Modes Enabled Case
+        verify(mMockMessage, times(1)).sendToTarget();
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
+        verify(mMockMessage1, times(1)).sendToTarget();
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         verify(mMockMessage2, times(1)).sendToTarget();
     }
 
@@ -433,6 +488,59 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
+    public void testNotifyCurrentSettingWithEnabledStatus() {
+        setEnabledStatusForWfcSettingsCrossSimSettings();
+
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED)))
+                .thenReturn(mMockMessage1);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY)))
+                .thenReturn(mMockMessage4);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED)))
+                .thenReturn(mMockMessage2);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY)))
+                .thenReturn(mMockMessage5);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
+                .thenReturn(mMockMessage3);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY);
+        events.add(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
+        final Intent validCarrierIdintent =
+                new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        verify(mMockMessage, times(2)).sendToTarget();
+        verify(mMockMessage1, times(2)).sendToTarget();
+        verify(mMockMessage4, times(2)).sendToTarget();
+        verify(mMockMessage2, times(2)).sendToTarget();
+        verify(mMockMessage5, times(2)).sendToTarget();
+        verify(mMockMessage3, times(1)).sendToTarget();
+    }
+
+    private void setEnabledStatusForWfcSettingsCrossSimSettings() {
+        lenient()
+                .when(QnsUtils.isCrossSimCallingEnabled(isA(Context.class), anyInt()))
+                .thenReturn(true);
+        lenient()
+                .when(QnsUtils.isWfcEnabledByPlatform(isA(Context.class), anyInt()))
+                .thenReturn(true);
+        lenient()
+                .when(QnsUtils.isWfcEnabled(isA(Context.class), anyInt(), anyBoolean()))
+                .thenReturn(true);
+    }
+
+    @Test
     public void testUnregisterEventAndUserSettingObserver() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
                 .thenReturn(mMockMessage);
@@ -453,7 +561,7 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testOnUserSettingChanged() {
+    public void testOnUserSettingChangedEventDisableStatus() {
         when(mMockHandler.obtainMessage(
                         eq(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_DISABLED)))
                 .thenReturn(mMockMessage);
@@ -487,21 +595,74 @@ public class QnsEventDispatcherTest {
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
-        verify(mMockMessage4, times(1)).sendToTarget();
+        verify(mMockMessage4, atLeastOnce()).sendToTarget();
         verify(mMockMessage2, times(2)).sendToTarget();
-        verify(mMockMessage5, times(1)).sendToTarget();
+        verify(mMockMessage5, atLeastOnce()).sendToTarget();
         verify(mMockMessage3, times(1)).sendToTarget();
 
-        mQnsEventDispatcher.onUserSettingChanged(CROSS_SIM_URI);
-        mQnsEventDispatcher.onUserSettingChanged(WFC_ENABLED_URI);
-        mQnsEventDispatcher.onUserSettingChanged(WFC_MODE_URI);
-        mQnsEventDispatcher.onUserSettingChanged(WFC_ROAMING_ENABLED_URI);
-        mQnsEventDispatcher.onUserSettingChanged(WFC_ROAMIN_MODE_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, CROSS_SIM_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ENABLED_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_ENABLED_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMIN_MODE_URI);
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
-        verify(mMockMessage4, times(1)).sendToTarget();
+        verify(mMockMessage4, atLeastOnce()).sendToTarget();
         verify(mMockMessage2, times(2)).sendToTarget();
-        verify(mMockMessage5, times(1)).sendToTarget();
+        verify(mMockMessage5, atLeastOnce()).sendToTarget();
+    }
+
+    @Test
+    public void testOnUserSettingChangedEventEnabledStatus() {
+        setEnabledStatusForWfcSettingsCrossSimSettings();
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED)))
+                .thenReturn(mMockMessage1);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY)))
+                .thenReturn(mMockMessage4);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED)))
+                .thenReturn(mMockMessage2);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY)))
+                .thenReturn(mMockMessage5);
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
+                .thenReturn(mMockMessage3);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY);
+        events.add(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
+        final Intent validCarrierIdintent =
+                new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+
+        verify(mMockMessage, times(2)).sendToTarget();
+        verify(mMockMessage1, times(2)).sendToTarget();
+        verify(mMockMessage4, times(2)).sendToTarget();
+        verify(mMockMessage2, times(2)).sendToTarget();
+        verify(mMockMessage5, times(2)).sendToTarget();
+        verify(mMockMessage3, times(1)).sendToTarget();
+
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, CROSS_SIM_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ENABLED_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_ENABLED_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMIN_MODE_URI);
+
+        verify(mMockMessage, times(2)).sendToTarget();
+        verify(mMockMessage1, times(2)).sendToTarget();
+        verify(mMockMessage4, times(2)).sendToTarget();
+        verify(mMockMessage2, times(2)).sendToTarget();
+        verify(mMockMessage5, times(2)).sendToTarget();
     }
 }

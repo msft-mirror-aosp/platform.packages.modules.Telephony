@@ -30,6 +30,8 @@ import android.telephony.data.QualifiedNetworksService;
 import android.telephony.data.ThrottleStatus;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -127,8 +129,8 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
     public class NetworkAvailabilityProviderImpl extends NetworkAvailabilityProvider {
         private final String mLogTag;
         private final int mSlotIndex;
-        private final Handler mHandler;
-        private final Handler mConfigHandler;
+        @VisibleForTesting Handler mHandler;
+        @VisibleForTesting Handler mConfigHandler;
         private final HandlerThread mHandlerThread;
         private final HandlerThread mConfigHandlerThread;
         private boolean isQnsConfigChangeRegistered = false;

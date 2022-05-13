@@ -233,8 +233,10 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testForCallTypeChangedScenarios() {
+        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, null, 1, null);
         mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
         mListener.registerCallTypeChangedListener(ApnSetting.TYPE_EMERGENCY, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_MMS, mHandler, 1, null);
 
         // Test1:
         mAltEventProvider.notifyCallInfo(
@@ -288,8 +290,10 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testUnregisterCallTypeChangedListener() {
+        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, null, 1, null);
         mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
         mListener.registerCallTypeChangedListener(ApnSetting.TYPE_EMERGENCY, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_MMS, mHandler, 1, null);
 
         mAltEventProvider.notifyCallInfo(
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);

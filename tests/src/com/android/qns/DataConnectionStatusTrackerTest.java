@@ -80,8 +80,6 @@ public class DataConnectionStatusTrackerTest {
     protected DataConnectionStatusTracker mDataConnectionStatusTracker;
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = 1;
     DataConnectionChangedInfo dcStatus;
-    int transportType;
-    private final String LOG_TAG = DataConnectionStatusTrackerTest.class.getSimpleName();
 
     private boolean mReady = false;
     private Object mLock = new Object();
@@ -351,6 +349,45 @@ public class DataConnectionStatusTrackerTest {
     }
 
     @Test
+    public void testHandoverOnNonSrcTransportType() {
+        mReady = false;
+        validateNotConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WWAN,
+                TelephonyManager.DATA_CONNECTING,
+                TelephonyManager.NETWORK_TYPE_LTE);
+
+        validateConnectingStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WWAN,
+                TelephonyManager.DATA_CONNECTED,
+                TelephonyManager.NETWORK_TYPE_LTE);
+
+        validateConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WWAN);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTED, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_CONNECTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WLAN,
+                TelephonyManager.DATA_HANDOVER_IN_PROGRESS,
+                TelephonyManager.NETWORK_TYPE_IWLAN);
+
+        Assert.assertFalse(mDataConnectionStatusTracker.isHandoverState());
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WWAN);
+    }
+
+    @Test
     public void testOnCellularHandoverSuspended() {
         mReady = false;
         validateNotConnectedStatusChecks();
@@ -500,6 +537,40 @@ public class DataConnectionStatusTrackerTest {
     }
 
     @Test
+    public void testOnIwlanWithApnSetting() {
+        mReady = false;
+        validateNotConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+
+        loadPrecisionDataConnectionStateWithApnSetting(
+                TRANSPORT_TYPE_WLAN,
+                ApnSetting.TYPE_IMS,
+                TelephonyManager.DATA_CONNECTING,
+                TelephonyManager.NETWORK_TYPE_IWLAN);
+
+        validateConnectingStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTING, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_STARTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionStateWithApnSetting(
+                TRANSPORT_TYPE_WLAN,
+                ApnSetting.TYPE_IMS,
+                TelephonyManager.DATA_CONNECTED,
+                TelephonyManager.NETWORK_TYPE_IWLAN);
+
+        validateConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WLAN);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTED, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_CONNECTED);
+
+        validateApnSetting(TRANSPORT_TYPE_WLAN);
+    }
+
+    @Test
     public void testOnIwlanHandover() {
         mReady = false;
         validateNotConnectedStatusChecks();
@@ -646,6 +717,14 @@ public class DataConnectionStatusTrackerTest {
         validateConnectedStatusChecks();
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_WLAN);
         validateHandoverFailCause(MISSING_UNKNOWN_APN);
+        validateApnSettingForNull(TRANSPORT_TYPE_WLAN);
+    }
+
+    @Test
+    public void testInvalidDataConnectionStatusTrackerHandler() {
+        mDataConnectionStatusTracker.mHandler.handleMessage(
+                Message.obtain(mDataConnectionStatusTracker.mHandler, -1, null));
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
     }
 
     private void loadPrecisionDataConnectionState(
@@ -669,6 +748,31 @@ public class DataConnectionStatusTrackerTest {
                 new PreciseDataConnectionState.Builder()
                         .setTransportType(accessNetwork)
                         .setFailCause(failCause)
+                        .setState(telephonyState)
+                        .setNetworkType(currentRat)
+                        .build();
+        AsyncResult ar = new AsyncResult(null, dataState, null);
+        Message msg = mDataConnectionStatusTracker.mHandler.obtainMessage(11001, ar);
+        mDataConnectionStatusTracker.mHandler.handleMessage(msg);
+    }
+
+    private void loadPrecisionDataConnectionStateWithApnSetting(
+            int accessNetwork, int apnType, int telephonyState, int currentRat) {
+        ApnSetting apnSetting =
+                new ApnSetting.Builder()
+                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                        .setApnName("ims")
+                        .setEntryName("IMS")
+                        .setApnTypeBitmask(apnType)
+                        .setNetworkTypeBitmask(
+                                (int) TelephonyManager.NETWORK_STANDARDS_FAMILY_BITMASK_3GPP)
+                        .setCarrierEnabled(true)
+                        .build();
+
+        PreciseDataConnectionState dataState =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(accessNetwork)
+                        .setApnSetting(apnSetting)
                         .setState(telephonyState)
                         .setNetworkType(currentRat)
                         .build();
@@ -716,6 +820,16 @@ public class DataConnectionStatusTrackerTest {
         Assert.assertEquals(state, dcStatus.getState());
         Assert.assertEquals(transportType, dcStatus.getTransportType());
         Assert.assertEquals(event, dcStatus.getEvent());
+    }
+
+    private void validateApnSettingForNull(int transportType) {
+        ApnSetting apnSetting = mDataConnectionStatusTracker.getLastApnSetting(transportType);
+        Assert.assertNull(apnSetting);
+    }
+
+    private void validateApnSetting(int transportType) {
+        ApnSetting apnSetting = mDataConnectionStatusTracker.getLastApnSetting(transportType);
+        Assert.assertTrue(apnSetting.canHandleType(ApnSetting.TYPE_IMS));
     }
 
     @After

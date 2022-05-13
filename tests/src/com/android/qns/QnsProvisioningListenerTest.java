@@ -21,7 +21,9 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSess
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,7 +100,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
     private void captureProvisioningHandler() throws ImsException {
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
-        verify(mMockProvisioningManager)
+
+        verify(mMockProvisioningManager, atLeast(1))
                 .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
         mQnsProvisioningCallback = arg.getValue();
     }
@@ -240,6 +243,11 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
         // test clear()
         info.clear();
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        QnsEventDispatcher.QNS_EVENT_SIM_ABSENT,
+                        null));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS));
         assertNull(info.getStringItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_ENTITLEMENT_ID));
@@ -293,5 +301,55 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertTrue(
                 info3.equalsIntegerItem(
                         info1, ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE));
+    }
+
+    @Test
+    public void testUnregisterProvisioningCallback() throws ImsException {
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        QnsEventDispatcher.QNS_EVENT_SIM_LOADED,
+                        null));
+
+        ArgumentCaptor<ProvisioningManager.Callback> arg =
+                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
+        verify(mMockProvisioningManager).unregisterProvisioningChangedCallback(arg.capture());
+
+        captureProvisioningHandler();
+    }
+
+    @Test
+    public void testOnQnsConfigEventChangedEventHandler() throws ImsException {
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED,
+                        null));
+
+        ArgumentCaptor<ProvisioningManager.Callback> arg =
+                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
+        verify(mMockProvisioningManager, times(1))
+                .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
+        mQnsProvisioningCallback = arg.getValue();
+    }
+
+    @Test
+    public void testOnIwlanNetworkStatusChangedEventHandler() throws ImsException {
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(mQnsProvisioningListener.mQnsProvisioningHandler, 11002, null));
+
+        IwlanNetworkStatusTracker.IwlanAvailabilityInfo info =
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false);
+
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        11002,
+                        new AsyncResult(null, info, null)));
+        ArgumentCaptor<ProvisioningManager.Callback> arg =
+                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
+        verify(mMockProvisioningManager, times(1))
+                .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
+        mQnsProvisioningCallback = arg.getValue();
     }
 }

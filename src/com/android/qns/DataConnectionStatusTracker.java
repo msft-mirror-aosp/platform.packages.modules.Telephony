@@ -18,10 +18,7 @@ package com.android.qns;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,10 +44,6 @@ public class DataConnectionStatusTracker {
     private final int mApnType;
     @VisibleForTesting protected final Handler mHandler;
     private DataConnectionChangedInfo mLastUpdatedDcChangedInfo;
-    /*For internal test [s] This should be removed later.*/
-    private boolean mTestMode = false;
-    private int mTestHoFailMode = 0;
-    /*For internal test [e] This should be removed later.*/
     private final QnsTelephonyListener mQnsTelephonyListener;
     public static final int STATE_INACTIVE = 0;
     public static final int STATE_CONNECTING = 1;
@@ -112,73 +105,11 @@ public class DataConnectionStatusTracker {
         mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
         mQnsTelephonyListener.registerPreciseDataConnectionStateChanged(
                 mApnType, mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED, null, true);
-        /*For internal test [s] This should be removed later.*/
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("android.intent.action.QNS_DC_CHANGED");
-        mContext.registerReceiver(mIntentReceiver, intentFilter);
-        /*For internal test [e]*/
     }
 
     protected void log(String s) {
         Log.d(LOG_TAG, s);
     }
-
-    /*For internal test [s] This should be removed later.*/
-    public void notifyTransportTypeChanged(int transportType) {
-        if (!mTestMode) {
-            return;
-        }
-        log(
-                "notifyTransportTypeChanged target:"
-                        + AccessNetworkConstants.transportTypeToString(transportType)
-                        + " current:"
-                        + AccessNetworkConstants.transportTypeToString(mTransportType));
-        int prevTransportType = mTransportType;
-        if (mState == STATE_CONNECTED && transportType != mTransportType) {
-            PreciseDataConnectionState dc1 =
-                    new PreciseDataConnectionState.Builder()
-                            .setTransportType(transportType)
-                            .setState(TelephonyManager.DATA_CONNECTING)
-                            .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
-                            .build();
-            AsyncResult ar1 = new AsyncResult(null, dc1, null);
-            Message msg = mHandler.obtainMessage(EVENT_DATA_CONNECTION_STATE_CHANGED, ar1);
-            mHandler.sendMessageDelayed(msg, 300);
-            if (mTestHoFailMode == 0) {
-                PreciseDataConnectionState dc2 =
-                        new PreciseDataConnectionState.Builder()
-                                .setTransportType(transportType)
-                                .setState(TelephonyManager.DATA_CONNECTED)
-                                .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
-                                .build();
-                AsyncResult ar2 = new AsyncResult(null, dc2, null);
-                Message msg2 = mHandler.obtainMessage(EVENT_DATA_CONNECTION_STATE_CHANGED, ar2);
-                mHandler.sendMessageDelayed(msg2, 3300);
-
-                PreciseDataConnectionState dc3 =
-                        new PreciseDataConnectionState.Builder()
-                                .setTransportType(prevTransportType)
-                                .setState(TelephonyManager.DATA_DISCONNECTED)
-                                .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
-                                .build();
-                AsyncResult ar3 = new AsyncResult(null, dc3, null);
-                Message msg3 = mHandler.obtainMessage(EVENT_DATA_CONNECTION_STATE_CHANGED, ar3);
-                mHandler.sendMessageDelayed(msg3, 3800);
-            } else {
-                PreciseDataConnectionState dc4 =
-                        new PreciseDataConnectionState.Builder()
-                                .setTransportType(transportType)
-                                .setFailCause(33)
-                                .setState(TelephonyManager.DATA_DISCONNECTED)
-                                .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
-                                .build();
-                AsyncResult ar4 = new AsyncResult(null, dc4, null);
-                Message msg2 = mHandler.obtainMessage(EVENT_DATA_CONNECTION_STATE_CHANGED, ar4);
-                mHandler.sendMessageDelayed(msg2, 13300);
-            }
-        }
-    }
-    /*For internal test [e] */
 
     public boolean isInactiveState() {
         return mState == STATE_INACTIVE;
@@ -348,7 +279,6 @@ public class DataConnectionStatusTracker {
     public void close() {
         mQnsTelephonyListener.unregisterPreciseDataConnectionStateChanged(mApnType, mHandler);
         mDataConnectionStatusRegistrants.removeAll();
-        mContext.unregisterReceiver(mIntentReceiver);
     }
 
     public static String stateToString(int state) {
@@ -442,64 +372,4 @@ public class DataConnectionStatusTracker {
             }
         }
     }
-
-    /*For internal test This should be removed later.*/
-    private final BroadcastReceiver mIntentReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    String action = intent.getAction();
-                    int event = -1;
-                    log("onReceive: " + action);
-                    switch (action) {
-                        case "android.intent.action.QNS_DC_CHANGED":
-                            int apntype = intent.getIntExtra("apntype", ApnSetting.TYPE_IMS);
-                            if (apntype != mApnType) {
-                                return;
-                            }
-                            mTestHoFailMode = intent.getIntExtra("hofailmode", 0);
-                            int dctransporttype =
-                                    intent.getIntExtra(
-                                            "transport",
-                                            AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-                            mTransportType = dctransporttype;
-                            int dcevent =
-                                    intent.getIntExtra("event", EVENT_DATA_CONNECTION_DISCONNECTED);
-                            switch (dcevent) {
-                                case EVENT_DATA_CONNECTION_DISCONNECTED:
-                                    mState = STATE_INACTIVE;
-                                    break;
-                                case EVENT_DATA_CONNECTION_CONNECTED:
-                                    mState = STATE_CONNECTED;
-                                    break;
-                                case EVENT_DATA_CONNECTION_HANDOVER_STARTED:
-                                    mState = STATE_HANDOVER;
-                                    break;
-                                case EVENT_DATA_CONNECTION_HANDOVER_SUCCESS:
-                                    mState = STATE_CONNECTED;
-                                    break;
-                                case EVENT_DATA_CONNECTION_HANDOVER_FAILED:
-                                    mState = STATE_CONNECTED;
-                                    break;
-                                default:
-                                    break;
-                            }
-                            mTestMode = true;
-                            log(
-                                    "TEST: QNS_DC_CHANGED apntype:"
-                                            + apntype
-                                            + "  state:"
-                                            + mState
-                                            + "  transport:"
-                                            + dctransporttype
-                                            + "  dcevent"
-                                            + dcevent
-                                            + "  testHoFailMode:"
-                                            + mTestHoFailMode);
-                            notifyDataConnectionStatusChangedEvent(dcevent);
-                            break;
-                    }
-                }
-            };
-    /*For internal test [e]*/
 }

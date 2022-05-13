@@ -30,7 +30,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.os.AsyncResult;
 import android.os.Handler;
+import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.data.ApnSetting;
@@ -54,6 +56,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
 
     QualifiedNetworksServiceImpl mQualifiedNetworksService;
     private static final int TEST_QNS_CONFIGURATION_LOADED = 1;
+    private static final int TEST_QUALIFIED_NETWORKS_CHANGED = 2;
     private static final int TEST_QNS_CONFIGURATION_CHANGED = 2;
     MockitoSession mMockitoSession;
     @Mock private QnsCarrierConfigManager mMockConfigManager;
@@ -73,7 +76,6 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
                         .mockStatic(QnsProvisioningListener.class)
                         .startMocking();
         mQualifiedNetworksService = new QualifiedNetworksServiceImpl();
-
         Field f = QualifiedNetworksServiceImpl.class.getDeclaredField("mContext");
         f.setAccessible(true);
         f.set(mQualifiedNetworksService, sMockContext);
@@ -212,12 +214,35 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     public void testOnConfigurationChanged() {
         QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
                 mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
+        provider.mConfigHandler.handleMessage(
+                Message.obtain(provider.mConfigHandler, TEST_QNS_CONFIGURATION_LOADED, null));
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
+
         verify(mMockConfigManager)
                 .registerForConfigurationLoaded(
                         capture.capture(), eq(TEST_QNS_CONFIGURATION_LOADED));
+
         Handler configHandler = capture.getValue();
         configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_CHANGED);
-        // Yet to verity - method not implemented yet.
+        provider.mConfigHandler.handleMessage(
+                Message.obtain(provider.mConfigHandler, TEST_QNS_CONFIGURATION_CHANGED, null));
+        provider.mConfigHandler.handleMessage(
+                Message.obtain(provider.mConfigHandler, TEST_QUALIFIED_NETWORKS_CHANGED, null));
+    }
+
+    @Test
+    public void testQnsChangedHandlerEvent() {
+        QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
+                mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
+        QualifiedNetworksInfo info =
+                new QualifiedNetworksInfo(ApnSetting.TYPE_IMS, new ArrayList<>());
+        info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
+        AsyncResult ar = new AsyncResult(null, info, null);
+        provider.mHandler.handleMessage(
+                Message.obtain(provider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar));
+        assertEquals(info.getApnType(), ApnSetting.TYPE_IMS);
+        assertEquals(List.of(AccessNetworkType.EUTRAN), info.getAccessNetworkTypes());
+        provider.mHandler.handleMessage(
+                Message.obtain(provider.mHandler, TEST_QNS_CONFIGURATION_LOADED, ar));
     }
 }
