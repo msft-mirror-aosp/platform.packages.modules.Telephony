@@ -92,6 +92,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     @After
     public void tearDown() throws Exception {
         mQualifiedNetworksService.onDestroy();
+        waitFor(100); // close triggers on different thread.
         mMockitoSession.finishMocking();
     }
 

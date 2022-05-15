@@ -18,11 +18,13 @@ package com.android.qns;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,8 +38,10 @@ import android.telephony.ServiceState;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
+import android.telephony.ims.ProvisioningManager;
 
 import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
+import com.android.qns.QnsProvisioningListener.QnsProvisioningInfo;
 
 import org.junit.After;
 import org.junit.Before;
@@ -48,6 +52,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Field;
@@ -55,6 +60,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -96,11 +102,6 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private int mApnType = ApnSetting.TYPE_IMS;
     private HandlerThread mHandlerThread;
     private MockitoSession mMockitoSession;
-    private boolean mWfcPlatformEnabled = false;
-    private boolean mSettingWfcEnabled = false;
-    private boolean mSettingWfcRoamingEnabled = false;
-    private int mSettingWfcMode = QnsConstants.WIFI_PREF;
-    private int mSettingWfcRoamingMode = QnsConstants.WIFI_PREF;
 
     private class AneHandler extends Handler {
         AneHandler() {
@@ -129,7 +130,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         super.setUp();
         mHandlerThread = new HandlerThread("");
         latch = new CountDownLatch(1);
-        mMockitoSession = mockitoSession().spyStatic(QnsUtils.class).startMocking();
+        mMockitoSession = null;
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
@@ -148,34 +149,32 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsImsStatusListener);
         mHandlerThread.start();
         mHandler = new AneHandler();
-        stubStatics();
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
         verify(iwlanNetworkStatusTracker)
                 .registerIwlanNetworksChanged(anyInt(), capture.capture(), anyInt());
         mEvaluatorHandler = capture.getValue();
     }
 
-    private void stubStatics() {
-        lenient()
-                .when(QnsUtils.isWfcEnabledByPlatform(sMockContext, mSlotIndex))
-                .thenAnswer((Answer<Boolean>) invocation -> mWfcPlatformEnabled);
-        lenient()
-                .when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, false))
-                .thenAnswer((Answer<Boolean>) invocation -> mSettingWfcEnabled);
-        lenient()
-                .when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, false))
-                .thenAnswer((Answer<Integer>) invocation -> mSettingWfcMode);
-        lenient()
-                .when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, true))
-                .thenAnswer((Answer<Boolean>) invocation -> mSettingWfcRoamingEnabled);
-        lenient()
-                .when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, true))
-                .thenAnswer((Answer<Integer>) invocation -> mSettingWfcRoamingMode);
+    private void stubQnsStatics(
+            int settingWfcMode,
+            int settingWfcRoamingMode,
+            boolean wfcPlatformEnabled,
+            boolean settingWfcEnabled,
+            boolean settingWfcRoamingEnabled) {
+        when(QnsUtils.isWfcEnabledByPlatform(sMockContext, mSlotIndex))
+                .thenReturn(wfcPlatformEnabled);
+        when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, false)).thenReturn(settingWfcEnabled);
+        when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, false)).thenReturn(settingWfcMode);
+        when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, true))
+                .thenReturn(settingWfcRoamingEnabled);
+        when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, true)).thenReturn(settingWfcRoamingMode);
     }
 
     @After
     public void tearDown() throws Exception {
-        mMockitoSession.finishMocking();
+        if (mMockitoSession != null) {
+            mMockitoSession.finishMocking();
+        }
         if (ane != null) {
             ane.close();
         }
@@ -418,7 +417,13 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
         QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
                 qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
-        ane.onQnsTelephonyInfoChanged(infoIms);
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_QNS_TELEPHONY_INFO_CHANGED,
+                        new AsyncResult(null, info, null))
+                .sendToTarget();
+        waitFor(100);
+        // ane.onQnsTelephonyInfoChanged(infoIms);
 
         assertTrue(latch.await(3, TimeUnit.SECONDS));
         ArrayList<Integer> expected = new ArrayList<>();
@@ -454,10 +459,27 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnTryWfcConnectionStateChanged() {
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
         ane.onTryWfcConnectionStateChanged(true);
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
+                        new AsyncResult(null, true, null))
+                .sendToTarget();
+        waitFor(100);
         assertTrue(ane.isWfcEnabled());
         assertEquals(QnsConstants.WIFI_PREF, ane.getPreferredMode());
-        ane.onTryWfcConnectionStateChanged(false);
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
+                        new AsyncResult(null, false, null))
+                .sendToTarget();
+        waitFor(100);
         assertFalse(ane.isWfcEnabled());
         assertEquals(QnsConstants.CELL_PREF, ane.getPreferredMode());
     }
@@ -769,9 +791,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Home() throws InterruptedException {
-        mWfcPlatformEnabled = true;
-        mSettingWfcMode = QnsConstants.WIFI_PREF;
-        mSettingWfcRoamingMode = QnsConstants.WIFI_PREF;
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
+        stubQnsStatics(QnsConstants.WIFI_PREF, QnsConstants.WIFI_PREF, true, false, false);
         ane.rebuild();
         ane.onIwlanNetworkStatusChanged(
                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
@@ -799,8 +824,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Roaming() throws InterruptedException {
-        mWfcPlatformEnabled = true;
-        mSettingWfcRoamingEnabled = false;
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
         QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
         QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
                 qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
@@ -836,7 +865,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcPlatformChanged() throws InterruptedException {
-        mSettingWfcEnabled = true;
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, false, true, false);
         ane.rebuild();
         ane.onIwlanNetworkStatusChanged(
                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
@@ -866,9 +900,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcModeChanged_Home() throws Exception {
-        mSettingWfcMode = QnsConstants.CELL_PREF;
-        mWfcPlatformEnabled = true;
-        mSettingWfcEnabled = true;
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
         ane.rebuild();
         waitFor(300);
         generateAnspPolicyMap();
@@ -1009,7 +1046,6 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         ane.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
         waitFor(200);
-
         ane.reportSatisfiedAccessNetworkTypesByState(accessNetworks, true);
         assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -1068,7 +1104,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private void mockCurrentQuality(int wifi, int cellular) {
         when(wifiQualityMonitor.getCurrentQuality(anyInt(), anyInt()))
                 .thenAnswer(
-                (Answer<Integer>)
+                        (Answer<Integer>)
                     invocation -> {
                         int quality = -255;
                         switch ((int) invocation.getArgument(0)) {
@@ -1080,8 +1116,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                                 break;
                         }
                         return quality;
-                    }
-            );
+                    });
     }
 
     private List<ThresholdGroup> generateTestThresholdGroups(
@@ -1098,5 +1133,91 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         thgroups.add(new ThresholdGroup(ths));
 
         return thgroups;
+    }
+
+    @Test
+    public void testOnProvisioningInfoChanged_LTE() throws Exception {
+        QnsProvisioningInfo lastInfo = getQnsProvisioningInfo();
+        setObject(AccessNetworkEvaluator.class, "mLastProvisioningInfo", ane, lastInfo);
+
+        QnsProvisioningInfo info = getQnsProvisioningInfo();
+        ConcurrentHashMap<Integer, Integer> integerItems = getProvisioningItems();
+
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_1, -100); // bad
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_2, -120); // worst
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_3, -85); // good
+
+        // update new provisioning info
+        setObject(QnsProvisioningInfo.class, "mIntegerItems", info, integerItems);
+
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_PROVISIONING_INFO_CHANGED,
+                        new AsyncResult(null, info, null))
+                .sendToTarget();
+        waitFor(100);
+        verify(configManager, times(3)).setQnsProvisioningInfo(info);
+    }
+
+    @Test
+    public void testOnProvisioningInfoChanged_Wifi() throws Exception {
+        QnsProvisioningInfo lastInfo = getQnsProvisioningInfo();
+        setObject(AccessNetworkEvaluator.class, "mLastProvisioningInfo", ane, lastInfo);
+
+        QnsProvisioningInfo info = getQnsProvisioningInfo();
+        ConcurrentHashMap<Integer, Integer> integerItems = getProvisioningItems();
+
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_A, -75); // good
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_B, -90); // bad
+
+        // update new provisioning info
+        setObject(QnsProvisioningInfo.class, "mIntegerItems", info, integerItems);
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_PROVISIONING_INFO_CHANGED,
+                        new AsyncResult(null, info, null))
+                .sendToTarget();
+        waitFor(100);
+        verify(configManager, times(2)).setQnsProvisioningInfo(info);
+    }
+
+    @Test
+    public void testOnProvisioningInfoChanged_ePDG() throws Exception {
+        QnsProvisioningInfo lastInfo = getQnsProvisioningInfo();
+        setObject(AccessNetworkEvaluator.class, "mLastProvisioningInfo", ane, lastInfo);
+
+        QnsProvisioningInfo info = getQnsProvisioningInfo();
+        ConcurrentHashMap<Integer, Integer> integerItems = getProvisioningItems();
+        integerItems.put(ProvisioningManager.KEY_LTE_EPDG_TIMER_SEC, 10000);
+        integerItems.put(ProvisioningManager.KEY_WIFI_EPDG_TIMER_SEC, 20000);
+
+        // update new provisioning info
+        setObject(QnsProvisioningInfo.class, "mIntegerItems", info, integerItems);
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_PROVISIONING_INFO_CHANGED,
+                        new AsyncResult(null, info, null))
+                .sendToTarget();
+        waitFor(100);
+        verify(configManager, times(2)).setQnsProvisioningInfo(info);
+    }
+
+    private QnsProvisioningInfo getQnsProvisioningInfo() throws Exception {
+        QnsProvisioningInfo info = new QnsProvisioningInfo();
+        ConcurrentHashMap<Integer, Integer> integerItems = getProvisioningItems();
+        setObject(QnsProvisioningInfo.class, "mIntegerItems", info, integerItems);
+        return info;
+    }
+
+    private ConcurrentHashMap<Integer, Integer> getProvisioningItems() {
+        ConcurrentHashMap<Integer, Integer> integerItems = new ConcurrentHashMap<>();
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_1, -95); // bad
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_2, -110); // worst
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_3, -80); // good
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_A, -70); // good
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_B, -85); // bad
+        integerItems.put(ProvisioningManager.KEY_LTE_EPDG_TIMER_SEC, -80);
+        integerItems.put(ProvisioningManager.KEY_WIFI_EPDG_TIMER_SEC, -80);
+        return integerItems;
     }
 }

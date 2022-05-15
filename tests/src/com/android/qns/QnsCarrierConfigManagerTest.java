@@ -68,6 +68,7 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
+import android.telephony.ims.ProvisioningManager;
 
 import androidx.test.core.app.ApplicationProvider;
 
@@ -82,6 +83,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -1793,6 +1798,91 @@ public class QnsCarrierConfigManagerTest {
         PersistableBundle bundleNew = new PersistableBundle();
         bundleNew.putStringArray(key, new String[] {HANDOVER_POLICY_4});
         doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
+    }
+
+    @Test
+    public void testApplyProvisioningInfo() throws Exception {
+        QnsProvisioningListener.QnsProvisioningInfo info =
+                new QnsProvisioningListener.QnsProvisioningInfo();
+        ConcurrentHashMap<Integer, Integer> integerItems = new ConcurrentHashMap<>();
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_1, -95); // bad
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_2, -110); // worst
+        integerItems.put(ProvisioningManager.KEY_LTE_THRESHOLD_3, -80); // good
+
+        // update private object
+        setObject(info, "mIntegerItems", integerItems);
+
+        mConfigManager.setQnsProvisioningInfo(info);
+        QnsCarrierConfigManager.QnsConfigArray configArray =
+                new QnsCarrierConfigManager.QnsConfigArray(-90, -100, -120);
+
+        // invoke private method
+        configArray =
+                invokeApplyProvisioningInfo(
+                        configArray,
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        SIGNAL_MEASUREMENT_TYPE_RSRP,
+                        CALL_TYPE_IDLE);
+
+        assertEquals(-95, configArray.mBad);
+        assertEquals(-110, configArray.mWorst);
+        assertEquals(-80, configArray.mGood);
+
+        integerItems.clear();
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_A, -50); // good
+        integerItems.put(ProvisioningManager.KEY_WIFI_THRESHOLD_B, -70); // bad
+
+        // update private object
+        setObject(info, "mIntegerItems", integerItems);
+        mConfigManager.setQnsProvisioningInfo(info);
+
+        // invoke private method
+        configArray =
+                invokeApplyProvisioningInfo(
+                        configArray,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        CALL_TYPE_IDLE);
+        assertEquals(-70, configArray.mBad);
+        assertEquals(-50, configArray.mGood);
+
+        when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(1839);
+
+        // invoke private method
+        configArray =
+                invokeApplyProvisioningInfo(
+                        configArray,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        CALL_TYPE_VIDEO);
+        assertEquals(-70 + 5, configArray.mBad);
+        assertEquals(-50, configArray.mGood);
+    }
+
+    private void setObject(Object obj, String field, ConcurrentHashMap<Integer, Integer> value)
+            throws NoSuchFieldException, IllegalAccessException {
+        Field f = QnsProvisioningListener.QnsProvisioningInfo.class.getDeclaredField(field);
+        f.setAccessible(true);
+        f.set(obj, value);
+    }
+
+    private QnsCarrierConfigManager.QnsConfigArray invokeApplyProvisioningInfo(
+            QnsCarrierConfigManager.QnsConfigArray configArray,
+            int accessNetwork,
+            int measType,
+            int callType)
+            throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method m =
+                QnsCarrierConfigManager.class.getDeclaredMethod(
+                        "applyProvisioningInfo",
+                        QnsCarrierConfigManager.QnsConfigArray.class,
+                        int.class,
+                        int.class,
+                        int.class);
+        m.setAccessible(true);
+        return (QnsCarrierConfigManager.QnsConfigArray)
+                m.invoke(mConfigManager, configArray, accessNetwork, measType, callType);
     }
 
     @After

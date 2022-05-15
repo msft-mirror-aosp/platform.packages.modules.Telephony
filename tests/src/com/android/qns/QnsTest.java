@@ -31,7 +31,6 @@ import android.location.CountryDetector;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
-import android.os.PersistableBundle;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -42,6 +41,8 @@ import android.telephony.ims.ImsMmTelManager;
 import androidx.test.core.app.ApplicationProvider;
 
 import org.mockito.Mock;
+
+import java.lang.reflect.Field;
 
 public abstract class QnsTest {
     private static final long MAX_WAIT_TIME_MS = 10000;
@@ -148,39 +149,11 @@ public abstract class QnsTest {
         }
     }
 
-    protected PersistableBundle createBundleFor(String key, int value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putInt(key, value);
-        return bundle;
-    }
-
-    protected PersistableBundle createBundleFor(String key, int[] value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putIntArray(key, value);
-        return bundle;
-    }
-
-    protected PersistableBundle createBundleFor(String key, String value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putString(key, value);
-        return bundle;
-    }
-
-    protected PersistableBundle createBundleFor(String key, String[] value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putStringArray(key, value);
-        return bundle;
-    }
-
-    protected PersistableBundle createBundleFor(String key, boolean value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putBoolean(key, value);
-        return bundle;
-    }
-
-    protected PersistableBundle createBundleFor(String key, boolean[] value) {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putBooleanArray(key, value);
-        return bundle;
+    protected synchronized void setObject(
+            final Class c, final String field, final Object obj, final Object newValue)
+            throws Exception {
+        Field f = c.getDeclaredField(field);
+        f.setAccessible(true);
+        f.set(obj, newValue);
     }
 }
