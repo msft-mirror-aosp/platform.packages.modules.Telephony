@@ -1254,6 +1254,16 @@ public class AccessNetworkEvaluator {
                                 + " different apn over IWLAN.");
                 return true;
             }
+            if (dstAccessNetwork != AccessNetworkType.IWLAN
+                    && mCellularAvailable
+                    && mConfigManager.getRatPreference(mApnType)
+                            == QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR) {
+                // Telephony will make new connection when change transport type
+                log(
+                        "handover is not allowed. but need to move to target Transport for the"
+                                + " RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR.");
+                return true;
+            }
         }
         return false;
     }

@@ -695,9 +695,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         mQnsProvisioningListener,
                         qnsImsStatusListener);
 
-        ApnSetting apnSettingForCelluar =
+        ApnSetting apnSettingForCellular =
                 new ApnSetting.Builder()
-                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
                         .setApnName("internetmms")
                         .setEntryName("internetmms")
                         .setApnTypeBitmask(
@@ -718,9 +717,54 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(dataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         when(dataConnectionStatusTracker.getLastApnSetting(anyInt()))
-                .thenReturn(apnSettingForCelluar);
+                .thenReturn(apnSettingForCellular);
 
         assertTrue(ane.moveTransportTypeAllowed());
+    }
+
+    @Test
+    public void testRatPreferenceWifiWhenNoCellularHandoverDisallowedButMoveToCellular() {
+        ane =
+                new AccessNetworkEvaluator(
+                        mSlotIndex,
+                        ApnSetting.TYPE_XCAP,
+                        sMockContext,
+                        restrictManager,
+                        configManager,
+                        wifiQualityMonitor,
+                        cellularQualityMonitor,
+                        cellularNetworkStatusTracker,
+                        iwlanNetworkStatusTracker,
+                        dataConnectionStatusTracker,
+                        qnsEventDispatcher,
+                        altEventListener,
+                        mQnsProvisioningListener,
+                        qnsImsStatusListener);
+        QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
+        info.setCellularAvailable(true);
+        info.setCoverage(false);
+        info.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        info.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        info.setDataRegState(ServiceState.STATE_IN_SERVICE);
+
+        when(configManager.isHandoverAllowedByPolicy(
+                        ApnSetting.TYPE_XCAP,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        QnsConstants.COVERAGE_HOME))
+                .thenReturn(false);
+        when(configManager.getRatPreference(ApnSetting.TYPE_XCAP))
+                .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR);
+        when(dataConnectionStatusTracker.getLastTransportType())
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        ane.onQnsTelephonyInfoChanged(info);
+
+        assertTrue(ane.moveTransportTypeAllowed());
+
+        info.setCellularAvailable(false);
+        ane.onQnsTelephonyInfoChanged(info);
+
+        assertFalse(ane.moveTransportTypeAllowed());
     }
 
     @Test
