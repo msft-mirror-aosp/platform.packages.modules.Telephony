@@ -61,6 +61,9 @@ public class QnsUtils {
     }
 
     public static String getStringAccessNetworkTypes(List<Integer> accessNetworkTypes) {
+        if (accessNetworkTypes != null && accessNetworkTypes.size() == 0) {
+            return "[empty]";
+        }
         List<String> types = new ArrayList<>();
         for (Integer net : accessNetworkTypes) {
             types.add(AccessNetworkConstants.AccessNetworkType.toString(net));
@@ -229,6 +232,7 @@ public class QnsUtils {
     public static synchronized <T> T getDefaultValueForKey(String key) {
         switch (key) {
             case QnsCarrierConfigManager.KEY_QNS_SUPPORT_WFC_DURING_AIRPLANE_MODE_BOOL:
+            case QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL:
             case CarrierConfigManager.ImsVoice.KEY_CARRIER_VOLTE_ROAMING_AVAILABLE_BOOL:
                 return (T) Boolean.valueOf(true);
             case QnsCarrierConfigManager
@@ -354,6 +358,8 @@ public class QnsUtils {
             case QnsCarrierAnspSupportConfig.KEY_OVERRIDE_WIFI_PREF_VIDEO_WIFI_RSSI_INT_ARRAY:
             case CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY:
                 return (T) new int[] {};
+            case QnsCarrierConfigManager
+                    .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY:
             case QnsCarrierConfigManager
                     .KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY:
             case QnsCarrierConfigManager

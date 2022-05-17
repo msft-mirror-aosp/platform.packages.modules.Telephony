@@ -76,6 +76,7 @@ public class QnsProvisioningListener {
         List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED);
         events.add(QnsEventDispatcher.QNS_EVENT_SIM_ABSENT);
+        events.add(QnsEventDispatcher.QNS_EVENT_SIM_LOADED);
         mQnsEventDispatcher.registerEvent(events, mQnsProvisioningHandler);
 
         registerProvisioningCallback();
@@ -450,6 +451,12 @@ public class QnsProvisioningListener {
                 case QnsEventDispatcher.QNS_EVENT_SIM_ABSENT:
                     log("clear last Provisioning Info.");
                     clearLastProvisioningInfo();
+                    break;
+                case QnsEventDispatcher.QNS_EVENT_SIM_LOADED:
+                    log("re-register Provisioning Callback");
+                    unregisterProvisioningCallback();
+                    resetRetryRegisterProvisioningCallbackCount();
+                    registerProvisioningCallback();
                     break;
                 case EVENT_IWLAN_NETWORK_STATUS_CHANGED:
                     log("iwlan network state changed.");

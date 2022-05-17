@@ -161,8 +161,13 @@ public class AccessNetworkSelectionPolicyBuilder {
 
     public static synchronized Map<PreCondition, List<AccessNetworkSelectionPolicy>> build(
             Context context, int slotIndex, int apnType) {
-        AccessNetworkSelectionPolicyBuilder builder =
-                new AccessNetworkSelectionPolicyBuilder(context, slotIndex, apnType);
+        AccessNetworkSelectionPolicyBuilder builder;
+        QnsCarrierConfigManager cm = QnsCarrierConfigManager.getInstance(context, slotIndex);
+        if (cm.isOverrideImsPreferenceSupported()) {
+            builder = new AnspImsPreferModePolicyBuilder(context, slotIndex, apnType);
+        } else {
+            builder = new AccessNetworkSelectionPolicyBuilder(context, slotIndex, apnType);
+        }
         return builder.buildAnsp();
     }
 
@@ -426,6 +431,9 @@ public class AccessNetworkSelectionPolicyBuilder {
                         preCondition.getCallType(),
                         anspItem.getMeasurementType(),
                         preCondition.getPreference());
+        if (thresholds == null) {
+            return QnsConfigArray.INVALID;
+        }
         switch (anspItem.getQualityType()) {
             case GOOD:
                 return thresholds.mGood;

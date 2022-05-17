@@ -17,6 +17,7 @@ package com.android.qns;
 
 import android.content.Context;
 import android.os.AsyncResult;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -64,7 +65,7 @@ public class CellularQualityMonitor extends QualityMonitor {
     private final String mTag;
     private final Handler handler;
     private TelephonyManager mTelephonyManager;
-    private final int mSubId;
+    private int mSubId;
     private final int mSlotIndex;
     private boolean mIsQnsListenerRegistered;
     private static final SparseArray<CellularQualityMonitor> sCellularQualityMonitors =
@@ -98,6 +99,8 @@ public class CellularQualityMonitor extends QualityMonitor {
         handler = new CellularEventsHandler(handlerThread.getLooper());
         mTelephonyManager = mContext.getSystemService(TelephonyManager.class);
         mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
+        mQnsTelephonyListener.registerSubscriptionIdListener(
+                handler, EVENT_SUBSCRIPTION_ID_CHANGED, null);
         if (mTelephonyManager != null) {
             mTelephonyManager = mTelephonyManager.createForSubscriptionId(mSubId);
         } else {
@@ -149,7 +152,12 @@ public class CellularQualityMonitor extends QualityMonitor {
 
         /** Register a TelephonyCallback for this listener. */
         public void register() {
-            mTelephonyManager.registerTelephonyCallback(mExecutor, this);
+            long identity = Binder.clearCallingIdentity();
+            try {
+                mTelephonyManager.registerTelephonyCallback(mExecutor, this);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
         }
 
         /** Unregister a TelephonyCallback for this listener. */
@@ -248,8 +256,8 @@ public class CellularQualityMonitor extends QualityMonitor {
     public synchronized int getCurrentQuality(int accessNetwork, int measurementType) {
         SignalStrength ss = mTelephonyManager.getSignalStrength();
         int quality = SignalStrength.INVALID; // Int Max Value
-        List<CellSignalStrength> cellSignalStrengthList = ss.getCellSignalStrengths();
-        if (!cellSignalStrengthList.isEmpty()) {
+        if (ss != null) {
+            List<CellSignalStrength> cellSignalStrengthList = ss.getCellSignalStrengths();
             for (CellSignalStrength cs : cellSignalStrengthList) {
                 quality = getSignalStrength(accessNetwork, measurementType, cs);
                 if (quality != CellInfo.UNAVAILABLE) {
@@ -578,6 +586,15 @@ public class CellularQualityMonitor extends QualityMonitor {
                     mWaitingThresholds.put(key, false);
                     // check and notify current thresholds info
                     checkAndNotifySignalStrength(key);
+                    break;
+                case EVENT_SUBSCRIPTION_ID_CHANGED:
+                    ar = (AsyncResult) msg.obj;
+                    int newSubId = (int) ar.result;
+                    clearOldRequests();
+                    mSubId = newSubId;
+                    mTelephonyManager =
+                            mContext.getSystemService(TelephonyManager.class)
+                                    .createForSubscriptionId(mSubId);
                     break;
                 default:
                     Log.d(mTag, "Not Handled !");

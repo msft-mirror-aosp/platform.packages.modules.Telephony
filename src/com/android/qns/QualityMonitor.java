@@ -38,6 +38,7 @@ public abstract class QualityMonitor {
     protected static final int EVENT_WIFI_RSSI_CHANGED = BASE + 2;
     protected static final int EVENT_WIFI_STATE_CHANGED = BASE + 3;
     protected static final int EVENT_WIFI_NOTIFY_TIMER_EXPIRED = BASE + 4;
+    protected static final int EVENT_SUBSCRIPTION_ID_CHANGED = BASE + 5;
 
     protected static final int BACKHAUL_TIMER_DEFAULT = 3000;
 

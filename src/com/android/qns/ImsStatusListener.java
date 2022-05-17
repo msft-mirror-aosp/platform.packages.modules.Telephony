@@ -91,7 +91,8 @@ public class ImsStatusListener {
         }
     }
 
-    private final RegistrationManager.RegistrationCallback mImsRegistrationCallback =
+    @VisibleForTesting
+    final RegistrationManager.RegistrationCallback mImsRegistrationCallback =
             new RegistrationManager.RegistrationCallback() {
                 @Override
                 public void onRegistered(ImsRegistrationAttributes attribute) {

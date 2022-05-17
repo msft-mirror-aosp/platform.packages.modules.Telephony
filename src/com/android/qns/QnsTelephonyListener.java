@@ -56,6 +56,8 @@ public class QnsTelephonyListener {
 
     private static final SparseArray<QnsTelephonyListener> sQnsTelephonyListener =
             new SparseArray<>();
+    private static final Archiving<PreciseDataConnectionState>
+            sArchivingPreciseDataConnectionState = new Archiving<>();
     private final String LOG_TAG;
     private final int mSlotIndex;
     private final Context mContext;
@@ -64,6 +66,8 @@ public class QnsTelephonyListener {
     private final HandlerThread mHandlerThread;
     public RegistrantList mCallStateListener = new RegistrantList();
     public RegistrantList mSrvccStateListener = new RegistrantList();
+    public RegistrantList mSubscriptionIdListener = new RegistrantList();
+    public RegistrantList mIwlanServiceStateListener = new RegistrantList();
     protected HashMap<Integer, RegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
     protected HashMap<Integer, RegistrantList> mApnTypeRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
@@ -81,12 +85,11 @@ public class QnsTelephonyListener {
                 @Override
                 public void onSubscriptionsChanged() {
                     int newSubId = QnsUtils.getSubId(mContext, mSlotIndex);
-                    if (mSubId != newSubId) {
+                    if ((mSubId != newSubId)
+                            && (newSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID)) {
                         stopTelephonyListener(mSubId); // old
                         mSubId = newSubId;
-                        if (newSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                            cleanupQnsTelephonyListenerSettings();
-                        }
+                        onSubscriptionIdChanged(newSubId);
                         startTelephonyListener(newSubId); // new
                     }
                 }
@@ -156,6 +159,10 @@ public class QnsTelephonyListener {
         }
     }
 
+    protected void notifyIwlanServiceStateInfo(boolean isInService) {
+        mIwlanServiceStateListener.notifyResult(isInService);
+    }
+
     protected void notifyPreciseDataConnectionStateChanged(
             PreciseDataConnectionState connectionState) {
         List<Integer> apnTypes = connectionState.getApnSetting().getApnTypes();
@@ -165,6 +172,8 @@ public class QnsTelephonyListener {
                 PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(apnType);
                 if (lastState == null || !lastState.equals(connectionState)) {
                     mLastPreciseDataConnectionState.put(apnType, connectionState);
+                    sArchivingPreciseDataConnectionState.put(
+                            mSubId, connectionState.getTransportType(), apnType, connectionState);
                     RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
                     if (apnTypeRegistrantList != null) {
                         apnTypeRegistrantList.notifyRegistrants(ar);
@@ -276,6 +285,36 @@ public class QnsTelephonyListener {
     }
 
     /**
+     * Register an event for subscription Id changed.
+     *
+     * @param h the Handler to get event.
+     * @param what the event.
+     * @param userObj user object.
+     */
+    public void registerSubscriptionIdListener(Handler h, int what, Object userObj) {
+        log("registerSubscriptionIdListener");
+        if (h != null) {
+            Registrant r = new Registrant(h, what, userObj);
+            mSubscriptionIdListener.add(r);
+        }
+    }
+
+    /**
+     * Register an event for iwlan service state changed.
+     *
+     * @param h the Handler to get event.
+     * @param what the event.
+     * @param userObj user object.
+     */
+    public void registerIwlanServiceStateListener(Handler h, int what, Object userObj) {
+        log("registerIwlanServiceStateListener");
+        if (h != null) {
+            Registrant r = new Registrant(h, what, userObj);
+            mIwlanServiceStateListener.add(r);
+        }
+    }
+
+    /**
      * Unregister an event for QnsTelephonyInfo changed.
      *
      * @param apnType the apn type to be notified.
@@ -328,12 +367,34 @@ public class QnsTelephonyListener {
         }
     }
 
+    /**
+     * Unregister an event for subscription Id changed.
+     *
+     * @param h the handler to get event.
+     */
+    public void unregisterSubscriptionIdChanged(Handler h) {
+        if (h != null) {
+            mSubscriptionIdListener.remove(h);
+        }
+    }
+
+    /**
+     * Unregister an event for iwlan service state changed.
+     *
+     * @param h the handler to get event.
+     */
+    public void unregisterIwlanServiceStateChanged(Handler h) {
+        if (h != null) {
+            mIwlanServiceStateListener.remove(h);
+        }
+    }
+
     private void createTelephonyListener() {
         if (mTelephonyListener == null) {
             mTelephonyListener = new TelephonyListener(mContext.getMainExecutor());
             mTelephonyListener.setServiceStateListener(
                     (ServiceState serviceState) -> {
-                        onCellularServiceStateChanged(serviceState);
+                        onServiceStateChanged(serviceState);
                     });
             mTelephonyListener.setPreciseDataConnectionStateListener(
                     (PreciseDataConnectionState connectionState) -> {
@@ -358,10 +419,14 @@ public class QnsTelephonyListener {
         if (mTelephonyListener == null) {
             return;
         }
-        mTelephonyListener.unregister(mContext, subId);
+        mTelephonyListener.unregister(subId);
+        cleanupQnsTelephonyListenerSettings();
     }
 
     protected void startTelephonyListener(int subId) {
+        if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+            return;
+        }
         if (mTelephonyListener == null) {
             createTelephonyListener();
         }
@@ -378,14 +443,30 @@ public class QnsTelephonyListener {
         mCallState = QnsConstants.CALL_TYPE_IDLE;
     }
 
-    protected void onCellularServiceStateChanged(ServiceState serviceState) {
+    protected void onServiceStateChanged(ServiceState serviceState) {
         QnsTelephonyInfo newInfo = new QnsTelephonyInfo(mLastQnsTelephonyInfo);
 
-        NetworkRegistrationInfo newNrs =
+        NetworkRegistrationInfo newIwlanNrs =
+                serviceState.getNetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_PS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        NetworkRegistrationInfo oldIwlanNrs =
+                mLastServiceState.getNetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_PS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+        if ((newIwlanNrs != null)
+                && (oldIwlanNrs != null)
+                && (newIwlanNrs.isInService() != oldIwlanNrs.isInService())) {
+            log("Iwlan is in service: " + newIwlanNrs.isInService());
+            notifyIwlanServiceStateInfo(newIwlanNrs.isInService());
+        }
+
+        NetworkRegistrationInfo newWwanNrs =
                 serviceState.getNetworkRegistrationInfo(
                         NetworkRegistrationInfo.DOMAIN_PS,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-        NetworkRegistrationInfo oldNrs =
+        NetworkRegistrationInfo oldWwanNrs =
                 mLastServiceState.getNetworkRegistrationInfo(
                         NetworkRegistrationInfo.DOMAIN_PS,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
@@ -397,23 +478,25 @@ public class QnsTelephonyListener {
         // Event for cellular data tech changed
         int dataTech = ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN;
         int dataRegState = ServiceState.STATE_OUT_OF_SERVICE;
-        if (newNrs != null) {
+        if (newWwanNrs != null) {
             newInfo.setDataTech(
                     ServiceState.networkTypeToRilRadioTechnology(
-                            newNrs.getAccessNetworkTechnology()));
-            newInfo.setDataRegState(registrationStateToServiceState(newNrs.getRegistrationState()));
+                            newWwanNrs.getAccessNetworkTechnology()));
+            newInfo.setDataRegState(
+                    registrationStateToServiceState(newWwanNrs.getRegistrationState()));
         }
 
         // Event for cellular data roaming registration state changed.
-        if (newNrs != null) {
-            if (newNrs.getRegistrationState() == NetworkRegistrationInfo.REGISTRATION_STATE_HOME) {
+        if (newWwanNrs != null) {
+            if (newWwanNrs.getRegistrationState()
+                    == NetworkRegistrationInfo.REGISTRATION_STATE_HOME) {
                 mCoverage = QnsConstants.COVERAGE_HOME;
-            } else if (newNrs.getRegistrationState()
+            } else if (newWwanNrs.getRegistrationState()
                     == NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING) {
                 mCoverage = QnsConstants.COVERAGE_ROAM;
-                newInfo.setRoamingType(newNrs.getRoamingType());
+                newInfo.setRoamingType(newWwanNrs.getRoamingType());
             }
-            newInfo.setRegisteredPlmn(newNrs.getRegisteredPlmn());
+            newInfo.setRegisteredPlmn(newWwanNrs.getRegisteredPlmn());
             newInfo.setCoverage(mCoverage == QnsConstants.COVERAGE_ROAM);
         } else {
             newInfo.setRegisteredPlmn(null);
@@ -423,17 +506,18 @@ public class QnsTelephonyListener {
         boolean hasAirplaneModeOnChanged =
                 mLastServiceState.getVoiceRegState() != ServiceState.STATE_POWER_OFF
                         && serviceState.getVoiceRegState() == ServiceState.STATE_POWER_OFF;
-        if ((oldNrs == null || !oldNrs.isInService() || hasAirplaneModeOnChanged)
-                && (newNrs != null && newNrs.isInService())) {
+        if ((oldWwanNrs == null || !oldWwanNrs.isInService() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isInService())) {
             newInfo.setCellularAvailable(true);
         }
-        if ((oldNrs != null && oldNrs.isInService()) && (newNrs == null || !newNrs.isInService())) {
+        if ((oldWwanNrs != null && oldWwanNrs.isInService())
+                && (newWwanNrs == null || !newWwanNrs.isInService())) {
             newInfo.setCellularAvailable(false);
         }
 
         // Event for VOPS changed
-        boolean vopsSupport = isSupportVoPS(newNrs);
-        boolean vopsEmergencySupport = isSupportEmergencyService(newNrs);
+        boolean vopsSupport = isSupportVoPS(newWwanNrs);
+        boolean vopsEmergencySupport = isSupportEmergencyService(newWwanNrs);
         boolean vopsSupportChanged = vopsSupport != mLastQnsTelephonyInfoIms.getVopsSupport();
         boolean vopsEmergencySupportChanged =
                 vopsEmergencySupport != mLastQnsTelephonyInfoIms.getVopsEmergencySupport();
@@ -536,8 +620,33 @@ public class QnsTelephonyListener {
     }
 
     protected void onPreciseDataConnectionStateChanged(PreciseDataConnectionState connectionState) {
+        if (!validatePreciseDataConnectionStateChanged(connectionState)) {
+            log("invalid onPreciseDataConnectionStateChanged:" + connectionState);
+            return;
+        }
         log("onPreciseDataConnectionStateChanged state:" + connectionState);
         notifyPreciseDataConnectionStateChanged(connectionState);
+    }
+
+    private boolean validatePreciseDataConnectionStateChanged(PreciseDataConnectionState newState) {
+        try {
+            if (newState.getState() == TelephonyManager.DATA_CONNECTED
+                    || newState.getState() == TelephonyManager.DATA_HANDOVER_IN_PROGRESS) {
+                for (int apnType : newState.getApnSetting().getApnTypes()) {
+                    PreciseDataConnectionState lastState =
+                            getLastPreciseDataConnectionState(apnType);
+                    PreciseDataConnectionState archiveState =
+                            sArchivingPreciseDataConnectionState.get(
+                                    mSubId, newState.getTransportType(), apnType);
+                    if (archiveState.equals(newState) && lastState == null) {
+                        return false;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log("got Exception in validatePreciseDataConnectionStateChanged:" + e);
+        }
+        return true;
     }
 
     public boolean isVoiceBarring() {
@@ -589,6 +698,10 @@ public class QnsTelephonyListener {
         mSrvccStateListener.notifyResult(srvccState);
     }
 
+    protected void onSubscriptionIdChanged(int subId) {
+        mSubscriptionIdListener.notifyResult(subId);
+    }
+
     protected void log(String s) {
         Log.d(LOG_TAG, s);
     }
@@ -596,7 +709,9 @@ public class QnsTelephonyListener {
     public void close() {
         mSubscriptionManager.removeOnSubscriptionsChangedListener(mSubscriptionsChangeListener);
         mHandlerThread.quitSafely();
-        mTelephonyListener.unregister(mContext, mSubId);
+        if (mTelephonyListener != null) {
+            mTelephonyListener.unregister(mSubId);
+        }
         mApnTypeRegistrantMap.clear();
         mQnsTelephonyInfoRegistrantMap.clear();
         mLastPreciseDataConnectionState.clear();
@@ -606,7 +721,7 @@ public class QnsTelephonyListener {
     /** Listener for change of service state. */
     protected interface OnServiceStateListener {
         /** Notify the cellular service state changed. */
-        void onCellularServiceStateChanged(ServiceState serviceState);
+        void onServiceStateChanged(ServiceState serviceState);
     }
 
     /** Listener for change of precise data connection state. */
@@ -628,6 +743,24 @@ public class QnsTelephonyListener {
     protected interface OnSrvccStateListener {
         /** Notify the Call state changed. */
         void onSrvccStateChanged(@Annotation.SrvccState int state);
+    }
+
+    protected static class Archiving<V> {
+        protected HashMap<String, V> mArchiving = new HashMap<>();
+
+        public Archiving() {}
+
+        private String getKey(int subId, int transportType, int apnType) {
+            return subId + "_" + transportType + "_" + apnType;
+        }
+
+        public void put(int subId, int transportType, int apnType, V v) {
+            mArchiving.put(getKey(subId, transportType, apnType), v);
+        }
+
+        public V get(int subId, int transportType, int apnType) {
+            return mArchiving.get(getKey(subId, transportType, apnType));
+        }
     }
 
     public class QnsTelephonyInfoIms extends QnsTelephonyInfo {
@@ -850,6 +983,7 @@ public class QnsTelephonyListener {
         private OnBarringInfoListener mBarringInfoListener;
         private OnCallStateListener mCallStateListener;
         private OnSrvccStateListener mSrvccStateListener;
+        private TelephonyManager mTelephonyManager;
 
         public TelephonyListener(Executor executor) {
             super();
@@ -885,11 +1019,15 @@ public class QnsTelephonyListener {
          */
         public void register(Context context, int subId) {
             log("register TelephonyCallback for sub:" + subId);
-            TelephonyManager telephonyManager =
-                    context.getSystemService(TelephonyManager.class).createForSubscriptionId(subId);
             long identity = Binder.clearCallingIdentity();
             try {
-                telephonyManager.registerTelephonyCallback(mExecutor, this);
+                mTelephonyManager =
+                        context.getSystemService(TelephonyManager.class)
+                                .createForSubscriptionId(subId);
+                mTelephonyManager.registerTelephonyCallback(
+                        TelephonyManager.INCLUDE_LOCATION_DATA_NONE, mExecutor, this);
+            } catch (NullPointerException e) {
+                log("got NullPointerException e:" + e);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -898,20 +1036,17 @@ public class QnsTelephonyListener {
         /**
          * Unregister a TelephonyCallback for this listener.
          *
-         * @param context the Context
          * @param subId the subscription id.
          */
-        public void unregister(Context context, int subId) {
+        public void unregister(int subId) {
             log("unregister TelephonyCallback for sub:" + subId);
-            TelephonyManager telephonyManager =
-                    context.getSystemService(TelephonyManager.class).createForSubscriptionId(subId);
-            telephonyManager.unregisterTelephonyCallback(this);
+            mTelephonyManager.unregisterTelephonyCallback(this);
         }
 
         @Override
         public void onServiceStateChanged(ServiceState serviceState) {
             if (mServiceStateListener != null) {
-                mServiceStateListener.onCellularServiceStateChanged(serviceState);
+                mServiceStateListener.onServiceStateChanged(serviceState);
             }
         }
 

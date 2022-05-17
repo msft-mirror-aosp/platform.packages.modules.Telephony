@@ -1,5 +1,12 @@
 package com.android.qns;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.os.HandlerThread;
@@ -12,6 +19,7 @@ import android.telephony.CellSignalStrengthTdscdma;
 import android.telephony.CellSignalStrengthWcdma;
 import android.telephony.SignalStrength;
 import android.telephony.SignalThresholdInfo;
+import android.telephony.TelephonyCallback;
 import android.telephony.data.ApnSetting;
 
 import org.junit.After;
@@ -20,6 +28,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
@@ -27,6 +36,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public final class CellularQualityMonitorTest extends QnsTest {
@@ -37,6 +47,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
     Threshold th1[];
     Threshold th2[];
     Threshold th3[] = new Threshold[1];
+    Threshold[] mOutputThs;
     CountDownLatch latch;
     ThresholdListener mThresholdListener;
 
@@ -49,6 +60,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
         @Override
         public void onCellularThresholdChanged(Threshold[] thresholds) {
+            mOutputThs = thresholds;
             latch.countDown();
         }
     }
@@ -63,7 +75,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                     mCellularQualityMonitor =
                             (CellularQualityMonitor)
                                     QualityMonitor.getInstance(
-                                            mockContext,
+                                            sMockContext,
                                             AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                                             slotIndex);
                     setReady(true);
@@ -450,15 +462,195 @@ public final class CellularQualityMonitorTest extends QnsTest {
                 mThresholdListener, apnType1, new Threshold[] {th1[0]}, slotIndex);
         List<SignalThresholdInfo> signalThresholdInfoList =
                 mCellularQualityMonitor.getSignalThresholdInfo();
-        Assert.assertNotNull(signalThresholdInfoList);
+        assertNotNull(signalThresholdInfoList);
         SignalThresholdInfo stInfo = signalThresholdInfoList.get(0);
         Assert.assertEquals(waitTime, stInfo.getHysteresisMs());
 
         mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th2);
         signalThresholdInfoList = mCellularQualityMonitor.getSignalThresholdInfo();
-        Assert.assertNotNull(signalThresholdInfoList);
+        assertNotNull(signalThresholdInfoList);
         stInfo = signalThresholdInfoList.get(0);
         Assert.assertEquals(0, stInfo.getHysteresisMs());
+    }
+
+    @Test
+    public void testOnSignalStrengthsChanged_Matching() throws InterruptedException {
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP,
+                            -117,
+                            QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.registerThresholdChange(
+                mThresholdListener, apnType1, th1, slotIndex);
+        ArgumentCaptor<TelephonyCallback> capture =
+                ArgumentCaptor.forClass(TelephonyCallback.class);
+        verify(mockTelephonyManager)
+                .registerTelephonyCallback(isA(Executor.class), capture.capture());
+        TelephonyCallback.SignalStrengthsListener callback =
+                (TelephonyCallback.SignalStrengthsListener) capture.getValue();
+        assertNotNull(callback);
+
+        ArrayList<Byte> NrCqiReport = new ArrayList<>(Arrays.asList((byte) 3, (byte) 2, (byte) 1));
+        SignalStrength ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(-93, -132, -89, -125, 5),
+                        new CellSignalStrengthGsm(-79, 2, 5),
+                        new CellSignalStrengthWcdma(-94, 4, -102, -5),
+                        new CellSignalStrengthTdscdma(-95, 2, -103), // not using Tdscdma
+                        new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        verifyReportedThreshold(-91);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.UTRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP,
+                            -90,
+                            QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        verifyReportedThreshold(-102);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.GERAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                            -70,
+                            QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        verifyReportedThreshold(-79);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.NGRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP,
+                            -90,
+                            QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        verifyReportedThreshold(-80);
+    }
+
+    private void verifyReportedThreshold(int expected) throws InterruptedException {
+        assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(mOutputThs.length > 0);
+        assertEquals(expected, mOutputThs[0].getThreshold());
+    }
+
+    @Test
+    public void testOnSignalStrengthsChanged_NotMatching() throws InterruptedException {
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP,
+                            -90,
+                            QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.registerThresholdChange(
+                mThresholdListener, apnType1, th1, slotIndex);
+        ArgumentCaptor<TelephonyCallback> capture =
+                ArgumentCaptor.forClass(TelephonyCallback.class);
+        verify(mockTelephonyManager)
+                .registerTelephonyCallback(isA(Executor.class), capture.capture());
+        TelephonyCallback.SignalStrengthsListener callback =
+                (TelephonyCallback.SignalStrengthsListener) capture.getValue();
+        assertNotNull(callback);
+
+        ArrayList<Byte> NrCqiReport = new ArrayList<>(Arrays.asList((byte) 3, (byte) 2, (byte) 1));
+        SignalStrength ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(-93, -132, -89, -125, 5),
+                        new CellSignalStrengthGsm(-79, 2, 5),
+                        new CellSignalStrengthWcdma(-94, 4, -102, -5),
+                        new CellSignalStrengthTdscdma(-95, 2, -103), // not using Tdscdma
+                        new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertNull(mOutputThs);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.UTRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP,
+                            -105,
+                            QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertNull(mOutputThs);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.GERAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                            -70,
+                            QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertNull(mOutputThs);
+
+        th1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.NGRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP,
+                            -81,
+                            QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+
+        latch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertNull(mOutputThs);
     }
 
     @After

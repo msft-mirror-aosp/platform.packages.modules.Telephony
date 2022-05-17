@@ -106,6 +106,8 @@ public class QnsConstants {
 
     public static final int MAX_COUNT_INVALID = -1;
 
+    public static final int MIN_THRESHOLD_GAP = 3;
+
     public static final int WIFI_ONLY = ImsMmTelManager.WIFI_MODE_WIFI_ONLY;
     public static final int WIFI_PREF = ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
     public static final int CELL_PREF = ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED;

@@ -27,7 +27,6 @@ import static com.android.qns.QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.content.Context;
 import android.hardware.radio.V1_5.ApnTypes;
 import android.os.Handler;
@@ -71,7 +70,7 @@ public class QnsCarrierConfigManager {
 
     /**
      * Keys supporting the configurations to support ANE in HO decision and Access Network
-     * candidate
+     * candidating
      */
 
     /**
@@ -211,17 +210,26 @@ public class QnsCarrierConfigManager {
             "qns.block_iwlan_in_international_roaming_without_wwan_bool";
 
     /**
+     * Boolean indicating if to block IWLAN when UE is connected to IPv6 only WiFi AP. The setting
+     * may only apply on Android T. For Android U onwards, we may support a carrier config at IWLAN
+     * if we still encounter any issues for IPv6 WFC. By default this value is {@code true}.
+     */
+    public static final String KEY_BLOCK_IPV6_ONLY_WIFI_BOOL = "qns.block_ipv6_only_wifi_bool";
+
+    /**
      * Specifies the Rat Preference for the XCAP apn type. Boolean indicating adding the IMS
      * Registration condition to the Wi-Fi Rove in condition.
      *
-     * <p>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default value , Follow the system preference.
-     * {@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always {@code
-     * QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi when the Wi-Fi
-     * Calling is available.(when IMS is registered through the Wi-Fi) {@code
-     * QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when no cellular
-     * {@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set , choose Wi-Fi
-     * when cellular is available at home network. The default value for this key is {@code
-     * QnsConstants#RAT_PREFERENCE_DEFAULT}
+     * <ul>
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi
+     *     when the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
+     *     no cellular
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set ,
+     *     choose Wi-Fi when cellular is available at home network.
+     * </ul>
      */
     public static final String KEY_QNS_XCAP_RAT_PREFERENCE_INT = "qns.xcap_rat_preference_int";
 
@@ -229,14 +237,16 @@ public class QnsCarrierConfigManager {
      * Specifies the Rat Preference for the SOS apn type. Boolean indicating adding the IMS
      * Registration condition to the Wi-Fi Rove in condition.
      *
-     * <p>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default value , Follow the system preference.
-     * {@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always {@code
-     * QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi when the Wi-Fi
-     * Calling is available.(when IMS is registered through the Wi-Fi) {@code
-     * QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when no cellular
-     * {@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set , choose Wi-Fi
-     * when cellular is available at home network. The default value for this key is {@code
-     * QnsConstants#RAT_PREFERENCE_DEFAULT}
+     * <ul>
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi
+     *     when the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
+     *     no cellular
+     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set ,
+     *     choose Wi-Fi when cellular is available at home network.
+     * </ul>
      */
     public static final String KEY_QNS_SOS_RAT_PREFERENCE_INT = "qns.sos_rat_preference_int";
 
@@ -580,6 +590,20 @@ public class QnsCarrierConfigManager {
             "qns.choose_wfc_preferred_transport_in_both_bad_condition_int_array";
 
     /**
+     * List of Array items indicating APN Types with fallback support based on retry count or retry
+     * timer or either of them with fallback guard timer to be set
+     *
+     *<p><string-array name="qns.fallback_on_initial_connection_failure_string_array" num="2">
+     *    <item value="<apn_type>:<retry_count>:<retry_timer>:<fallback_guard_timer>"/>
+     *    <item value="ims:3:60000:10000"/>
+     *
+     * <p>The default value for this key is null indicating not enabled by default for fallback in
+     * case of initial connection failure
+     */
+    public static final String KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY =
+            "qns.fallback_on_initial_connection_failure_string_array";
+
+    /**
      * List of Array items indicating the Access Network Allowed For IMS APN Type. The values are
      * set as below: "LTE" "NR" "3G" "2G" The default value for this key is {@Code "LTE","NR"}
      */
@@ -709,7 +733,7 @@ public class QnsCarrierConfigManager {
     protected int mCurrCarrierId;
     private final QnsEventDispatcher mQnsEventDispatcher;
     private final QnsCarrierAnspSupportConfig mAnspConfigMgr;
-    private final Handler mHandler;
+    @VisibleForTesting final Handler mHandler;
 
     private boolean mIsWfcInAirplaneModeOnSupport;
     private boolean mIsInCallHoDecisionWlanToWwanWithoutVopsConditionSupported;
@@ -719,6 +743,7 @@ public class QnsCarrierConfigManager {
     private boolean mIsRoveOutWifiBadGuardTimerConditionsSupported;
     private boolean mIsAllowImsOverIwlanCellularLimitedCase;
     private boolean mIsBlockIwlanInInternationalRoamWithoutWwan;
+    private boolean mIsBlockIpv6OnlyWifi;
     private boolean mIsVolteRoamingSupported;
     private final boolean[] anspSupportConfigArray = new boolean[3];
 
@@ -751,6 +776,8 @@ public class QnsCarrierConfigManager {
     private String[] mApnTypesInternationalRoamingCheck;
     private String[] mPlmnsRegardedAsDomesticRoaming;
     private String[] mPlmnsRegardedAsInternationalRoaming;
+    private String[] mFallbackOnInitialConnectionFailure;
+
     private @NonNull final List<FallbackRule> mFallbackWwanRuleWithImsUnregistered =
             new ArrayList<>();
     private @NonNull final List<FallbackRule> mFallbackWwanRuleWithImsHoRegisterFail =
@@ -764,18 +791,19 @@ public class QnsCarrierConfigManager {
 
     protected QnsProvisioningListener.QnsProvisioningInfo mQnsProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();
+
     public void setQnsProvisioningInfo(QnsProvisioningListener.QnsProvisioningInfo info) {
         mQnsProvisioningInfo = info;
     }
-    private QnsConfigArray applyProvisioningInfo(QnsConfigArray thresholds, int accessNetwork,
-            int measurementType, int callType) {
+
+    private QnsConfigArray applyProvisioningInfo(
+            QnsConfigArray thresholds, int accessNetwork, int measurementType, int callType) {
 
         if (mQnsProvisioningInfo.hasItem(ProvisioningManager.KEY_LTE_THRESHOLD_1)
                 && thresholds.mBad != QnsConfigArray.INVALID
                 && accessNetwork == AccessNetworkConstants.AccessNetworkType.EUTRAN
                 && measurementType == SIGNAL_MEASUREMENT_TYPE_RSRP) {
-            int bad =
-                    mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_LTE_THRESHOLD_1);
+            int bad = mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_LTE_THRESHOLD_1);
             Log.d(LOG_TAG, "provisioning bad THLTE1 old:" + thresholds.mBad + " new:" + bad);
             thresholds.mBad = bad;
         }
@@ -792,8 +820,7 @@ public class QnsCarrierConfigManager {
                 && thresholds.mGood != QnsConfigArray.INVALID
                 && accessNetwork == AccessNetworkConstants.AccessNetworkType.EUTRAN
                 && measurementType == SIGNAL_MEASUREMENT_TYPE_RSRP) {
-            int good =
-                    mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_LTE_THRESHOLD_3);
+            int good = mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_LTE_THRESHOLD_3);
             Log.d(LOG_TAG, "provisioning good THLTE3 old:" + thresholds.mGood + " new:" + good);
             thresholds.mGood = good;
         }
@@ -810,8 +837,7 @@ public class QnsCarrierConfigManager {
                 && thresholds.mBad != QnsConfigArray.INVALID
                 && accessNetwork == AccessNetworkConstants.AccessNetworkType.IWLAN
                 && measurementType == SIGNAL_MEASUREMENT_TYPE_RSSI) {
-            int bad =
-                    mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_WIFI_THRESHOLD_B);
+            int bad = mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_WIFI_THRESHOLD_B);
             Log.d(LOG_TAG, "provisioning bad VOWT_B old:" + thresholds.mBad + " new:" + bad);
             thresholds.mBad = bad;
             // TODO : make video threshold gap config, and move in getThreshold...()
@@ -1061,7 +1087,7 @@ public class QnsCarrierConfigManager {
                             } else {
                                 if (isQnsConfigChanged()) {
                                     Log.d(LOG_TAG, "Qns Carrier config updated found");
-                                    notifyQnsConfigurationschanged();
+                                    notifyQnsConfigurationsChanged();
                                 }
                             }
                         }
@@ -1326,6 +1352,7 @@ public class QnsCarrierConfigManager {
                         bundleCarrier,
                         bundleAsset,
                         KEY_BLOCK_IWLAN_IN_INTERNATIONAL_ROAMING_WITHOUT_WWAN_BOOL);
+        mIsBlockIpv6OnlyWifi = getConfig(bundleCarrier, bundleAsset, KEY_BLOCK_IPV6_ONLY_WIFI_BOOL);
 
         mWifiThresBackHaulTimer =
                 getConfig(
@@ -1386,6 +1413,11 @@ public class QnsCarrierConfigManager {
                         KEY_QNS_HO_RESTRICT_TIME_WITH_LOW_RTP_QUALITY_MILLIS_INT_ARRAY);
         mRTPMetricsData = getConfig(bundleCarrier, bundleAsset, KEY_QNS_RTP_METRICS_INT_ARRAY);
 
+        mFallbackOnInitialConnectionFailure =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY);
         mImsAllowedRats =
                 getConfig(bundleCarrier, bundleAsset, KEY_IMS_CELLULAR_ALLOWED_RAT_STRING_ARRAY);
         mRoveInGuardTimerConditionThresholdGaps =
@@ -1408,6 +1440,7 @@ public class QnsCarrierConfigManager {
                         bundleCarrier,
                         bundleAsset,
                         KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY);
+
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
     }
 
@@ -1572,8 +1605,7 @@ public class QnsCarrierConfigManager {
 
     /** Load carrier config. */
     @VisibleForTesting
-    void loadCarrierConfig(
-            PersistableBundle bundleCarrier, PersistableBundle bundleAsset) {
+    void loadCarrierConfig(PersistableBundle bundleCarrier, PersistableBundle bundleAsset) {
         mIsMmtelCapabilityRequired =
                 getConfig(
                         bundleCarrier,
@@ -1620,7 +1652,7 @@ public class QnsCarrierConfigManager {
     }
 
     /** Notify all the registrants of the Slot loaded after carrier config loading is Completed */
-    protected void notifyQnsConfigurationschanged() {
+    protected void notifyQnsConfigurationsChanged() {
 
         if (mQnsCarrierConfigChangedRegistrants != null) {
             mQnsCarrierConfigChangedRegistrants.notifyRegistrants();
@@ -2462,6 +2494,15 @@ public class QnsCarrierConfigManager {
     }
 
     /**
+     * This method returns if IPv6 only WiFi is allowed
+     *
+     * @return True if need to block IPv6 only WiFi, otherwise false.
+     */
+    public boolean blockIpv6OnlyWifi() {
+        return mIsBlockIpv6OnlyWifi;
+    }
+
+    /**
      * This method returns whether the IMS Registration state option is added when reporting a
      * qualified Wi-Fi network for APN types other than ims.
      *
@@ -2490,8 +2531,8 @@ public class QnsCarrierConfigManager {
      *     True / False
      */
     public boolean needToCheckInternationalRoaming(int apnType) {
-        if (mApnTypesInternationalRoamingCheck != null &&
-                mApnTypesInternationalRoamingCheck.length > 0) {
+        if (mApnTypesInternationalRoamingCheck != null
+                && mApnTypesInternationalRoamingCheck.length > 0) {
             String apnName = ApnSetting.getApnTypeString(apnType);
             for (String apn : mApnTypesInternationalRoamingCheck) {
                 Log.d(LOG_TAG, apn + " needs International roaming check.");
@@ -2510,17 +2551,21 @@ public class QnsCarrierConfigManager {
      *     True / False
      */
     public boolean isDefinedInternationalRoamingPlmn(String plmn) {
-        if (mPlmnsRegardedAsInternationalRoaming != null &&
-                mPlmnsRegardedAsInternationalRoaming.length > 0) {
+        if (mPlmnsRegardedAsInternationalRoaming != null
+                && mPlmnsRegardedAsInternationalRoaming.length > 0) {
             for (String configuredPlmn : mPlmnsRegardedAsInternationalRoaming) {
-                Log.d(LOG_TAG, "isDefinedInternationalRoamingPlmn" +
-                        configuredPlmn + " is match with " + plmn);
+                Log.d(
+                        LOG_TAG,
+                        "isDefinedInternationalRoamingPlmn"
+                                + configuredPlmn
+                                + " is match with "
+                                + plmn);
                 if (configuredPlmn.length() == 3 && plmn.startsWith(configuredPlmn)) {
                     return true;
-                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6){
-                    if ((Integer.valueOf(configuredPlmn.substring(0,3))
-                            .equals(Integer.valueOf(plmn.substring(0,3)))) &&
-                            (Integer.valueOf(configuredPlmn.substring(3)))
+                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6) {
+                    if ((Integer.valueOf(configuredPlmn.substring(0, 3))
+                                    .equals(Integer.valueOf(plmn.substring(0, 3))))
+                            && (Integer.valueOf(configuredPlmn.substring(3)))
                                     .equals(Integer.valueOf(plmn.substring(3)))) {
                         return true;
                     }
@@ -2531,23 +2576,109 @@ public class QnsCarrierConfigManager {
     }
 
     /**
+     * If fallback for Initial connection failure for the apn type is met is supported , this method
+     * provides information about the failure retry count or retry timer or both if supported until
+     * fallback to other transport.
+     *
+     * @param apnType : (ims,sos,mms,xcap,cbs)
+     * @return : <APNSupportforFallback>:<retry_count>:<retry_timer>
+     */
+    public int[] getInitialDataConnectionFallbackConfig(int apnType) {
+
+        int[] fallbackConfigOnDataFail = new int[4];
+        String[] fallback_config = getFallbackConfigForApn(apnType);
+
+        if (fallback_config != null
+                && fallback_config[0] != null
+                && fallback_config[0].length() > 0) {
+            // APN Availability Status
+            fallbackConfigOnDataFail[0] = 1;
+
+            // Retry Count :  && fallback_config[1].length() > 0
+            if (fallback_config.length > 1
+                    && fallback_config[1] != null
+                    && !fallback_config[1].isEmpty()) {
+                fallbackConfigOnDataFail[1] = Integer.parseInt(fallback_config[1]);
+            }
+
+            // Retry timer
+            if (fallback_config.length > 2
+                    && fallback_config[2] != null
+                    && !fallback_config[2].isEmpty()) {
+                fallbackConfigOnDataFail[2] = Integer.parseInt(fallback_config[2]);
+            }
+
+            // Max fallback count
+            if (fallback_config.length > 4
+                    && fallback_config[4] != null
+                    && !fallback_config[4].isEmpty()) {
+                fallbackConfigOnDataFail[3] = Integer.parseInt(fallback_config[4]);
+            }
+        }
+        return fallbackConfigOnDataFail;
+    }
+
+    /**
+     * This method returns the fall back timer to be starting the restriction , for no. of retries
+     * when met with the pdn fail fallback causes
+     *
+     * @param apnType : (ims,sos,mms,xcap,cbs)
+     * @return : Fallback Guard timer to be set on starting the fallback restrict @ RestrictManager
+     */
+    public int getFallbackGuardTimerOnInitialConnectionFail(int apnType) {
+        String[] fallback_guard_timer = getFallbackConfigForApn(apnType);
+
+        if (fallback_guard_timer != null
+                && fallback_guard_timer[0] != null
+                && fallback_guard_timer[0].length() > 0
+                && ((fallback_guard_timer.length > 1
+                                && fallback_guard_timer[1] != null
+                                && !fallback_guard_timer[1].isEmpty())
+                        || (fallback_guard_timer.length > 2
+                                && fallback_guard_timer[2] != null
+                                && !fallback_guard_timer[2].isEmpty()))
+                && (fallback_guard_timer.length > 3
+                        && fallback_guard_timer[3] != null
+                        && !fallback_guard_timer[3].isEmpty())) {
+            return Integer.parseInt(fallback_guard_timer[3]);
+        } else {
+            return 0;
+        }
+    }
+
+    /* To support find the right Initial Pdn connection failure fallback config based on apn type*/
+    private String[] getFallbackConfigForApn(int apnType) {
+        if (mFallbackOnInitialConnectionFailure != null
+                && mFallbackOnInitialConnectionFailure.length > 0) {
+            String apnName = ApnSetting.getApnTypeString(apnType);
+            for (String apn : mFallbackOnInitialConnectionFailure) {
+                Log.d(LOG_TAG, "Fallback On Initial Failure enabled for" + apn);
+                if (apn.contains(apnName)) {
+                    return apn.split(":");
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * This method returns whether input plmn needs to be regarded as domestic roaming or not.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
      *     True / False
      */
     public boolean isDefinedDomesticRoamingPlmn(String plmn) {
-        if (mPlmnsRegardedAsDomesticRoaming != null &&
-                mPlmnsRegardedAsDomesticRoaming.length > 0) {
+        if (mPlmnsRegardedAsDomesticRoaming != null && mPlmnsRegardedAsDomesticRoaming.length > 0) {
             for (String configuredPlmn : mPlmnsRegardedAsDomesticRoaming) {
-                Log.d(LOG_TAG, "isDefinedDomesticRoamingPlmn" +
-                        configuredPlmn + " is match with " + plmn);
+                Log.d(
+                        LOG_TAG,
+                        "isDefinedDomesticRoamingPlmn" + configuredPlmn + " is match with " + plmn);
                 if (configuredPlmn.length() == 3 && plmn.startsWith(configuredPlmn)) {
                     return true;
-                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6){
-                    if ((Integer.valueOf(configuredPlmn.substring(0,3))
-                            .equals(Integer.valueOf(plmn.substring(0,3)))) &&
-                            (Integer.valueOf(configuredPlmn.substring(3)))
+                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6) {
+                    if ((Integer.valueOf(configuredPlmn.substring(0, 3))
+                                    .equals(Integer.valueOf(plmn.substring(0, 3))))
+                            && (Integer.valueOf(configuredPlmn.substring(3)))
                                     .equals(Integer.valueOf(plmn.substring(3)))) {
                         return true;
                     }

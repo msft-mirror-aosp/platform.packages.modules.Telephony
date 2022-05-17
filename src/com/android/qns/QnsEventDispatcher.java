@@ -44,6 +44,7 @@ import android.telephony.ims.ProvisioningManager;
 import android.util.Log;
 import android.util.SparseArray;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.TelephonyIntents;
 
 import java.util.HashSet;
@@ -138,7 +139,8 @@ public class QnsEventDispatcher {
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo;
     private final QnsEventDispatcherHandler mQnsEventDispatcherHandler;
 
-    private final BroadcastReceiver mIntentReceiver =
+    @VisibleForTesting
+    final BroadcastReceiver mIntentReceiver =
             new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -165,8 +167,10 @@ public class QnsEventDispatcher {
                                     intent.getIntExtra(
                                             CarrierConfigManager.EXTRA_SLOT_INDEX,
                                             SubscriptionManager.INVALID_SIM_SLOT_INDEX);
-                            int simState = intent.getIntExtra(TelephonyManager.EXTRA_SIM_STATE,
-                                    TelephonyManager.SIM_STATE_UNKNOWN);
+                            int simState =
+                                    intent.getIntExtra(
+                                            TelephonyManager.EXTRA_SIM_STATE,
+                                            TelephonyManager.SIM_STATE_UNKNOWN);
                             onSimStateChanged(slotId, simState);
                             break;
 
@@ -424,7 +428,10 @@ public class QnsEventDispatcher {
     }
 
     public void dispose() {
-        mContext.unregisterReceiver(mIntentReceiver);
+        try {
+            mContext.unregisterReceiver(mIntentReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
         if (mUserSettingObserver != null) {
             mContext.getContentResolver().unregisterContentObserver(mUserSettingObserver);
         }
@@ -540,6 +547,12 @@ public class QnsEventDispatcher {
 
             StringBuilder sb = new StringBuilder("notifyCurrentSetting");
             sb.append(", bForceUpdate:").append(bForceUpdate);
+
+            Log.d(LOG_TAG, "CrossSimCallingUri:" + mCrossSimCallingUri);
+            Log.d(LOG_TAG, "mWfcEnabledUri:" + mWfcEnabledUri);
+            Log.d(LOG_TAG, "mWfcModeUri:" + mWfcModeUri);
+            Log.d(LOG_TAG, "mWfcRoamingEnabledUri:" + mWfcRoamingEnabledUri);
+            Log.d(LOG_TAG, "mWfcRoamingEnabledUri:" + mWfcRoamingEnabledUri);
 
             if (uri.equals(mCrossSimCallingUri)) {
                 boolean isCrossSimCallingEnabled =
@@ -673,7 +686,8 @@ public class QnsEventDispatcher {
         }
     }
 
-    private synchronized void onUserSettingChanged(Uri uri) {
+    @VisibleForTesting
+    synchronized void onUserSettingChanged(Uri uri) {
         if (mCrossSimCallingUri.equals(uri)) {
             notifyCurrentSetting(uri, false);
         } else if (mWfcEnabledUri.equals(uri)) {
@@ -728,8 +742,10 @@ public class QnsEventDispatcher {
         Log.d(LOG_TAG, "onCreateProvisioningListener");
         mLastProvisioningInfo = new QnsProvisioningListener.QnsProvisioningInfo();
         mQnsProvisioningListener = QnsProvisioningListener.getInstance(mContext, mSlotIndex);
-        mQnsProvisioningListener.registerProvisioningItemInfoChanged(
-                mQnsEventDispatcherHandler, EVENT_PROVISIONING_INFO_CHANGED, null, true);
+        if (mQnsProvisioningListener != null) {
+            mQnsProvisioningListener.registerProvisioningItemInfoChanged(
+                    mQnsEventDispatcherHandler, EVENT_PROVISIONING_INFO_CHANGED, null, true);
+        }
     }
 
     private synchronized void onProvisioningInfoChanged(

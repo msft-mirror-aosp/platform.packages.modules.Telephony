@@ -446,6 +446,17 @@ public class AlternativeEventListener {
         }
     }
 
+    @VisibleForTesting
+    protected void close() {
+        mCallTypeChangedEventListener = null;
+        mEmergencyCallTypeChangedEventListener = null;
+        mEmergencyPreferredTransportTypeChanged = null;
+        mTryWfcConnectionState = null;
+        mLowRtpQuallityListener = null;
+        mEmcLowRtpQuallityListener = null;
+        sAlternativeInterfaceManager.remove(mSlotIndex);
+    }
+
     protected void log(String s) {
         Log.d(LOG_TAG, s);
     }

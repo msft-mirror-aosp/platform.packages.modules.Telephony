@@ -34,6 +34,7 @@ import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.util.Log;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.util.TelephonyUtils;
@@ -89,6 +90,7 @@ public class DataConnectionStatusTracker {
     private int mState = STATE_INACTIVE;
     private int mDataConnectionFailCause;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+    private SparseArray<ApnSetting> mApnSettings = new SparseArray<>();
 
     public DataConnectionStatusTracker(
             @NonNull Context context, Looper looper, int slotIndex, int apnType) {
@@ -202,6 +204,15 @@ public class DataConnectionStatusTracker {
         return mDataConnectionFailCause;
     }
 
+    /** Returns Latest APN setting for the transport type */
+    public ApnSetting getLastApnSetting(int transportType) {
+        try {
+            return mApnSettings.get(transportType);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public void registerDataConnectionStatusChanged(Handler h, int what) {
         if (h != null) {
             mDataConnectionStatusRegistrants.addUnique(h, what, null);
@@ -243,7 +254,7 @@ public class DataConnectionStatusTracker {
                         mState = STATE_INACTIVE;
                         mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
                         log("Initial connect failed");
-                        notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_FAILED);
+                        notifyDataConnectionFailed(transportType);
                     }
                 }
                 break;
@@ -254,7 +265,7 @@ public class DataConnectionStatusTracker {
                     log(
                             "Initial Connect inited transport: "
                                     + AccessNetworkConstants.transportTypeToString(transportType));
-                    notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_STARTED);
+                    notifyDataConnectionStarted(transportType);
                 }
                 break;
 
@@ -282,6 +293,17 @@ public class DataConnectionStatusTracker {
                 }
                 break;
 
+            case TelephonyManager.DATA_SUSPENDED:
+                if (mState == STATE_HANDOVER && mTransportType != transportType) {
+                    mState = STATE_CONNECTED;
+                    mTransportType = transportType;
+                    log(
+                            "QNS assumes Handover completed to: "
+                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                    notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_HANDOVER_SUCCESS);
+                }
+                break;
+
             case TelephonyManager.DATA_HANDOVER_IN_PROGRESS:
                 if (mState == STATE_CONNECTED && mTransportType == transportType) {
                     mState = STATE_HANDOVER;
@@ -299,6 +321,21 @@ public class DataConnectionStatusTracker {
             default:
                 break;
         }
+        mApnSettings.put(mTransportType, status.getApnSetting());
+    }
+
+    private void notifyDataConnectionStarted(int transportType) {
+        DataConnectionChangedInfo info =
+                new DataConnectionChangedInfo(EVENT_DATA_CONNECTION_STARTED, mState, transportType);
+        mLastUpdatedDcChangedInfo = info;
+        mDataConnectionStatusRegistrants.notifyResult(info);
+    }
+
+    private void notifyDataConnectionFailed(int transportType) {
+        DataConnectionChangedInfo info =
+                new DataConnectionChangedInfo(EVENT_DATA_CONNECTION_FAILED, mState, transportType);
+        mLastUpdatedDcChangedInfo = info;
+        mDataConnectionStatusRegistrants.notifyResult(info);
     }
 
     private void notifyDataConnectionStatusChangedEvent(int event) {

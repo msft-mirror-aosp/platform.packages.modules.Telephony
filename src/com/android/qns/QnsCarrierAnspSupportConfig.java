@@ -16,10 +16,15 @@
 
 package com.android.qns;
 
+import static com.android.qns.QnsConstants.MIN_THRESHOLD_GAP;
+import static com.android.qns.QnsConstants.POLICY_BAD;
+import static com.android.qns.QnsConstants.POLICY_GOOD;
+
 import android.content.Context;
 import android.net.wifi.WifiInfo;
 import android.os.PersistableBundle;
 import android.telephony.SignalThresholdInfo;
+import android.util.Log;
 import android.util.SparseArray;
 
 import java.util.Arrays;
@@ -1044,8 +1049,49 @@ public class QnsCarrierAnspSupportConfig {
 
         for (String key : THRESHOLD_KEYS) {
             int[] anspThresholdArray = QnsUtils.getConfig(bundleCarrier, bundleAsset, key);
+            if (anspThresholdArray != null && anspThresholdArray.length > 1) {
+                anspThresholdArray = validateAndAdjustThresholdArray(anspThresholdArray, key);
+            }
             mQnsRatThresholdMap.put(key, anspThresholdArray);
         }
+    }
+
+    private int[] validateAndAdjustThresholdArray(int[] thresholds, String thresholdKey) {
+        if (thresholds[POLICY_GOOD] != QnsCarrierConfigManager.QnsConfigArray.INVALID
+                && thresholds[POLICY_BAD] != QnsCarrierConfigManager.QnsConfigArray.INVALID
+                && thresholds[POLICY_GOOD] - thresholds[POLICY_BAD] < MIN_THRESHOLD_GAP) {
+            if (thresholds[POLICY_GOOD] - thresholds[POLICY_BAD] < 0) {
+                Log.d(LOG_TAG, "invalid Thresholds for " + thresholdKey + " use default.");
+                return QnsUtils.getConfig(null, null, thresholdKey);
+            } else if (thresholds[POLICY_GOOD] - thresholds[POLICY_BAD] < MIN_THRESHOLD_GAP) {
+                int currentGap = thresholds[POLICY_GOOD] - thresholds[POLICY_BAD];
+                int[] adjust = thresholds.clone();
+                for (int i = currentGap; i < MIN_THRESHOLD_GAP; i++) {
+                    if ((i - currentGap) % 2 == 0) {
+                        adjust[POLICY_GOOD]++;
+                    } else {
+                        adjust[POLICY_BAD]--;
+                    }
+                }
+                Log.d(
+                        LOG_TAG,
+                        "Thresholds("
+                                + thresholdKey
+                                + ") gap is too small adjust:"
+                                + "["
+                                + thresholds[POLICY_GOOD]
+                                + "] > ["
+                                + adjust[POLICY_GOOD]
+                                + "]"
+                                + "["
+                                + thresholds[POLICY_BAD]
+                                + "] > ["
+                                + adjust[POLICY_BAD]
+                                + "]");
+                return adjust;
+            }
+        }
+        return thresholds;
     }
 
     private void updateAnspPolicyArrayList(

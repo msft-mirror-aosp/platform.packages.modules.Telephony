@@ -114,7 +114,7 @@ public class QnsUtilsTest {
 
     @Test
     public void testGetStringAccessNetworkTypes() {
-        assertEquals("", QnsUtils.getStringAccessNetworkTypes(new ArrayList<>()));
+        assertEquals("[empty]", QnsUtils.getStringAccessNetworkTypes(new ArrayList<>()));
 
         Integer[] accessNetworks =
                 new Integer[] {
@@ -255,6 +255,8 @@ public class QnsUtilsTest {
         String[] apnTypesForInternationalRoamingcheck = new String[] {"ims", "emergency"};
         String[] plmnsToBeInternationalRoaming = new String[] {"313200", "233", "37809"};
         String[] plmnsToBeDomesticRoaming = new String[] {"313200", "233", "37707"};
+        String[] defaultFallbackConfigInitialDataConnection =
+                new String[] {"ims:2:30000:60000:5", "mms:1:10000:5000:2"};
 
         assertFalse(
                 QnsUtils.getConfig(
@@ -313,6 +315,9 @@ public class QnsUtilsTest {
                         null,
                         QnsCarrierConfigManager
                                 .KEY_BLOCK_IWLAN_IN_INTERNATIONAL_ROAMING_WITHOUT_WWAN_BOOL));
+        assertFalse(
+                QnsUtils.getConfig(
+                        testBundle, null, QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL));
         assertEquals(
                 1,
                 (int)
@@ -406,8 +411,7 @@ public class QnsUtilsTest {
                         testBundle,
                         null,
                         QnsCarrierConfigManager
-                                .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY
-                                ));
+                            .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
         assertArrayEquals(
                 defaultWwanHystTimerIntArray,
                 QnsUtils.getConfig(
@@ -435,7 +439,9 @@ public class QnsUtilsTest {
         assertArrayEquals(
                 defaultRtpMetricsIntArray,
                 QnsUtils.getConfig(
-                        testBundle, null, QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
+                        testBundle,
+                        null,
+                        QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
         assertArrayEquals(
                 defaultWaitingTimetIntArray,
                 QnsUtils.getConfig(
@@ -456,8 +462,7 @@ public class QnsUtilsTest {
                         testBundle,
                         null,
                         QnsCarrierConfigManager
-                                .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY
-                                ));
+                            .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
         assertArrayEquals(
                 defaultNoVopsArray,
                 QnsUtils.getConfig(
@@ -518,6 +523,13 @@ public class QnsUtilsTest {
                         null,
                         QnsCarrierConfigManager
                                 .KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY));
+        assertArrayEquals(
+                defaultFallbackConfigInitialDataConnection,
+                QnsUtils.getConfig(
+                        testBundle,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY));
     }
 
     private void createTestBundle() {
@@ -552,6 +564,7 @@ public class QnsUtilsTest {
         testBundle.putBoolean(
                 QnsCarrierConfigManager.KEY_BLOCK_IWLAN_IN_INTERNATIONAL_ROAMING_WITHOUT_WWAN_BOOL,
                 false);
+        testBundle.putBoolean(QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL, false);
         testBundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_CELLULAR_SS_THRESHOLDBACKHAUL_TIMER_MS_INT, 1);
         testBundle.putInt(
@@ -630,6 +643,9 @@ public class QnsUtilsTest {
         testBundle.putStringArray(
                 QnsCarrierConfigManager.KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY,
                 new String[] {"313200", "233", "37707"});
+        testBundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims:2:30000:60000:5", "mms:1:10000:5000:2"});
     }
 
     @Test
@@ -694,6 +710,9 @@ public class QnsUtilsTest {
                         null,
                         QnsCarrierConfigManager
                                 .KEY_BLOCK_IWLAN_IN_INTERNATIONAL_ROAMING_WITHOUT_WWAN_BOOL));
+        assertTrue(
+                QnsUtils.getConfig(
+                        null, null, QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL));
         assertEquals(
                 QnsConstants.KEY_DEFAULT_VALUE,
                 (int)
@@ -787,8 +806,7 @@ public class QnsUtilsTest {
                         null,
                         null,
                         QnsCarrierConfigManager
-                                .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY
-                                ));
+                            .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
         assertArrayEquals(
                 new int[] {
                     QnsConstants.KEY_DEFAULT_HYST_TIMER,
@@ -853,8 +871,7 @@ public class QnsUtilsTest {
                         null,
                         null,
                         QnsCarrierConfigManager
-                                .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY
-                                ));
+                            .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
         assertArrayEquals(
                 new int[] {},
                 QnsUtils.getConfig(
@@ -878,6 +895,13 @@ public class QnsUtilsTest {
                 (String[]) null,
                 QnsUtils.getConfig(
                         null, null, CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY));
+        assertArrayEquals(
+                new String[] {},
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY));
     }
 
     @Test

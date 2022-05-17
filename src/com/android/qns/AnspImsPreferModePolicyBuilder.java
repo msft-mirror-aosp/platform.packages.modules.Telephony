@@ -34,17 +34,18 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, IDLE, WIFI_PREF), new String[] {"Condition:WIFI_AVAILABLE"});
         sPolicyMap.put(
-                new AnspKey(ROVE_OUT, IDLE, WIFI_PREF), new String[] {"Condition:EUTRAN_WORST"});
+                new AnspKey(ROVE_OUT, IDLE, WIFI_PREF),
+                new String[] {"Condition:EUTRAN_TOLERABLE"});
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VOICE, WIFI_PREF), new String[] {"Condition:WIFI_GOOD"});
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VOICE, WIFI_PREF),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VIDEO, WIFI_PREF), new String[] {"Condition:WIFI_GOOD"});
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VIDEO, WIFI_PREF),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, IDLE, CELL_PREF, ROAM),
                 new String[] {"Condition:WIFI_GOOD,CELLULAR_BAD"});
@@ -56,13 +57,13 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 new String[] {"Condition:WIFI_GOOD,CELLULAR_BAD"});
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VOICE, CELL_PREF, ROAM),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VIDEO, CELL_PREF, ROAM),
                 new String[] {"Condition:WIFI_GOOD,CELLULAR_BAD"});
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VIDEO, CELL_PREF, ROAM),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
         // Overridden rules to ims preference from cellular preference
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, IDLE, CELL_PREF, HOME),
@@ -83,7 +84,7 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 });
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VOICE, CELL_PREF, HOME),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VIDEO, CELL_PREF, HOME),
                 new String[] {
@@ -93,7 +94,7 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 });
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VIDEO, CELL_PREF, HOME),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_WORST"});
+                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
     }
 
     @Override

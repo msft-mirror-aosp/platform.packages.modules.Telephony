@@ -76,6 +76,7 @@ public class DataConnectionStatusTrackerTest {
     @Mock protected ConnectivityManager mockConnectivityManager;
     @Mock protected SubscriptionManager mockSubscriptionManager;
     @Mock protected WifiManager mockWifiManager;
+    @Mock protected Resources mResources;
     protected DataConnectionStatusTracker mDataConnectionStatusTracker;
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = 1;
     DataConnectionChangedInfo dcStatus;
@@ -146,6 +147,7 @@ public class DataConnectionStatusTrackerTest {
         when(mContext.getSystemService(ConnectivityManager.class))
                 .thenReturn(mockConnectivityManager);
         when(mContext.getSystemService(WifiManager.class)).thenReturn(mockWifiManager);
+        when(mContext.getResources()).thenReturn(mResources);
         ht.start();
         waitUntilReady();
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
@@ -167,8 +169,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
-
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
         mReady = false;
         loadPrecisionDataConnectionState(
                 TRANSPORT_TYPE_WWAN,
@@ -209,11 +210,10 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
-
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
         mReady = false;
         loadPrecisionDataConnectionState(
-                TRANSPORT_TYPE_INVALID,
+                TRANSPORT_TYPE_WWAN,
                 TelephonyManager.DATA_DISCONNECTED,
                 TelephonyManager.NETWORK_TYPE_LTE);
 
@@ -221,7 +221,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_INACTIVE, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_FAILED);
+                STATE_INACTIVE, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_FAILED);
     }
 
     @Test
@@ -239,7 +239,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(
@@ -281,11 +281,11 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(
-                TRANSPORT_TYPE_INVALID,
+                TRANSPORT_TYPE_WLAN,
                 TelephonyManager.DATA_DISCONNECTED,
                 TelephonyManager.NETWORK_TYPE_IWLAN);
 
@@ -293,7 +293,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_INACTIVE, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_FAILED);
+                STATE_INACTIVE, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_FAILED);
     }
 
     @Test
@@ -311,7 +311,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(
@@ -351,6 +351,60 @@ public class DataConnectionStatusTrackerTest {
     }
 
     @Test
+    public void testOnCellularHandoverSuspended() {
+        mReady = false;
+        validateNotConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WWAN,
+                TelephonyManager.DATA_CONNECTING,
+                TelephonyManager.NETWORK_TYPE_LTE);
+
+        validateConnectingStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WWAN,
+                TelephonyManager.DATA_CONNECTED,
+                TelephonyManager.NETWORK_TYPE_LTE);
+
+        validateConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WWAN);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTED, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_CONNECTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WWAN,
+                TelephonyManager.DATA_HANDOVER_IN_PROGRESS,
+                TelephonyManager.NETWORK_TYPE_LTE);
+
+        validateHandoverStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WWAN);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_HANDOVER, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_HANDOVER_STARTED);
+
+        mReady = false;
+        loadPrecisionDataConnectionState(
+                TRANSPORT_TYPE_WLAN,
+                TelephonyManager.DATA_SUSPENDED,
+                TelephonyManager.NETWORK_TYPE_IWLAN);
+
+        validateConnectedStatusChecks();
+        validateDataConnectionLastTransportType(TRANSPORT_TYPE_WLAN);
+        waitUntilReady();
+        validateDataConnectionChangedInfo(
+                STATE_CONNECTED, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_HANDOVER_SUCCESS);
+    }
+
+    @Test
     public void testOnCellularHandoverFail() {
         mReady = false;
         validateNotConnectedStatusChecks();
@@ -365,7 +419,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WWAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(
@@ -460,7 +514,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(
@@ -514,7 +568,7 @@ public class DataConnectionStatusTrackerTest {
         validateDataConnectionLastTransportType(TRANSPORT_TYPE_INVALID);
         waitUntilReady();
         validateDataConnectionChangedInfo(
-                STATE_CONNECTING, TRANSPORT_TYPE_INVALID, EVENT_DATA_CONNECTION_STARTED);
+                STATE_CONNECTING, TRANSPORT_TYPE_WLAN, EVENT_DATA_CONNECTION_STARTED);
 
         mReady = false;
         loadPrecisionDataConnectionState(

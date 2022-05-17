@@ -16,12 +16,18 @@
 
 package com.android.qns;
 
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED;
 import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED;
+import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_FAILED;
 import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_HANDOVER_FAILED;
 import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_HANDOVER_STARTED;
 import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_HANDOVER_SUCCESS;
+import static com.android.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_STARTED;
+import static com.android.qns.RestrictManager.GUARDING_TIMER_HANDOVER_INIT;
 import static com.android.qns.RestrictManager.RELEASE_EVENT_CALL_END;
+import static com.android.qns.RestrictManager.RELEASE_EVENT_DISCONNECT;
+import static com.android.qns.RestrictManager.RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_GUARDING;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_NON_PREFERRED_TRANSPORT;
@@ -37,12 +43,15 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.Message;
 import android.os.SystemClock;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
@@ -57,11 +66,17 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public class RestrictManagerTest extends QnsTest {
     @Mock private DataConnectionStatusTracker mMockDcst;
     @Mock private QnsCarrierConfigManager mConfigManager;
+    @Mock private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
+    private MockitoSession mMockSession;
     private AlternativeEventListener mAltListener;
     private QnsTelephonyListener mTelephonyListener;
 
@@ -70,6 +85,7 @@ public class RestrictManagerTest extends QnsTest {
     private static final int DEFAULT_RESTRICT_WITH_LOW_RTP_QUALITY_TIME = 60000;
     private RestrictManager mRestrictManager;
     private ImsStatusListener mImsStatusListener;
+    private CountDownLatch mLatch;
 
     protected TestLooper mTestLooper;
 
@@ -78,9 +94,9 @@ public class RestrictManagerTest extends QnsTest {
                 @Override
                 protected void onLooperPrepared() {
                     super.onLooperPrepared();
-                    mAltListener = AlternativeEventListener.getInstance(mockContext, 0);
-                    mTelephonyListener = QnsTelephonyListener.getInstance(mockContext, 0);
-                    mImsStatusListener = ImsStatusListener.getInstance(mockContext, 0);
+                    mAltListener = AlternativeEventListener.getInstance(sMockContext, 0);
+                    mTelephonyListener = QnsTelephonyListener.getInstance(sMockContext, 0);
+                    mImsStatusListener = ImsStatusListener.getInstance(sMockContext, 0);
                     setReady(true);
                 }
             };
@@ -91,6 +107,11 @@ public class RestrictManagerTest extends QnsTest {
         super.setUp();
         mMockDcst = mock(DataConnectionStatusTracker.class);
         mConfigManager = mock(QnsCarrierConfigManager.class);
+        mMockSession =
+                mockitoSession().mockStatic(CellularNetworkStatusTracker.class).startMocking();
+        lenient()
+                .when(CellularNetworkStatusTracker.getInstance(sMockContext, 0))
+                .thenReturn(mCellularNetworkStatusTracker);
         when(mConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 .thenReturn(0);
@@ -99,10 +120,12 @@ public class RestrictManagerTest extends QnsTest {
                 .thenReturn(0);
         mTestLooper = new TestLooper();
         mHandlerThread.start();
+        mLatch = new CountDownLatch(1);
+
         waitUntilReady();
         mRestrictManager =
                 new RestrictManager(
-                        mockContext,
+                        sMockContext,
                         mTestLooper.getLooper(),
                         0,
                         ApnSetting.TYPE_IMS,
@@ -124,12 +147,12 @@ public class RestrictManagerTest extends QnsTest {
         if (mRestrictManager != null) {
             mRestrictManager.close();
         }
-        QnsCarrierConfigManager.getInstance(mockContext, 0).close();
+        QnsCarrierConfigManager.getInstance(sMockContext, 0).close();
+        mMockSession.finishMocking();
     }
 
     @Test
     public void testRequestGuardingRestrictionWithStartGuarding() {
-
         validateGuardingRestriction(
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
@@ -140,10 +163,10 @@ public class RestrictManagerTest extends QnsTest {
 
     private void validateGuardingRestriction(int SrcTransportType, int targetTransportType) {
         when(mMockDcst.isActiveState()).thenReturn(true);
-        mRestrictManager.requestGuardingRestriction(SrcTransportType);
+        mRestrictManager.startGuarding(GUARDING_TIMER_HANDOVER_INIT, SrcTransportType);
         mTestLooper.moveTimeForward(DEFAULT_GUARDING_TIME / 2);
         mTestLooper.dispatchAll();
-        mRestrictManager.requestGuardingRestriction(targetTransportType);
+        mRestrictManager.startGuarding(GUARDING_TIMER_HANDOVER_INIT, targetTransportType);
         assertFalse(mRestrictManager.isRestricted(SrcTransportType));
         assertTrue(mRestrictManager.isRestricted(targetTransportType));
         assertTrue(
@@ -594,6 +617,16 @@ public class RestrictManagerTest extends QnsTest {
                 RESTRICT_TYPE_THROTTLING,
                 sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
                 600000);
+        mRestrictManager.addRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
+                sReleaseEventMap.get(RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL),
+                600000);
+        mRestrictManager.addRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
+                sReleaseEventMap.get(RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL),
+                600000);
         assertTrue(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
         assertTrue(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
         assertTrue(
@@ -610,6 +643,8 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL));
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
         mRestrictManager.notifyThrottling(false, 0, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.processReleaseEvent(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RELEASE_EVENT_DISCONNECT);
         assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
         assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
     }
@@ -872,6 +907,63 @@ public class RestrictManagerTest extends QnsTest {
     }
 
     @Test
+    public void testReleasePdnfallbacktoWwanOnImsRegOnWlanRegistered() {
+        long throttleTime = SystemClock.elapsedRealtime() + 12000;
+        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        when(mConfigManager.getFallbackTimeImsUnreigstered(
+                        eq(ImsReasonInfo.CODE_SIP_BUSY), anyInt()))
+                .thenReturn(60000);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                null);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
+        ImsReasonInfo reason = new ImsReasonInfo();
+        reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
+                reason);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                reason);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
+    }
+
+    @Test
     public void testHandoverHystOfVoiceGreaterThanIdleState() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
@@ -1125,5 +1217,699 @@ public class RestrictManagerTest extends QnsTest {
         assertNotNull(mRestrictManager.mRestrictInfoRegistrant);
         mRestrictManager.unRegisterRestrictInfoChanged(h2);
         assertNull(mRestrictManager.mRestrictInfoRegistrant);
+    }
+
+    @Test
+    public void testEnablePdnFallbackOnInitialDataConnectionFailWithRetryCounterOnWlan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testEnablePdnFallbackOnInitialDataConnectionFailWithRetryCounterOnWwan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testEnablePdnFallbackOnInitialDataConnectionFailWithRetryTimerOnWlan() {
+        setupEnableInitialDataConnectionFailFallbackWithRetryTimer();
+        validateEnablePdnFallbackOnRetryTimerOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testEnablePdnFallbackOnInitialDataConnectionFailWithRetryTimerOnWwan() {
+        setupEnableInitialDataConnectionFailFallbackWithRetryTimer();
+        validateEnablePdnFallbackOnRetryTimerOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    private void setupEnableInitialDataConnectionFailFallbackWithRetryTimer() {
+        int[] fallbackConfigs = new int[] {1, 0, 30000, 2};
+        when(mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS))
+                .thenReturn(fallbackConfigs);
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+    }
+
+    private void validateEnablePdnFallbackOnRetryTimerOverTransportType(
+            @AccessNetworkConstants.TransportType int transportType,
+            @RestrictManager.RestrictType int restrictType) {
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        assertTrue(mRestrictManager.mHandler.hasMessages(3010));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        mTestLooper.moveTimeForward(30000);
+        mTestLooper.dispatchAll();
+        assertTrue(mRestrictManager.hasRestrictionType(transportType, restrictType));
+    }
+
+    @Test
+    public void testDisablePdnFallbackRunningOnDataConnectedStateWlanToWwan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        cancelPdnFallbackRunningOnDataConnectedStateOverOtherTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testDisablePdnFallbackRunningOnDataConnectedStateWwanToWlan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        cancelPdnFallbackRunningOnDataConnectedStateOverOtherTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testDisablePdnFallbackRunningOnDataConnectedStateWlantoWlan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        cancelPdnFallbackRunningOnDataConnectedStateOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testDisablePdnFallbackRunningOnDataConnectedStateWwantoWwan() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        cancelPdnFallbackRunningOnDataConnectedStateOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    private void cancelPdnFallbackRunningOnDataConnectedStateOverOtherTransportType(
+            @AccessNetworkConstants.TransportType int transportType,
+            @RestrictManager.RestrictType int restrictType) {
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType), restrictType));
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType), restrictType));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType), restrictType));
+    }
+
+    private void cancelPdnFallbackRunningOnDataConnectedStateOverTransportType(
+            @AccessNetworkConstants.TransportType int transportType,
+            @RestrictManager.RestrictType int restrictType) {
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+    }
+
+    private void setupEnablePdnFallbackOnInitialDataConnectionFail() {
+        int[] fallbackConfigs = new int[] {1, 2, 0, 2};
+        when(mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS))
+                .thenReturn(fallbackConfigs);
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+    }
+
+    private void validateEnablePdnFallbackOnRetryCounterOverTransportType(
+            @AccessNetworkConstants.TransportType int transportType,
+            @RestrictManager.RestrictType int restrictType) {
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertTrue(mRestrictManager.hasRestrictionType(transportType, restrictType));
+    }
+
+    private void setConnectionStartedToConnectionFailedState(int transportType) {
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_FAILED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+    }
+
+    @Test
+    public void testDisablePdnFallbackRunningOnGuardTimerExpiry() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+    }
+
+    @Test
+    public void testCancelPdnFallbackRestrictionOnImsNotSupportedRat() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.UTRAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+    }
+
+    @Test
+    public void testSkipPdnFallbackCheckOverWlanWithAirplaneModeOnState() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(true);
+        cancelPdnFallbackOnAirplaneModeOn(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    private void cancelPdnFallbackOnAirplaneModeOn(
+            @AccessNetworkConstants.TransportType int transportType,
+            @RestrictManager.RestrictType int restrictType) {
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+        setConnectionStartedToConnectionFailedState(transportType);
+        assertFalse(mRestrictManager.hasRestrictionType(transportType, restrictType));
+    }
+
+    @Test
+    public void testDisableFallbackOnDataConnectionFailOnFallbackCountMet() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+
+        // First Fallback
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+        // WLAN Fallback timer Expiry
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+
+        // Second Fallback
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+
+        // WWAN Fallback timer Expiry
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+
+        // Max Fallback reached , so Fallback restriction never expected to run
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+    }
+
+    @Test
+    public void testIgnoreFallbackCountOnSingleRat() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+
+        // First Fallback
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        // WLAN Fallback timer Expiry
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_FAILED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+
+        // Second Fallback
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        // WLAN Fallback timer Expiry
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_FAILED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        // Fallback Count not increased if single rat
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+    }
+
+    @Test
+    public void testClearFallbackCountOnDataConnectedOverTransportType() {
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+                .thenReturn(30000);
+
+        // First Fallback
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        mTestLooper.moveTimeForward(20000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+        // WLAN Fallback timer Expiry
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+
+        // Fallback count = 2 Reached as per config
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        setConnectionStartedToConnectionFailedState(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+
+        // On Data connected state : clear fallback count
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL));
+    }
+
+    @Test
+    public void testResetFallbackCounterOnAirplaneModeOn() {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        testDisableFallbackOnDataConnectionFailOnFallbackCountMet();
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 6, null));
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testResetFallbackCounterOnWfcOff() {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        testDisableFallbackOnDataConnectionFailOnFallbackCountMet();
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 8, null));
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testResetFallbackCounterOnWifiOff() {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        testDisableFallbackOnDataConnectionFailOnFallbackCountMet();
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 3, null));
+        setupEnablePdnFallbackOnInitialDataConnectionFail();
+        validateEnablePdnFallbackOnRetryCounterOverTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+    }
+
+    @Test
+    public void testHandlerEventOnDataConnectionChangedEvent() throws InterruptedException {
+        // Handler message with WLAN Connected received
+        AsyncResult asyncResult =
+                new AsyncResult(
+                        null,
+                        new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                                DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED,
+                                DataConnectionStatusTracker.STATE_CONNECTED,
+                                AccessNetworkConstants.TRANSPORT_TYPE_WLAN),
+                        null);
+        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertNotNull(msg.obj);
+        AsyncResult ar = (AsyncResult) msg.obj;
+        assertNotNull(ar);
+
+        // Receive Handover started over Wwan
+        asyncResult =
+                new AsyncResult(
+                        null,
+                        new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                                EVENT_DATA_CONNECTION_HANDOVER_STARTED,
+                                DataConnectionStatusTracker.STATE_HANDOVER,
+                                AccessNetworkConstants.TRANSPORT_TYPE_WLAN),
+                        null);
+        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
+        mLatch.await(2, TimeUnit.SECONDS);
+        msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertNotNull(msg.obj);
+        ar = (AsyncResult) msg.obj;
+        assertNotNull(ar);
+
+        // Receive Handover Success over Wwan
+        asyncResult =
+                new AsyncResult(
+                        null,
+                        new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                                EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                                DataConnectionStatusTracker.STATE_CONNECTED,
+                                AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
+                        null);
+        Message.obtain(mRestrictManager.mHandler, 3001, asyncResult).sendToTarget();
+        mLatch.await(2, TimeUnit.SECONDS);
+        msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertNotNull(msg.obj);
+        ar = (AsyncResult) msg.obj;
+        assertNotNull(ar);
+    }
+
+    @Test
+    public void testRestrictNonPreferredTransportOnBootUpWithWfcModeChangedEvents() {
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        validateOnWfcModeChanged(9, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        validateOnWfcModeChanged(10, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        validateOnWfcModeChanged(11, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_ROAM);
+        validateOnWfcModeChanged(14, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        validateOnWfcModeChanged(15, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        validateOnWfcModeChanged(16, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+    }
+
+    private void validateOnWfcModeChanged(
+            int wfcModeEvent, @AccessNetworkConstants.TransportType int transportType) {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        when(mConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(transportType))
+                .thenReturn(10000);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+        mRestrictManager.mHandler.handleMessage(
+                Message.obtain(mRestrictManager.mHandler, wfcModeEvent, null));
+        mRestrictManager.restrictNonPreferredTransport();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType),
+                        RESTRICT_TYPE_NON_PREFERRED_TRANSPORT));
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType),
+                        RESTRICT_TYPE_NON_PREFERRED_TRANSPORT));
+    }
+
+    @Test
+    public void testUpdateLastNotifiedTransportType() {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+
+        // Initial Data Connection State
+        mRestrictManager.updateLastNotifiedTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING));
+
+        // WWAN connected to WLAN handover state
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_STARTED,
+                        DataConnectionStatusTracker.STATE_CONNECTING,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        when(mMockDcst.isActiveState()).thenReturn(true);
+        mRestrictManager.updateLastNotifiedTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
+    }
+
+    @Test
+    public void testIsRestrictedForInvalidTransportType() {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+
+        assertFalse(mRestrictManager.isRestricted(-1));
+        assertFalse(mRestrictManager.hasRestrictionType(-1, RESTRICT_TYPE_GUARDING));
+        assertFalse(mRestrictManager.isRestrictedExceptGuarding(-1));
+    }
+
+    @Test
+    public void testGuardTimerHysteresisOnPrefWithWifiPrefInHome() {
+        setupGuardTimerHysteresisOnPrefSupportedWithCoverage(11, QnsConstants.COVERAGE_HOME);
+        validateGuardTimerHysteresisOnPrefSupportedWithTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+    }
+
+    @Test
+    public void testGuardTimerHysteresisOnPrefWithCellPrefInHome() {
+        setupGuardTimerHysteresisOnPrefSupportedWithCoverage(10, QnsConstants.COVERAGE_HOME);
+        validateGuardTimerHysteresisOnPrefSupportedWithTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+    }
+
+    @Test
+    public void testGuardTimerHysteresisOnPrefWithWifiPrefInRoam() {
+        setupGuardTimerHysteresisOnPrefSupportedWithCoverage(16, QnsConstants.COVERAGE_ROAM);
+        validateGuardTimerHysteresisOnPrefSupportedWithTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+    }
+
+    @Test
+    public void testGuardTimerHysteresisOnPrefWithCellPrefInRoam() {
+        setupGuardTimerHysteresisOnPrefSupportedWithCoverage(15, QnsConstants.COVERAGE_ROAM);
+        validateGuardTimerHysteresisOnPrefSupportedWithTransportType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+    }
+
+    private void setupGuardTimerHysteresisOnPrefSupportedWithCoverage(
+            int event, @QnsConstants.CellularCoverage int coverage) {
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        when(mConfigManager.isHysteresisTimerEnabled(coverage)).thenReturn(true);
+        when(mConfigManager.getWwanHysteresisTimer(
+                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                .thenReturn(30000);
+        when(mConfigManager.getWlanHysteresisTimer(
+                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                .thenReturn(30000);
+        // Set Wfc preference with coverage with Hysteris based on Pref supported
+        mRestrictManager.setCellularCoverage(coverage);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
+        when(mConfigManager.isGuardTimerHystersisOnPrefSupported()).thenReturn(true);
+        mRestrictManager.mHandler.handleMessage(
+                Message.obtain(mRestrictManager.mHandler, event, null));
+    }
+
+    private void validateGuardTimerHysteresisOnPrefSupportedWithTransportType(
+            @AccessNetworkConstants.TransportType int transportType) {
+
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        mRestrictManager.getOtherTransport(transportType), RESTRICT_TYPE_GUARDING));
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_STARTED,
+                        DataConnectionStatusTracker.STATE_HANDOVER,
+                        transportType);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        mRestrictManager.getOtherTransport(transportType));
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(mRestrictManager.hasRestrictionType(transportType, RESTRICT_TYPE_GUARDING));
     }
 }

@@ -16,6 +16,9 @@
 
 package com.android.qns;
 
+import static com.android.qns.DataConnectionStatusTracker.STATE_CONNECTED;
+import static com.android.qns.DataConnectionStatusTracker.STATE_HANDOVER;
+
 import android.annotation.IntDef;
 import android.content.Context;
 import android.os.AsyncResult;
@@ -54,6 +57,7 @@ public class RestrictManager {
     static final int RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL = 6;
     static final int RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL = 7;
     static final int RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL = 8;
+    static final int RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL = 9;
 
     @IntDef(
             value = {
@@ -63,7 +67,9 @@ public class RestrictManager {
                 RESTRICT_TYPE_NON_PREFERRED_TRANSPORT,
                 RESTRICT_TYPE_RTP_LOW_QUALITY,
                 RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL,
+                RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL,
                 RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
             })
     public @interface RestrictType {}
 
@@ -89,8 +95,9 @@ public class RestrictManager {
     private static final int EVENT_LOW_RTP_QUALITY_REPORTED = 3006;
     private static final int EVENT_RELEASE_RESTRICTION = 3008;
     private static final int EVENT_REGISTER_LOW_RTP_QUALITY = 3009;
+    protected static final int EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED = 3010;
 
-    private static final int GUARDING_TIMER_HANDOVER_INIT = 30000;
+    @VisibleForTesting static final int GUARDING_TIMER_HANDOVER_INIT = 30000;
 
     static final HashMap<Integer, int[]> sReleaseEventMap =
             new HashMap<Integer, int[]>() {
@@ -109,6 +116,14 @@ public class RestrictManager {
                             new int[] {
                                 RELEASE_EVENT_DISCONNECT, RELEASE_EVENT_IMS_NOT_SUPPORT_RAT
                             });
+                    put(
+                            RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
+                            new int[] {
+                                RELEASE_EVENT_DISCONNECT,
+                                RELEASE_EVENT_WIFI_AP_CHANGED,
+                                RELEASE_EVENT_WFC_PREFER_MODE_CHANGED,
+                                RELEASE_EVENT_IMS_NOT_SUPPORT_RAT
+                            });
                 }
             };
     private static final int[] ignorableRestrictionsOnSingleRat =
@@ -116,13 +131,14 @@ public class RestrictManager {
                 RESTRICT_TYPE_GUARDING,
                 RESTRICT_TYPE_RTP_LOW_QUALITY,
                 RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL,
-                RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL
+                RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL
             };
 
     private QnsCarrierConfigManager mQnsCarrierConfigManager;
     private QnsTelephonyListener mTelephonyListener;
     private QnsEventDispatcher mQnsEventDispatcher;
-    private Handler mHandler;
+    @VisibleForTesting Handler mHandler;
 
     @QnsConstants.CellularCoverage
     int mCellularCoverage; // QnsConstants.COVERAGE_HOME or QnsConstants.COVERAGE_ROAM
@@ -136,11 +152,16 @@ public class RestrictManager {
     private ImsStatusListener mImsStatusListener;
     private int mApnType;
     private int mSlotId;
-    private int mDataConnectionState = DataConnectionStatusTracker.STATE_INACTIVE;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+    private int mLastEvaluatedTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
     private int mWfcPreference;
     private int mWfcRoamingPreference;
     private int mCounterForIwlanRestrictionInCall;
+    private int mRetryCounterOnDataConnectionFail;
+    private int mFallbackCounterOnDataConnectionFail;
+    private int mLastDataConnectionTransportType;
+    private boolean mIsTimerRunningOnDataConnectionFail = false;
+
     /** IMS call type */
     @QnsConstants.QnsCallType private int mImsCallType;
     /** Call state from TelephonyCallback.CallStateListener */
@@ -214,6 +235,18 @@ public class RestrictManager {
                     }
                     break;
 
+                case EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED:
+                    Log.d(
+                            TAG,
+                            "Initial Data Connection fail timer expired"
+                                    + mIsTimerRunningOnDataConnectionFail);
+
+                    if (mIsTimerRunningOnDataConnectionFail) {
+                        currTransportType = message.arg1;
+                        fallbackToOtherTransportOnDataConnectionFail(currTransportType);
+                    }
+                    break;
+
                 case QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY:
                     onWfcModeChanged(QnsConstants.WIFI_ONLY, QnsConstants.COVERAGE_HOME);
                     break;
@@ -224,6 +257,7 @@ public class RestrictManager {
                 case QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED:
                     onWfcModeChanged(QnsConstants.WIFI_PREF, QnsConstants.COVERAGE_HOME);
                     break;
+
                 case QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY:
                     onWfcModeChanged(QnsConstants.WIFI_ONLY, QnsConstants.COVERAGE_ROAM);
                     break;
@@ -231,10 +265,19 @@ public class RestrictManager {
                 case QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_CELLULAR_PREFERRED:
                     onWfcModeChanged(QnsConstants.CELL_PREF, QnsConstants.COVERAGE_ROAM);
                     break;
+
                 case QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_PREFERRED:
                     onWfcModeChanged(QnsConstants.WIFI_PREF, QnsConstants.COVERAGE_ROAM);
                     break;
 
+                case QnsEventDispatcher.QNS_EVENT_APM_ENABLED:
+                case QnsEventDispatcher.QNS_EVENT_WFC_DISABLED:
+                case QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING:
+                    if (mFallbackCounterOnDataConnectionFail > 0) {
+                        Log.d(TAG, "Reset Fallback Counter on APM On/WFC off/Wifi Off");
+                        mFallbackCounterOnDataConnectionFail = 0;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -406,6 +449,9 @@ public class RestrictManager {
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_ONLY);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_CELLULAR_PREFERRED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_MODE_TO_WIFI_PREFERRED);
+        events.add(QnsEventDispatcher.QNS_EVENT_APM_ENABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WFC_DISABLED);
+        events.add(QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING);
         mQnsEventDispatcher.registerEvent(events, mHandler);
 
         mCellularNetworkStatusTracker = CellularNetworkStatusTracker.getInstance(context, slotId);
@@ -576,15 +622,20 @@ public class RestrictManager {
 
     @VisibleForTesting
     void onDataConnectionChanged(DataConnectionChangedInfo status) {
-        mDataConnectionState = status.getState();
-        mTransportType = status.getTransportType();
+        int dataConnectionState = status.getState();
+        if (dataConnectionState == STATE_CONNECTED || dataConnectionState == STATE_HANDOVER) {
+            mTransportType = status.getTransportType();
+        } else {
+            mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+        }
+
         Log.d(TAG, "onDataConnectionChanged transportType:" + status);
         switch (status.getEvent()) {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
                 processDataConnectionDisconnected();
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_STARTED:
-                processDataConnectionStarted();
+                processDataConnectionStarted(status.getTransportType());
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED:
                 processDataConnectionConnected(mTransportType);
@@ -598,6 +649,9 @@ public class RestrictManager {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_HANDOVER_FAILED:
                 processDataConnectionHandoverFailed(mTransportType);
                 break;
+            case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_FAILED:
+                processDataConnectionFailed(status.getTransportType());
+                break;
             default:
                 Log.d(TAG, "unknown DataConnectionChangedEvent:");
                 break;
@@ -605,9 +659,50 @@ public class RestrictManager {
     }
 
     private void processDataConnectionConnected(int transportType) {
+        // Since HO hysterisis Guard timer is expected
+        checkToCancelInitialPdnConnectionFailFallback();
+        clearInitialPdnConnectionFailFallbackRestriction();
+
         checkIfCancelNonPreferredRestriction(getOtherTransport(transportType));
         if (mApnType == ApnSetting.TYPE_IMS) {
-            processHandoverGuardingOperation(transportType);
+            if (mLastEvaluatedTransportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID
+                    || transportType == mLastEvaluatedTransportType) {
+                processHandoverGuardingOperation(transportType);
+            } else {
+                Log.d(
+                        TAG,
+                        "DataConnectionConnected, but transport type is different,"
+                                + " Handover init may follow");
+            }
+        }
+    }
+
+    private void clearInitialPdnConnectionFailFallbackRestriction() {
+        mFallbackCounterOnDataConnectionFail = 0;
+        if (hasRestrictionType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL)) {
+            releaseRestriction(
+                    AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                    RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        }
+        if (hasRestrictionType(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL)) {
+            releaseRestriction(
+                    AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                    RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
+        }
+    }
+
+    private void checkToCancelInitialPdnConnectionFailFallback() {
+        Log.d(TAG, "clear Initial PDN Connection fail Timer checks");
+
+        mIsTimerRunningOnDataConnectionFail = false;
+        mRetryCounterOnDataConnectionFail = 0;
+
+        if (mHandler.hasMessages(EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED)) {
+            mHandler.removeMessages(EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED);
         }
     }
 
@@ -617,7 +712,25 @@ public class RestrictManager {
         mCounterForIwlanRestrictionInCall = 0;
     }
 
-    private void processDataConnectionStarted() {}
+    private void processDataConnectionStarted(int currTransportType) {
+        if (mLastDataConnectionTransportType != currTransportType) {
+            Log.d(
+                    TAG,
+                    "clear Initial PDN Connection fallback checks for last transport type:"
+                            + mLastDataConnectionTransportType);
+            checkToCancelInitialPdnConnectionFailFallback();
+
+            if (hasRestrictionType(
+                    mLastDataConnectionTransportType,
+                    RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL)) {
+                Log.d(
+                        TAG,
+                        "PreIncrement_Fallback Counter : " + mFallbackCounterOnDataConnectionFail);
+                mFallbackCounterOnDataConnectionFail += 1;
+            }
+            mLastDataConnectionTransportType = currTransportType;
+        }
+    }
 
     private void processDataConnectionHandoverStarted() {
         if ((mTransportType != AccessNetworkConstants.TRANSPORT_TYPE_INVALID)
@@ -656,6 +769,97 @@ public class RestrictManager {
         }
     }
 
+    private void processDataConnectionFailed(int dataConnectionTransportType) {
+        if (!mCellularNetworkStatusTracker.isAirplaneModeEnabled()) {
+            Log.d(TAG, "Initiate data connection fail Fallback support check");
+            checkFallbackOnDataConnectionFail(dataConnectionTransportType);
+        } else {
+            checkToCancelInitialPdnConnectionFailFallback();
+        }
+    }
+
+    private void checkFallbackOnDataConnectionFail(int transportType) {
+        int[] fallbackConfigOnInitDataFail =
+                mQnsCarrierConfigManager.getInitialDataConnectionFallbackConfig(mApnType);
+
+        Log.d(
+                TAG,
+                "FallbackConfig set is :"
+                        + fallbackConfigOnInitDataFail[0]
+                        + ":"
+                        + fallbackConfigOnInitDataFail[1]
+                        + ":"
+                        + fallbackConfigOnInitDataFail[2]);
+
+        if ((fallbackConfigOnInitDataFail != null && fallbackConfigOnInitDataFail[0] == 1)
+                && !hasRestrictionType(
+                        transportType, RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL)
+                && (fallbackConfigOnInitDataFail[3] == 0
+                        || mFallbackCounterOnDataConnectionFail
+                                < fallbackConfigOnInitDataFail[3])) {
+            Log.d(
+                    TAG,
+                    "FallbackCount: "
+                            + fallbackConfigOnInitDataFail[3]
+                            + "_"
+                            + mFallbackCounterOnDataConnectionFail);
+            enableFallbackRetryCountCheckOnInitialPdnFail(
+                    transportType, fallbackConfigOnInitDataFail[1]);
+            enableFallbackRetryTimerCheckOnInitialPdnFail(
+                    transportType, fallbackConfigOnInitDataFail[2]);
+        }
+    }
+
+    private void enableFallbackRetryTimerCheckOnInitialPdnFail(
+            int transportType, int fallbackRetryTimer) {
+        Log.d(
+                TAG,
+                "Start Initial Data Connection fail retry_timer On TransportType"
+                        + fallbackRetryTimer
+                        + "_"
+                        + AccessNetworkConstants.transportTypeToString(transportType));
+        if (fallbackRetryTimer > 0 && !mIsTimerRunningOnDataConnectionFail) {
+            Message msg =
+                    mHandler.obtainMessage(
+                            EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED,
+                            transportType,
+                            0,
+                            null);
+            mHandler.sendMessageDelayed(msg, (long) fallbackRetryTimer);
+            mIsTimerRunningOnDataConnectionFail = true;
+        }
+    }
+
+    private void enableFallbackRetryCountCheckOnInitialPdnFail(
+            int transportType, int fallbackRetryCount) {
+        Log.d(
+                TAG,
+                "Start Initial Data Connection fail retry_count On TransportType"
+                        + fallbackRetryCount
+                        + "_"
+                        + mRetryCounterOnDataConnectionFail
+                        + "_"
+                        + AccessNetworkConstants.transportTypeToString(transportType));
+        if (fallbackRetryCount > 0) {
+            if (mRetryCounterOnDataConnectionFail == fallbackRetryCount) {
+                fallbackToOtherTransportOnDataConnectionFail(transportType);
+            } else {
+                mRetryCounterOnDataConnectionFail += 1;
+            }
+        }
+    }
+
+    private void fallbackToOtherTransportOnDataConnectionFail(int currTransportType) {
+
+        checkToCancelInitialPdnConnectionFailFallback();
+
+        addRestriction(
+                currTransportType,
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
+                sReleaseEventMap.get(RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL),
+                mQnsCarrierConfigManager.getFallbackGuardTimerOnInitialConnectionFail(mApnType));
+    }
+
     @VisibleForTesting
     void onImsRegistrationStateChanged(ImsStatusListener.ImsRegistrationChangedEv event) {
         Log.d(
@@ -677,6 +881,21 @@ public class RestrictManager {
             case QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED:
                 onImsHoRegisterFailed(event, mTransportType, prefMode);
                 break;
+            case QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED:
+                Log.d(
+                        TAG,
+                        "On Ims Registered: "
+                                + AccessNetworkConstants.transportTypeToString(
+                                        event.getTransportType()));
+                if (event.getTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
+                        && hasRestrictionType(
+                                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                                RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL)) {
+                    releaseRestriction(
+                            AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                            RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL);
+                }
+                break;
             default:
                 break;
         }
@@ -691,7 +910,7 @@ public class RestrictManager {
             if (fallbackTimeMillis > 0
                     && mQnsCarrierConfigManager.isAccessNetworkAllowed(
                             mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
-                fallbackToWwanForImsRegitration(fallbackTimeMillis);
+                fallbackToWwanForImsRegistration(fallbackTimeMillis);
             }
         }
     }
@@ -706,12 +925,12 @@ public class RestrictManager {
             if (fallbackTimeMillis > 0
                     && mQnsCarrierConfigManager.isAccessNetworkAllowed(
                             mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
-                fallbackToWwanForImsRegitration(fallbackTimeMillis);
+                fallbackToWwanForImsRegistration(fallbackTimeMillis);
             }
         }
     }
 
-    private void fallbackToWwanForImsRegitration(int fallbackTimeMillis) {
+    private void fallbackToWwanForImsRegistration(int fallbackTimeMillis) {
         Log.d(TAG, "release ignorable restrictions on WWAN to fallback.");
         for (int restrictType : ignorableRestrictionsOnSingleRat) {
             releaseRestriction(AccessNetworkConstants.TRANSPORT_TYPE_WWAN, restrictType, true);
@@ -723,9 +942,18 @@ public class RestrictManager {
                 fallbackTimeMillis);
     }
 
-    public void requestGuardingRestriction(int transportType) {
-        if (mDataConnectionStatusTracker.isActiveState()) {
-            startGuarding(GUARDING_TIMER_HANDOVER_INIT, transportType);
+    /** Update Last notified transport type from ANE which owns this RestrictManager */
+    public void updateLastNotifiedTransportType(
+            @AccessNetworkConstants.TransportType int transportType) {
+        if (DBG) {
+            Log.d(
+                    TAG,
+                    "updateLastEvaluatedTransportType: "
+                            + AccessNetworkConstants.transportTypeToString(transportType));
+        }
+        mLastEvaluatedTransportType = transportType;
+        if (mDataConnectionStatusTracker.isActiveState() && mTransportType != transportType) {
+            startGuarding(GUARDING_TIMER_HANDOVER_INIT, getOtherTransport(transportType));
         }
     }
 
@@ -803,6 +1031,7 @@ public class RestrictManager {
     @VisibleForTesting
     void setCellularAccessNetwork(int accessNetwork) {
         mCellularAccessNetwork = accessNetwork;
+        Log.d(TAG, "Current Cellular Network:" + mCellularAccessNetwork);
         if (mApnType == ApnSetting.TYPE_IMS
                 && !mQnsCarrierConfigManager.isAccessNetworkAllowed(accessNetwork, mApnType)) {
             processReleaseEvent(
@@ -930,7 +1159,7 @@ public class RestrictManager {
         mHandler.removeMessages(EVENT_RELEASE_RESTRICTION, restriction);
     }
 
-    private int getOtherTransport(int transportType) {
+    protected int getOtherTransport(int transportType) {
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
             return AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
         } else {
@@ -972,7 +1201,14 @@ public class RestrictManager {
 
     @VisibleForTesting
     public boolean hasRestrictionType(int transportType, int restrictType) {
-        return mRestrictInfos.get(transportType).hasRestrictonType(restrictType);
+        try {
+            if (mRestrictInfos != null) {
+                return mRestrictInfos.get(transportType).hasRestrictonType(restrictType);
+            }
+        } catch (Exception e) {
+
+        }
+        return false;
     }
 
     /** This method is only for Testing */
@@ -1134,7 +1370,8 @@ public class RestrictManager {
         return delayMillis;
     }
 
-    private void startGuarding(int delay, int transportType) {
+    @VisibleForTesting
+    void startGuarding(int delay, int transportType) {
         // It is invalid to run to RESTRICT_TYPE_GUARDING for both Transport at same time
         // Make sure to release source TransportType Guarding before starting guarding for New
         // Transport
@@ -1202,6 +1439,8 @@ public class RestrictManager {
                 return "RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL";
             case RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL:
                 return "RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL";
+            case RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL:
+                return "RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL";
         }
         return "";
     }

@@ -31,12 +31,22 @@ import static com.android.qns.QnsConstants.CALL_TYPE_IDLE;
 import static com.android.qns.QnsConstants.CALL_TYPE_VIDEO;
 import static com.android.qns.QnsConstants.CALL_TYPE_VOICE;
 import static com.android.qns.QnsConstants.CELL_PREF;
+import static com.android.qns.QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD;
+import static com.android.qns.QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD;
+import static com.android.qns.QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD;
+import static com.android.qns.QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD;
+import static com.android.qns.QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD;
+import static com.android.qns.QnsConstants.POLICY_BAD;
+import static com.android.qns.QnsConstants.POLICY_GOOD;
+import static com.android.qns.QnsConstants.POLICY_TOLERABLE;
 import static com.android.qns.QnsConstants.WIFI_ONLY;
 import static com.android.qns.QnsConstants.WIFI_PREF;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -48,6 +58,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.radio.V1_5.ApnTypes;
 import android.net.ConnectivityManager;
+import android.os.Handler;
+import android.os.Message;
 import android.os.PersistableBundle;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
@@ -60,6 +72,7 @@ import android.telephony.data.ApnSetting;
 import androidx.test.core.app.ApplicationProvider;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -69,6 +82,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public class QnsCarrierConfigManagerTest {
@@ -76,10 +91,10 @@ public class QnsCarrierConfigManagerTest {
             "source=EUTRAN, target=IWLAN, type=allowed, capabilities=IMS|eims|MMS|cbs|xcap";
     private static final String HANDOVER_POLICY_1 =
             "source=GERAN|UTRAN|NGRAN, target=IWLAN, type=disallowed,"
-                + " capabilities=IMS|MMS|cbs|xcap";
+                    + " capabilities=IMS|MMS|cbs|xcap";
     private static final String HANDOVER_POLICY_2 =
             "source=IWLAN, target=GERAN|UTRAN|EUTRAN|NGRAN, roaming=true, type=disallowed,"
-                + " capabilities=IMS";
+                    + " capabilities=IMS";
     private static final String HANDOVER_POLICY_3 =
             "source=EUTRAN, target=IWLAN, type=allowed, capabilities=ims|eims|mms|CBS|XCAP";
     private static final String HANDOVER_POLICY_4 =
@@ -87,12 +102,15 @@ public class QnsCarrierConfigManagerTest {
     private static final String FALLBACK_RULE0 = "cause=321~378|1503, time=60000, preference=cell";
     private static final String FALLBACK_RULE1 = "cause=232|267|350~380|1503, time=90000";
 
-    @Mock private Context mContext;
-    @Mock private CarrierConfigManager carrierConfigManager;
+    @Mock private static Context sContext;
+    @Mock private CarrierConfigManager mCarrierConfigManager;
     @Mock private ConnectivityManager mCm;
     @Mock private TelephonyManager mTelephonyManager;
     @Mock private SubscriptionManager mSubscriptionManager;
     @Mock private SubscriptionInfo mSubscriptionInfo;
+    private Handler mHandler;
+    TestLooper mTestLooper;
+    private CountDownLatch mLatch;
 
     protected QnsCarrierConfigManager mConfigManager;
 
@@ -100,17 +118,20 @@ public class QnsCarrierConfigManagerTest {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.initMocks(this);
-        mContext = spy(ApplicationProvider.getApplicationContext());
-        when(mContext.getSystemService(CarrierConfigManager.class))
-                .thenReturn(carrierConfigManager);
-        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
-        when(mContext.getSystemService(SubscriptionManager.class)).thenReturn(mSubscriptionManager);
-        when(mContext.getSystemService(ConnectivityManager.class)).thenReturn(mCm);
-        TestLooper looper = new TestLooper();
-        when(mContext.getMainLooper()).thenReturn(looper.getLooper());
-        when(mContext.checkPermission(anyString(), anyInt(), anyInt()))
+        sContext = spy(ApplicationProvider.getApplicationContext());
+        when(sContext.getSystemService(CarrierConfigManager.class))
+                .thenReturn(mCarrierConfigManager);
+        when(sContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
+        when(sContext.getSystemService(SubscriptionManager.class)).thenReturn(mSubscriptionManager);
+        when(sContext.getSystemService(ConnectivityManager.class)).thenReturn(mCm);
+        mTestLooper = new TestLooper();
+        mHandler = new Handler(mTestLooper.getLooper());
+        mLatch = new CountDownLatch(1);
+        /* TestLooper looper = new TestLooper();
+        when(sContext.getMainLooper()).thenReturn(looper.getLooper());*/
+        when(sContext.checkPermission(anyString(), anyInt(), anyInt()))
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
-        when(carrierConfigManager.getConfigForSubId(anyInt())).thenReturn(null);
+        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(null);
         when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
         when(mTelephonyManager.getSimCarrierId()).thenReturn(0);
         doReturn(mSubscriptionInfo, mSubscriptionInfo, null)
@@ -119,7 +140,7 @@ public class QnsCarrierConfigManagerTest {
         when(mSubscriptionManager.getActiveSubscriptionInfoForSimSlotIndex(0))
                 .thenReturn(mSubscriptionInfo);
         when(mSubscriptionInfo.getSubscriptionId()).thenReturn(0);
-        mConfigManager = QnsCarrierConfigManager.getInstance(mContext, 0);
+        mConfigManager = QnsCarrierConfigManager.getInstance(sContext, 0);
         mConfigManager.loadQnsConfigurations();
     }
 
@@ -784,15 +805,15 @@ public class QnsCarrierConfigManagerTest {
                         QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD, threshold.mBad);
             } else if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD, threshold.mBad);
             }
             Assert.assertEquals(threshold.INVALID, threshold.mWorst);
         } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
                 && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSCP)) {
             if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD, threshold.mBad);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_BAD, threshold.mBad);
             }
             Assert.assertEquals(threshold.INVALID, threshold.mWorst);
         } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
@@ -983,6 +1004,53 @@ public class QnsCarrierConfigManagerTest {
                 WIFI_PREF);
     }
 
+    @Test
+    public void testInvalidThresholdConfig() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putIntArray(
+                QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRP_INT_ARRAY,
+                new int[] {-90, -92, QnsCarrierConfigManager.QnsConfigArray.INVALID});
+        bundle.putIntArray(
+                QnsCarrierAnspSupportConfig.KEY_IDLE_NGRAN_SSRSRP_INT_ARRAY,
+                new int[] {-97, -90, QnsCarrierConfigManager.QnsConfigArray.INVALID});
+        bundle.putIntArray(
+                QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRQ_INT_ARRAY,
+                new int[] {-11, -15, -18});
+        bundle.putIntArray(
+                QnsCarrierAnspSupportConfig.KEY_IDLE_UTRAN_RSCP_INT_ARRAY,
+                new int[] {-90, -90, -92});
+        QnsCarrierAnspSupportConfig testConfig =
+                QnsCarrierAnspSupportConfig.getInstance(sContext, 0);
+        testConfig.loadQnsAnspSupportArray(bundle, null);
+        int[] threshold;
+        threshold =
+                testConfig.getAnspCarrierThreshold(
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRP_INT_ARRAY);
+        Assert.assertEquals(threshold[POLICY_GOOD], -89);
+        Assert.assertEquals(threshold[POLICY_BAD], -92);
+        Assert.assertEquals(
+                threshold[POLICY_TOLERABLE], QnsCarrierConfigManager.QnsConfigArray.INVALID);
+        threshold =
+                testConfig.getAnspCarrierThreshold(
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_NGRAN_SSRSRP_INT_ARRAY);
+        Assert.assertEquals(threshold[POLICY_GOOD], KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD);
+        Assert.assertEquals(threshold[POLICY_BAD], KEY_DEFAULT_THRESHOLD_SSRSRP_BAD);
+        Assert.assertEquals(
+                threshold[POLICY_TOLERABLE], QnsCarrierConfigManager.QnsConfigArray.INVALID);
+        threshold =
+                testConfig.getAnspCarrierThreshold(
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRQ_INT_ARRAY);
+        Assert.assertEquals(threshold[POLICY_GOOD], -11);
+        Assert.assertEquals(threshold[POLICY_BAD], -15);
+        Assert.assertEquals(threshold[POLICY_TOLERABLE], -18);
+        threshold =
+                testConfig.getAnspCarrierThreshold(
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_UTRAN_RSCP_INT_ARRAY);
+        Assert.assertEquals(threshold[POLICY_GOOD], -88);
+        Assert.assertEquals(threshold[POLICY_BAD], -91);
+        Assert.assertEquals(threshold[POLICY_TOLERABLE], -92);
+    }
+
     private void loadAndValidateForThresholdsByPref(
             @AccessNetworkConstants.RadioAccessNetworkType int an,
             int callType,
@@ -1002,15 +1070,15 @@ public class QnsCarrierConfigManagerTest {
                         QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD, threshold.mBad);
             } else if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD, threshold.mBad);
             }
             Assert.assertEquals(threshold.INVALID, threshold.mWorst);
         } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
                 && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSCP)) {
             if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD, threshold.mBad);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
+                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_BAD, threshold.mBad);
             }
             Assert.assertEquals(threshold.INVALID, threshold.mWorst);
         } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
@@ -1085,7 +1153,7 @@ public class QnsCarrierConfigManagerTest {
         bundle.putStringArray(
                 CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY,
                 new String[] {HANDOVER_POLICY_0, HANDOVER_POLICY_1, HANDOVER_POLICY_2});
-        doReturn(bundle).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundle).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         mConfigManager.loadHandoverRules(
                 bundle, null, CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
         assertTrue(
@@ -1247,7 +1315,7 @@ public class QnsCarrierConfigManagerTest {
         bundle.putIntArray(
                 CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY,
                 new int[] {0, 1});
-        doReturn(bundle).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundle).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         mConfigManager.loadCarrierConfig(bundle, null);
         assertFalse(mConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_HOME));
         assertFalse(mConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_ROAM));
@@ -1267,7 +1335,7 @@ public class QnsCarrierConfigManagerTest {
         PersistableBundle bundleNew = new PersistableBundle();
         String key = CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY;
         bundleCurrent.putStringArray(key, new String[] {HANDOVER_POLICY_3});
-        doReturn(bundleCurrent).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleCurrent).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         mConfigManager.loadHandoverRules(bundleCurrent, null, key);
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
@@ -1306,7 +1374,7 @@ public class QnsCarrierConfigManagerTest {
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         bundleNew.putStringArray(key, new String[] {HANDOVER_POLICY_4});
-        doReturn(bundleNew).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         assertTrue(mConfigManager.checkHandoverRuleConfigChange(bundleNew, null, key));
         bundleNew.clear();
         assertFalse(
@@ -1340,11 +1408,11 @@ public class QnsCarrierConfigManagerTest {
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         bundleNew.putStringArray(key, new String[] {HANDOVER_POLICY_4});
-        doReturn(bundleNew).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         assertFalse(mConfigManager.checkHandoverRuleConfigChange(bundleNew, null, key));
         bundleNew.clear();
         bundleNew.putStringArray(key, new String[] {HANDOVER_POLICY_0, HANDOVER_POLICY_1});
-        doReturn(bundleNew).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         assertTrue(mConfigManager.checkHandoverRuleConfigChange(bundleNew, null, key));
     }
 
@@ -1359,12 +1427,12 @@ public class QnsCarrierConfigManagerTest {
         PersistableBundle bundleNew = new PersistableBundle();
         bundleNew.putIntArray(
                 QnsCarrierAnspSupportConfig.KEY_VIDEO_WIFI_RSSI_INT_ARRAY, new int[] {-60, -70});
-        doReturn(bundleNew).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         assertTrue(mConfigManager.checkThresholdConfigChange(bundleNew, null));
         bundleNew.putIntArray(
                 QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRP_INT_ARRAY,
                 new int[] {-90, -110, QnsCarrierConfigManager.QnsConfigArray.INVALID});
-        doReturn(bundleNew).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         assertTrue(mConfigManager.checkThresholdConfigChange(bundleNew, null));
     }
 
@@ -1373,7 +1441,7 @@ public class QnsCarrierConfigManagerTest {
         PersistableBundle bundle = new PersistableBundle();
         bundle.putBoolean(
                 CarrierConfigManager.ImsVoice.KEY_CARRIER_VOLTE_ROAMING_AVAILABLE_BOOL, false);
-        doReturn(bundle).when(carrierConfigManager).getConfigForSubId(anyInt());
+        doReturn(bundle).when(mCarrierConfigManager).getConfigForSubId(anyInt());
         mConfigManager.loadCarrierConfig(bundle, null);
         assertTrue(mConfigManager.isVolteRoamingSupported(QnsConstants.COVERAGE_HOME));
         assertFalse(mConfigManager.isVolteRoamingSupported(QnsConstants.COVERAGE_ROAM));
@@ -1443,6 +1511,189 @@ public class QnsCarrierConfigManagerTest {
     }
 
     @Test
+    public void testBlockIpv6OnlyWifi() {
+        // Test for the default setting
+        assertTrue(mConfigManager.blockIpv6OnlyWifi());
+
+        // Test for a new setting
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putBoolean(QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL, false);
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        assertFalse(mConfigManager.blockIpv6OnlyWifi());
+    }
+
+    @Test
+    public void testFallbackConfigOnInitialDataConnectionFailWithDefaultValue() {
+        mConfigManager.loadQnsAneSupportConfigurations(null, null);
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
+
+        int[] mmsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+        int mmsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackGuardTimer);
+    }
+
+    @Test
+    public void testFallbackConfigOnInitialDataConnectionFailWithNullValue() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                (String[]) null);
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
+
+        int[] mmsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+        int mmsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackGuardTimer);
+
+        int[] xcapFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+        int xcapFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_XCAP);
+
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackGuardTimer);
+    }
+
+    @Test
+    public void testFallbackOnInitialDataConnectionFailForMultiplePdnWithBothConfigs() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims:2:30000:60000:5"});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+
+        assertEquals(1, imsFallbackConfigs[0]);
+        assertEquals(2, imsFallbackConfigs[1]);
+        assertEquals(30000, imsFallbackConfigs[2]);
+        assertEquals(5, imsFallbackConfigs[3]);
+        assertEquals(60000, imsFallbackGuardTimer);
+
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims:2:30000:60000:3", "mms:1:10000:5000:2"});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+
+        int[] mmsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+        int mmsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+
+        assertEquals(1, mmsFallbackConfigs[0]);
+        assertEquals(1, mmsFallbackConfigs[1]);
+        assertEquals(10000, mmsFallbackConfigs[2]);
+        assertEquals(2, mmsFallbackConfigs[3]);
+        assertEquals(5000, mmsFallbackGuardTimer);
+    }
+
+    @Test
+    public void testFallbackConfigOnInitialDataConnectionFailWithEmptyValues() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {""});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
+
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims:"});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+
+        assertEquals(1, imsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[3]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
+    }
+
+    @Test
+    public void testFallbackOnInitialDataConnectionFailWithRetryCounterConfigOnly() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims:2::30000:3"});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+
+        assertEquals(1, imsFallbackConfigs[0]);
+        assertEquals(2, imsFallbackConfigs[1]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
+        assertEquals(3, imsFallbackConfigs[3]);
+        assertEquals(30000, imsFallbackGuardTimer);
+    }
+
+    @Test
+    public void testFallbackOnInitialDataConnectionFailWithRetryTimerConfigOnly() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
+                new String[] {"ims::30000:60000:4"});
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        int[] imsFallbackConfigs =
+                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+        int imsFallbackGuardTimer =
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+        assertEquals(1, imsFallbackConfigs[0]);
+        assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
+        assertEquals(30000, imsFallbackConfigs[2]);
+        assertEquals(4, imsFallbackConfigs[3]);
+        assertEquals(60000, imsFallbackGuardTimer);
+    }
+
+    @Test
     public void testGetSubId() {
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mConfigManager.getSubId());
     }
@@ -1452,8 +1703,106 @@ public class QnsCarrierConfigManagerTest {
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mConfigManager.getCarrierId());
     }
 
+    @Test
+    public void testNotifyLoadQnsConfigurationsCompleted() throws InterruptedException {
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(1);
+        validateLoadQnsConfigurationCompleted();
+    }
+
+    @Test
+    public void testQnsLoadingEventOnInvalidCarrierID() throws InterruptedException {
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(0);
+        validateLoadQnsConfigurationForInvalidCarrierID();
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(-1);
+        validateLoadQnsConfigurationForInvalidCarrierID();
+    }
+
+    @Test
+    public void testUnregisterForConfigurationLoaded() throws InterruptedException {
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(1);
+        mConfigManager.unregisterForConfigurationLoaded(mHandler);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    private void validateLoadQnsConfigurationCompleted() throws InterruptedException {
+        mConfigManager.registerForConfigurationLoaded(mHandler, 1);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(1, msg.what);
+    }
+
+    private void validateLoadQnsConfigurationForInvalidCarrierID() throws InterruptedException {
+        mConfigManager.registerForConfigurationLoaded(mHandler, 1);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    public void testNotifyQnsConfigurationsChangedEvent() throws InterruptedException {
+        setupQnsConfigurationChange(CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
+        validateLoadQnsConfigurationCompleted();
+        updateQnsConfiguration(CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
+        mConfigManager.registerForConfigurationChanged(mHandler, 3);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(3, msg.what);
+    }
+
+    @Test
+    public void testOnQnsConfigurationNotChanged() throws InterruptedException {
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(1);
+        validateLoadQnsConfigurationCompleted();
+        updateQnsConfiguration(CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
+        mConfigManager.registerForConfigurationChanged(mHandler, 3);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    public void testUnregisterForConfigurationChanged() throws InterruptedException {
+        setupQnsConfigurationChange(CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
+        validateLoadQnsConfigurationCompleted();
+        updateQnsConfiguration(CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
+        mConfigManager.unregisterForConfigurationChanged(mHandler);
+        mConfigManager.mHandler.handleMessage(Message.obtain(mConfigManager.mHandler, 1, null));
+        mLatch.await(2, TimeUnit.SECONDS);
+        Message msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    private void setupQnsConfigurationChange(String key) {
+        PersistableBundle bundleCurrent = new PersistableBundle();
+        when(mTelephonyManager.getSimCarrierId()).thenReturn(1);
+        bundleCurrent.putStringArray(key, new String[] {HANDOVER_POLICY_3});
+        doReturn(bundleCurrent).when(mCarrierConfigManager).getConfigForSubId(anyInt());
+        mConfigManager.loadHandoverRules(bundleCurrent, null, key);
+    }
+
+    private void updateQnsConfiguration(String key) {
+        PersistableBundle bundleNew = new PersistableBundle();
+        bundleNew.putStringArray(key, new String[] {HANDOVER_POLICY_4});
+        doReturn(bundleNew).when(mCarrierConfigManager).getConfigForSubId(anyInt());
+    }
+
     @After
     public void tearDown() {
         QnsCarrierConfigManager.closeQnsCarrierConfigManager(0);
+    }
+
+    @AfterClass
+    public static void cleanup() {
+        QnsEventDispatcher.getInstance(sContext, 0).dispose();
+        QnsProvisioningListener.getInstance(sContext, 0).close();
     }
 }

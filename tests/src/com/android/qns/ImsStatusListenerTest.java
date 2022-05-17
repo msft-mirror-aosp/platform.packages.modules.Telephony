@@ -27,7 +27,9 @@ import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.ims.ImsException;
 import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsRegistrationAttributes;
 import android.telephony.ims.RegistrationManager;
+import android.telephony.ims.stub.ImsRegistrationImplBase;
 
 import org.junit.After;
 import org.junit.Before;
@@ -53,7 +55,7 @@ public class ImsStatusListenerTest extends QnsTest {
                 @Override
                 protected void onLooperPrepared() {
                     super.onLooperPrepared();
-                    mImsStatusListener = ImsStatusListener.getInstance(mockContext, 0);
+                    mImsStatusListener = ImsStatusListener.getInstance(sMockContext, 0);
                     setReady(true);
                 }
             };
@@ -76,7 +78,7 @@ public class ImsStatusListenerTest extends QnsTest {
 
     @Test
     public void testUnregisterImsRegistrationStatusChanged() {
-        testNotifyImsRegistrationChangedEvent();
+        testNotifyImsRegistrationChangedEventWithOnTechnologyChangeFailed();
         ImsReasonInfo reasonInfo =
                 new ImsReasonInfo(
                         ImsReasonInfo.CODE_LOCAL_NOT_REGISTERED, ImsReasonInfo.CODE_UNSPECIFIED);
@@ -93,15 +95,13 @@ public class ImsStatusListenerTest extends QnsTest {
      * notifyImsRegistrationChangedEvent()
      **/
     @Test
-    public void testNotifyImsRegistrationChangedEvent() {
+    public void testNotifyImsRegistrationChangedEventWithOnTechnologyChangeFailed() {
         ImsReasonInfo reasonInfo =
                 new ImsReasonInfo(
                         ImsReasonInfo.CODE_LOCAL_NOT_REGISTERED, ImsReasonInfo.CODE_UNSPECIFIED);
         mImsStatusListener.registerImsRegistrationStatusChanged(mHandler, 1);
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                reasonInfo);
+        mImsStatusListener.mImsRegistrationCallback.onTechnologyChangeFailed(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN, reasonInfo);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertNotNull(msg.obj);
@@ -116,6 +116,48 @@ public class ImsStatusListenerTest extends QnsTest {
         assertNotNull(bean.getReasonInfo());
         assertEquals(ImsReasonInfo.CODE_LOCAL_NOT_REGISTERED, bean.getReasonInfo().getCode());
         assertEquals(ImsReasonInfo.CODE_UNSPECIFIED, bean.getReasonInfo().getExtraCode());
+    }
+
+    @Test
+    public void testNotifyImsRegistrationChangedEventOnUnregistered() {
+        ImsReasonInfo reasonInfo =
+                new ImsReasonInfo(
+                        ImsReasonInfo.CODE_LOCAL_NOT_REGISTERED, ImsReasonInfo.CODE_UNSPECIFIED);
+        mImsStatusListener.registerImsRegistrationStatusChanged(mHandler, 0);
+        mImsStatusListener.mImsRegistrationCallback.onUnregistered(reasonInfo);
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertNotNull(msg.obj);
+        AsyncResult ar = (AsyncResult) msg.obj;
+        assertNotNull(ar);
+        ImsStatusListener.ImsRegistrationChangedEv bean =
+                (ImsStatusListener.ImsRegistrationChangedEv) ar.result;
+
+        assertNotNull(bean);
+        assertEquals(QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED, msg.what);
+        assertEquals(AccessNetworkConstants.TRANSPORT_TYPE_INVALID, bean.getTransportType());
+        assertNotNull(bean.getReasonInfo());
+        assertEquals(ImsReasonInfo.CODE_LOCAL_NOT_REGISTERED, bean.getReasonInfo().getCode());
+        assertEquals(ImsReasonInfo.CODE_UNSPECIFIED, bean.getReasonInfo().getExtraCode());
+    }
+
+    @Test
+    public void testNotifyImsRegistrationChangedEventOnRegistered() {
+        ImsRegistrationAttributes attr =
+                new ImsRegistrationAttributes.Builder(ImsRegistrationImplBase.REGISTRATION_TECH_LTE)
+                        .build();
+        mImsStatusListener.registerImsRegistrationStatusChanged(mHandler, 2);
+        mImsStatusListener.mImsRegistrationCallback.onRegistered(attr);
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        assertNotNull(msg.obj);
+        AsyncResult ar = (AsyncResult) msg.obj;
+        assertNotNull(ar);
+        ImsStatusListener.ImsRegistrationChangedEv bean =
+                (ImsStatusListener.ImsRegistrationChangedEv) ar.result;
+        assertNotNull(bean);
+        assertEquals(QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, msg.what);
+        assertEquals(AccessNetworkConstants.TRANSPORT_TYPE_WWAN, bean.getTransportType());
     }
 
     @Test
