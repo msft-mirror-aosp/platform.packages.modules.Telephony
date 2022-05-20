@@ -84,6 +84,7 @@ public class QnsEventDispatcher {
                 QNS_EVENT_WFC_PLATFORM_DISABLED,
                 QNS_EVENT_SIM_ABSENT,
                 QNS_EVENT_SIM_LOADED,
+                QNS_EVENT_WIFI_ENABLED,
             })
     public @interface QnsEventType {}
 
@@ -112,6 +113,7 @@ public class QnsEventDispatcher {
     public static final int QNS_EVENT_WFC_PLATFORM_DISABLED = QNS_EVENT_BASE + 22;
     public static final int QNS_EVENT_SIM_ABSENT = QNS_EVENT_BASE + 23;
     public static final int QNS_EVENT_SIM_LOADED = QNS_EVENT_BASE + 24;
+    public static final int QNS_EVENT_WIFI_ENABLED = QNS_EVENT_BASE + 25;
     private static final int EVENT_CREATE_PROVISIONING_LISTENER = QNS_EVENT_BASE + 200;
     private static final int EVENT_PROVISIONING_INFO_CHANGED = QNS_EVENT_BASE + 201;
     private static final Map<Integer, QnsEventDispatcher> sInstances = new ConcurrentHashMap<>();
@@ -198,16 +200,21 @@ public class QnsEventDispatcher {
                                     intent.getIntExtra(
                                             WifiManager.EXTRA_WIFI_STATE,
                                             WifiManager.WIFI_STATE_UNKNOWN);
-                            if (wifiState == mWiFiState) break;
-                            if (wifiState == WifiManager.WIFI_STATE_DISABLING) {
-                                event = QNS_EVENT_WIFI_DISABLING;
+                            if (wifiState != mWiFiState) {
+                                mWiFiState = wifiState;
+                                if (wifiState == WifiManager.WIFI_STATE_DISABLING) {
+                                    event = QNS_EVENT_WIFI_DISABLING;
+                                } else if (wifiState == WifiManager.WIFI_STATE_ENABLED) {
+                                    event = QNS_EVENT_WIFI_ENABLED;
+                                } else {
+                                    break;
+                                }
                                 for (Map.Entry<Integer, QnsEventDispatcher> entry :
                                         sInstances.entrySet()) {
                                     QnsEventDispatcher instance = entry.getValue();
                                     instance.updateHandlers(event);
                                 }
                             }
-                            mWiFiState = wifiState;
                             break;
 
                         case TelephonyIntents.ACTION_EMERGENCY_CALLBACK_MODE_CHANGED:

@@ -70,6 +70,7 @@ public class IwlanNetworkStatusTracker {
     private final ConnectivityManager mConnectivityManager;
     private Handler mNetCbHandler = null;
     private boolean mWifiAvailable = false;
+    private boolean mWifiToggleOn = false;
     private Map<Integer, Boolean> mIwlanRegistered = new ConcurrentHashMap<>();
     private int mConnectedDds = INVALID_SUB_ID;
     private SparseArray<IwlanEventHandler> mHandlerSparseArray = new SparseArray<>();
@@ -95,6 +96,7 @@ public class IwlanNetworkStatusTracker {
             events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED);
             events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_DISABLED);
             events.add(QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING);
+            events.add(QnsEventDispatcher.QNS_EVENT_WIFI_ENABLED);
             QnsEventDispatcher.getInstance(mContext, mSlotIndex).registerEvent(events, this);
             QnsTelephonyListener.getInstance(mContext, mSlotIndex)
                     .registerIwlanServiceStateListener(
@@ -110,6 +112,9 @@ public class IwlanNetworkStatusTracker {
                     break;
                 case QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_DISABLED:
                     onCrossSimEnabledEvent(false, mSlotIndex);
+                    break;
+                case QnsEventDispatcher.QNS_EVENT_WIFI_ENABLED:
+                    onWifiEnabled();
                     break;
                 case QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING:
                     onWifiDisabling();
@@ -174,9 +179,27 @@ public class IwlanNetworkStatusTracker {
     }
 
     @VisibleForTesting
+    void onWifiEnabled() {
+        mWifiToggleOn = true;
+        if (!mWifiAvailable) {
+            for (Integer slotId : mIwlanNetworkListenersArray.keySet()) {
+                if (!isCrossSimCallingCondition(slotId)
+                        && mIwlanRegistered.containsKey(slotId)
+                        && mIwlanRegistered.get(slotId)) {
+                    mWifiAvailable = true;
+                    notifyIwlanNetworkStatus(slotId, false);
+                }
+            }
+        }
+    }
+
+    @VisibleForTesting
     void onWifiDisabling() {
-        mWifiAvailable = false;
-        notifyIwlanNetworkStatus(true);
+        mWifiToggleOn = false;
+        if (mWifiAvailable) {
+            mWifiAvailable = false;
+            notifyIwlanNetworkStatus(true);
+        }
     }
 
     @VisibleForTesting
@@ -264,14 +287,9 @@ public class IwlanNetworkStatusTracker {
             }
             iwlanEnable = mWifiAvailable && !blockWifi && isRegistered;
             isCrossWfc = false;
-        } else if (QnsUtils.isCrossSimCallingEnabled(mContext, slotId)) {
-            if (!QnsUtils.isDefaultDataSubs(slotId)
-                    && QnsUtils.getSubId(mContext, slotId) != mConnectedDds
-                    && mConnectedDds != INVALID_SUB_ID
-                    && isRegistered) {
-                iwlanEnable = true;
-                isCrossWfc = true;
-            }
+        } else if (isCrossSimCallingCondition(slotId) && isRegistered) {
+            iwlanEnable = true;
+            isCrossWfc = true;
         }
         if (DBG) {
             if (QnsUtils.isCrossSimCallingEnabled(mContext, slotId)) {
@@ -315,6 +333,13 @@ public class IwlanNetworkStatusTracker {
             }
         }
         return new IwlanAvailabilityInfo(iwlanEnable, isCrossWfc);
+    }
+
+    private boolean isCrossSimCallingCondition(int slotId) {
+        return QnsUtils.isCrossSimCallingEnabled(mContext, slotId)
+                && !QnsUtils.isDefaultDataSubs(slotId)
+                && QnsUtils.getSubId(mContext, slotId) != mConnectedDds
+                && mConnectedDds != INVALID_SUB_ID;
     }
 
     private void notifyIwlanNetworkStatus() {
@@ -404,6 +429,7 @@ public class IwlanNetworkStatusTracker {
             NetworkCapabilities nc = mConnectivityManager.getNetworkCapabilities(network);
             if (nc != null) {
                 if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    mWifiToggleOn = true;
                     mWifiAvailable = true;
                     mConnectedDds = INVALID_SUB_ID;
                     notifyIwlanNetworkStatus();
@@ -480,7 +506,7 @@ public class IwlanNetworkStatusTracker {
             NetworkCapabilities nc = networkCapabilities;
             if (nc != null) {
                 if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    if (!mWifiAvailable) {
+                    if (!mWifiAvailable && mWifiToggleOn) {
                         mWifiAvailable = true;
                         mConnectedDds = INVALID_SUB_ID;
                         notifyIwlanNetworkStatus();

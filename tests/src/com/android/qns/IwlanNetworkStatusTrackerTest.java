@@ -323,4 +323,25 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     public void testDefaultNetworkCallback_IwlanNotRegistered() throws InterruptedException {
         testDefaultNetworkCallback(true, false);
     }
+
+    @Test
+    public void testWifiToggleQuickOffOn() throws InterruptedException {
+        testWifiDisabling();
+        mHandlers[0].mLatch = new CountDownLatch(1);
+        mIwlanNetworkStatusTracker.onWifiEnabled();
+        assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
+        verifyIwlanAvailabilityInfo(true, true);
+    }
+
+    @Test
+    public void testWifiToggleQuickOffOn_inCrossSimEnabledCondition() throws InterruptedException {
+        mIwlanNetworkStatusTracker.onWifiEnabled();
+        testHandleMessage_ValidSubID();
+        mIwlanNetworkStatusTracker.onWifiDisabling();
+        assertNotNull(mIwlanAvailabilityInfo);
+        assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
+        mIwlanNetworkStatusTracker.onWifiEnabled();
+        assertNotNull(mIwlanAvailabilityInfo);
+        assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
+    }
 }
