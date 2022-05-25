@@ -146,7 +146,6 @@ public class RestrictManagerTest extends QnsTest {
         if (mRestrictManager != null) {
             mRestrictManager.close();
         }
-        QnsCarrierConfigManager.getInstance(sMockContext, 0).close();
         mMockSession.finishMocking();
     }
 

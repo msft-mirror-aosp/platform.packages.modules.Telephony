@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1022,6 +1023,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Test
     public void testReportSatisfiedAccessNetworkTypesByState()
             throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        doNothing().when(restrictManager).setQnsCallType(anyInt());
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_SET_CALL_TYPE,
