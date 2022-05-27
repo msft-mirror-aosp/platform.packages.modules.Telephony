@@ -57,6 +57,7 @@ import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -103,6 +104,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private int mApnType = ApnSetting.TYPE_IMS;
     private HandlerThread mHandlerThread;
     private MockitoSession mMockitoSession;
+    private int mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
 
     private class AneHandler extends Handler {
         AneHandler() {
@@ -1221,5 +1223,96 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         integerItems.put(ProvisioningManager.KEY_LTE_EPDG_TIMER_SEC, -80);
         integerItems.put(ProvisioningManager.KEY_WIFI_EPDG_TIMER_SEC, -80);
         return integerItems;
+    }
+
+    @Test
+    public void testIsAllowed_WLAN() throws Exception {
+        int transport = AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
+        ane.onTryWfcConnectionStateChanged(true);
+        when(qnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true);
+        when(configManager.allowWFCOnAirplaneModeOn()).thenReturn(false, true);
+        Method method = AccessNetworkEvaluator.class.getDeclaredMethod("isAllowed", int.class);
+        method.setAccessible(true);
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        when(iwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, mSlotIndex))
+                .thenReturn(true);
+        when(configManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(true, false);
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        when(configManager.getRatPreference(mApnType)).thenAnswer(pref -> mRatPreference);
+
+        // RAT_PREFERENCE_DEFAULT
+        mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_ONLY
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_ONLY;
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
+        when(qnsImsStatusListener.isImsRegistered(transport)).thenReturn(false, true);
+
+        // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE - ims not registered over WLAN
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE - ims registered over WLAN
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR - cellular available
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR;
+        setObject(AccessNetworkEvaluator.class, "mCellularAvailable", ane, true);
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR - cellular not available
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR;
+        setObject(AccessNetworkEvaluator.class, "mCellularAvailable", ane, false);
+        assertTrue((Boolean) method.invoke(ane, transport));
+    }
+
+    @Test
+    public void testIsAllowed_WWAN() throws Exception {
+        int transport = AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
+        when(qnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true, false);
+        Method method = AccessNetworkEvaluator.class.getDeclaredMethod("isAllowed", int.class);
+        method.setAccessible(true);
+
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        when(configManager.getRatPreference(mApnType)).thenAnswer(pref -> mRatPreference);
+
+        // RAT_PREFERENCE_DEFAULT
+        mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_ONLY
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_ONLY;
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
+        when(qnsImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+                .thenReturn(true, false);
+        assertFalse((Boolean) method.invoke(ane, transport));
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR;
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE;
+
+        // RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE - no cellular
+        setObject(AccessNetworkEvaluator.class, "mCellularAvailable", ane, false);
+        assertFalse((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE - home
+        setObject(AccessNetworkEvaluator.class, "mCellularAvailable", ane, true);
+        setObject(AccessNetworkEvaluator.class, "mCoverage", ane, QnsConstants.COVERAGE_HOME);
+        assertTrue((Boolean) method.invoke(ane, transport));
+
+        // RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE - roaming
+        setObject(AccessNetworkEvaluator.class, "mCoverage", ane, QnsConstants.COVERAGE_ROAM);
+        assertFalse((Boolean) method.invoke(ane, transport));
     }
 }

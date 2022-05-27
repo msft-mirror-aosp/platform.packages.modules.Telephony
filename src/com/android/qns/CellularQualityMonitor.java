@@ -59,11 +59,9 @@ import java.util.concurrent.Executor;
  */
 public class CellularQualityMonitor extends QualityMonitor {
 
-    private static final int EVENT_BACKHAUL_TIMER_EXPIRED = 1;
     private static final int MAX_THRESHOLD_COUNT =
             SignalThresholdInfo.MAXIMUM_NUMBER_OF_THRESHOLDS_ALLOWED;
     private final String mTag;
-    private final Handler handler;
     private TelephonyManager mTelephonyManager;
     private int mSubId;
     private final int mSlotIndex;
@@ -71,6 +69,7 @@ public class CellularQualityMonitor extends QualityMonitor {
     private static final SparseArray<CellularQualityMonitor> sCellularQualityMonitors =
             new SparseArray<>();
     private final List<SignalThresholdInfo> mSignalThresholdInfoList;
+    private final HandlerThread mHandlerThread;
 
     /**
      * thresholdMatrix stores the thresholds according to measurement type and apn type. For ex:
@@ -85,6 +84,7 @@ public class CellularQualityMonitor extends QualityMonitor {
     private SignalStrengthUpdateRequest mSSUpdateRequest;
     private final CellularSignalStrengthListener mSignalStrengthListener;
     private final QnsTelephonyListener mQnsTelephonyListener;
+    @VisibleForTesting final Handler mHandler;
 
     private CellularQualityMonitor(Context context, int slotIndex) {
         super(QualityMonitor.class.getSimpleName() + "-C-" + slotIndex);
@@ -94,13 +94,13 @@ public class CellularQualityMonitor extends QualityMonitor {
         mSubId = getSubId();
         mIsQnsListenerRegistered = false;
         mSignalThresholdInfoList = new ArrayList<>();
-        HandlerThread handlerThread = new HandlerThread(mTag);
-        handlerThread.start();
-        handler = new CellularEventsHandler(handlerThread.getLooper());
+        mHandlerThread = new HandlerThread(mTag);
+        mHandlerThread.start();
+        mHandler = new CellularEventsHandler(mHandlerThread.getLooper());
         mTelephonyManager = mContext.getSystemService(TelephonyManager.class);
         mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
         mQnsTelephonyListener.registerSubscriptionIdListener(
-                handler, EVENT_SUBSCRIPTION_ID_CHANGED, null);
+                mHandler, EVENT_SUBSCRIPTION_ID_CHANGED, null);
         if (mTelephonyManager != null) {
             mTelephonyManager = mTelephonyManager.createForSubscriptionId(mSubId);
         } else {
@@ -227,28 +227,6 @@ public class CellularQualityMonitor extends QualityMonitor {
             if (matchedThresholds.size() > 0) {
                 notifyThresholdChange(entry.getKey(), matchedThresholds.toArray(new Threshold[0]));
             }
-        }
-    }
-
-    /**
-     * Method checks the thresholds mapped with @param String key with current thresholds. If data
-     * gets matched, thresholds will be notified.
-     */
-    private void checkAndNotifySignalStrength(String key) {
-        List<Threshold> ths = mThresholdsList.get(key);
-        int signalStrength;
-        List<Threshold> matchedThresholds = new ArrayList<>();
-        Threshold threshold;
-        for (Threshold th : ths) {
-            signalStrength = getCurrentQuality(th.getAccessNetwork(), th.getMeasurementType());
-            if (th.isMatching(signalStrength)) {
-                threshold = th.copy();
-                threshold.setThreshold(signalStrength);
-                matchedThresholds.add(threshold);
-            }
-        }
-        if (matchedThresholds.size() > 0) {
-            notifyThresholdChange(key, matchedThresholds.toArray(new Threshold[0]));
         }
     }
 
@@ -432,7 +410,7 @@ public class CellularQualityMonitor extends QualityMonitor {
             if (!mIsQnsListenerRegistered) {
                 mQnsTelephonyListener.registerQnsTelephonyInfoChanged(
                         ApnSetting.TYPE_NONE,
-                        handler,
+                        mHandler,
                         EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
                         null,
                         false);
@@ -440,7 +418,7 @@ public class CellularQualityMonitor extends QualityMonitor {
             }
         } else {
             Log.d(mTag, "No requests are pending to listen");
-            mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_NONE, handler);
+            mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_NONE, mHandler);
             mIsQnsListenerRegistered = false;
         }
     }
@@ -581,12 +559,6 @@ public class CellularQualityMonitor extends QualityMonitor {
                         onQnsTelephonyInfoChanged(info);
                     }
                     break;
-                case EVENT_BACKHAUL_TIMER_EXPIRED:
-                    String key = (String) msg.obj;
-                    mWaitingThresholds.put(key, false);
-                    // check and notify current thresholds info
-                    checkAndNotifySignalStrength(key);
-                    break;
                 case EVENT_SUBSCRIPTION_ID_CHANGED:
                     ar = (AsyncResult) msg.obj;
                     int newSubId = (int) ar.result;
@@ -620,9 +592,13 @@ public class CellularQualityMonitor extends QualityMonitor {
     @Override
     public void dispose() {
         super.dispose();
+        mQnsTelephonyListener.unregisterSubscriptionIdChanged(mHandler);
         clearOldRequests();
         mSignalThresholdInfoList.clear();
         mIsQnsListenerRegistered = false;
+        if (mHandlerThread != null) {
+            mHandlerThread.quit();
+        }
         sCellularQualityMonitors.remove(mSlotIndex);
     }
 }

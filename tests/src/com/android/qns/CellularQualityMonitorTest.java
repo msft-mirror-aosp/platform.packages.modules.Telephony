@@ -1,15 +1,20 @@
 package com.android.qns;
 
+import static com.android.qns.QualityMonitor.EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.os.AsyncResult;
 import android.os.HandlerThread;
+import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CellSignalStrengthCdma;
 import android.telephony.CellSignalStrengthGsm;
@@ -17,7 +22,9 @@ import android.telephony.CellSignalStrengthLte;
 import android.telephony.CellSignalStrengthNr;
 import android.telephony.CellSignalStrengthTdscdma;
 import android.telephony.CellSignalStrengthWcdma;
+import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
+import android.telephony.SignalStrengthUpdateRequest;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.TelephonyCallback;
 import android.telephony.data.ApnSetting;
@@ -29,6 +36,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
@@ -40,6 +49,7 @@ import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public final class CellularQualityMonitorTest extends QnsTest {
+    @Mock private QnsTelephonyListener.QnsTelephonyInfo mQnsTelephonyInfo;
     private CellularQualityMonitor mCellularQualityMonitor;
     int apnType1 = ApnSetting.TYPE_IMS;
     int apnType2 = ApnSetting.TYPE_EMERGENCY;
@@ -142,25 +152,61 @@ public final class CellularQualityMonitorTest extends QnsTest {
                 mCellularQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP);
-        Assert.assertEquals(quality, -91);
+        Assert.assertEquals(-91, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ);
+        Assert.assertEquals(-6, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR);
+        Assert.assertEquals(-10, quality);
 
         quality =
                 mCellularQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.UTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Assert.assertEquals(quality, -94);
+        Assert.assertEquals(-94, quality);
 
         quality =
                 mCellularQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Assert.assertEquals(quality, -79);
+        Assert.assertEquals(-79, quality);
 
         quality =
                 mCellularQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP);
-        Assert.assertEquals(quality, -80);
+        Assert.assertEquals(-80, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.NGRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRQ);
+        Assert.assertEquals(-7, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.NGRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR);
+        Assert.assertEquals(4, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO);
+        Assert.assertEquals(-5, quality);
+
+        quality =
+                mCellularQualityMonitor.getCurrentQuality(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_UNKNOWN);
+        Assert.assertEquals(SignalStrength.INVALID, quality);
     }
 
     @Test
@@ -651,6 +697,31 @@ public final class CellularQualityMonitorTest extends QnsTest {
         callback.onSignalStrengthsChanged(ss);
         assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
         assertNull(mOutputThs);
+    }
+
+    @Test
+    public void testOnQnsTelephonyInfoChanged() {
+        testRegisterThresholdChange();
+        when(mQnsTelephonyInfo.getDataRegState()).thenReturn(ServiceState.STATE_IN_SERVICE);
+        when(mQnsTelephonyInfo.getDataTech()).thenReturn(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        when(mQnsTelephonyInfo.isCellularAvailable()).thenReturn(true, false);
+        when(mQnsTelephonyInfo.getDataRegState()).thenReturn(ServiceState.STATE_IN_SERVICE);
+        Message.obtain(
+                        mCellularQualityMonitor.mHandler,
+                        EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
+                        new AsyncResult(null, mQnsTelephonyInfo, null))
+                .sendToTarget();
+        verify(mockTelephonyManager)
+                .clearSignalStrengthUpdateRequest(isA(SignalStrengthUpdateRequest.class));
+        Mockito.clearInvocations(mockTelephonyManager);
+
+        Message.obtain(
+                        mCellularQualityMonitor.mHandler,
+                        EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
+                        new AsyncResult(null, mQnsTelephonyInfo, null))
+                .sendToTarget();
+        verify(mockTelephonyManager, never())
+                .clearSignalStrengthUpdateRequest(isA(SignalStrengthUpdateRequest.class));
     }
 
     @After

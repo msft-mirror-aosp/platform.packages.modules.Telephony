@@ -86,7 +86,7 @@ public class AccessNetworkSelectionPolicy {
             boolean iwlanAvailable,
             boolean cellAvailable,
             int cellularAccessNetworkType) {
-        if (wifiMonitor == null || cellMonitor == null || mPostCondition == null) {
+        if (wifiMonitor == null || cellMonitor == null) {
             return false;
         }
         return mPostCondition.satisfiedByThreshold(
@@ -95,7 +95,7 @@ public class AccessNetworkSelectionPolicy {
 
     public List<Threshold> findUnmatchedThresholds(
             QualityMonitor wifiMonitor, QualityMonitor cellMonitor) {
-        if (wifiMonitor == null || cellMonitor == null || mPostCondition == null) {
+        if (wifiMonitor == null || cellMonitor == null) {
             return null;
         }
         return mPostCondition.findUnmatchedThresholds(wifiMonitor, cellMonitor);
@@ -106,9 +106,6 @@ public class AccessNetworkSelectionPolicy {
     }
 
     public boolean hasWifiThresholdWithoutCellularCondition() {
-        if (mPostCondition == null) {
-            return false;
-        }
         return mPostCondition.hasWifiThresholdWithoutCellularCondition();
     }
 
@@ -178,7 +175,8 @@ public class AccessNetworkSelectionPolicy {
             if (this == o) return true;
             if (!(o instanceof PreCondition)) return false;
             PreCondition that = (PreCondition) o;
-            return mCallType == that.mCallType && mPreference == that.mPreference
+            return mCallType == that.mCallType
+                    && mPreference == that.mPreference
                     && mCoverage == that.mCoverage;
         }
 

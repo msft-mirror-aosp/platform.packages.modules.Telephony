@@ -16,15 +16,28 @@
 
 package com.android.qns;
 
+import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP;
+import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ;
+import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI;
+import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP;
+
+import static com.android.qns.AccessNetworkSelectionPolicyBuilder.UNAVAIL;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
-import android.telephony.AccessNetworkConstants;
+import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.Rlog;
 import android.telephony.data.ApnSetting;
+
+import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
+import com.android.qns.QnsCarrierConfigManager.QnsConfigArray;
 
 import org.junit.After;
 import org.junit.Before;
@@ -33,7 +46,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @RunWith(JUnit4.class)
@@ -65,11 +81,11 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     static final int LARGER = QnsConstants.THRESHOLD_EQUAL_OR_LARGER;
     static final int SMALLER = QnsConstants.THRESHOLD_EQUAL_OR_SMALLER;
     */
-    static final int NGRAN = AccessNetworkConstants.AccessNetworkType.NGRAN;
-    static final int EUTRAN = AccessNetworkConstants.AccessNetworkType.EUTRAN;
-    static final int UTRAN = AccessNetworkConstants.AccessNetworkType.UTRAN;
-    static final int GERAN = AccessNetworkConstants.AccessNetworkType.GERAN;
-    static final int IWLAN = AccessNetworkConstants.AccessNetworkType.IWLAN;
+    static final int NGRAN = AccessNetworkType.NGRAN;
+    static final int EUTRAN = AccessNetworkType.EUTRAN;
+    static final int UTRAN = AccessNetworkType.UTRAN;
+    static final int GERAN = AccessNetworkType.GERAN;
+    static final int IWLAN = AccessNetworkType.IWLAN;
     /*
         static final int RSSI = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI;
         static final int SSRSRP = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP;
@@ -87,11 +103,166 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
         static final int TOLERABLE = QnsConstants.POLICY_TOLERABLE;
     */
 
+    private HashMap<String, QnsConfigArray> mTestConfigsMap =
+            new HashMap<String, QnsConfigArray>() {
+                {
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-100, -115, -120));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRQ
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-10, -15, -20));
+                    put(
+                            AccessNetworkType.IWLAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSSI
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-75, -85));
+                    put(
+                            AccessNetworkType.NGRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_SSRSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-102, -117, -122));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-95, -110, -115));
+                    put(
+                            AccessNetworkType.IWLAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSSI
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-76, -86));
+                    put(
+                            AccessNetworkType.NGRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_SSRSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.WIFI_PREF,
+                            new QnsConfigArray(-92, -102, -112));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-103, -118, -123));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRQ
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-12, -16, -18));
+                    put(
+                            AccessNetworkType.IWLAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSSI
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-60, -75));
+                    put(
+                            AccessNetworkType.NGRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_SSRSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_IDLE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-100, -110, -120));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-101, -116, -121));
+                    put(
+                            AccessNetworkType.EUTRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSRQ
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-11, -16, -20));
+                    put(
+                            AccessNetworkType.IWLAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_RSSI
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-70, -80));
+                    put(
+                            AccessNetworkType.NGRAN
+                                    + "-"
+                                    + SIGNAL_MEASUREMENT_TYPE_SSRSRP
+                                    + "-"
+                                    + QnsConstants.CALL_TYPE_VOICE
+                                    + "-"
+                                    + QnsConstants.CELL_PREF,
+                            new QnsConfigArray(-90, -100, -110));
+                }
+            };
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
         mBuilder = new AccessNetworkSelectionPolicyBuilder(mConfig, ApnSetting.TYPE_IMS);
+        stubConfigManager();
+    }
+
+    private void stubConfigManager() {
+        when(mConfig.getThresholdByPref(anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenAnswer(
+                        (Answer<QnsConfigArray>)
+                    invocation -> {
+                        Object[] args = invocation.getArguments();
+                        return mTestConfigsMap.get(
+                                args[0] + "-" + args[2] + "-" + args[1] + "-" + args[3]);
+                    });
+        // stub threshold gap of 5 dBm
+        when(mConfig.getThresholdGapWithGuardTimer(anyInt(), anyInt())).thenReturn(5);
     }
 
     @After
@@ -102,8 +273,7 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     }
 
     protected String[] getPolicy(int direction, int calltype, int preference, int coverage) {
-        AccessNetworkSelectionPolicy.PreCondition condition =
-                new AccessNetworkSelectionPolicy.PreCondition(calltype, preference, coverage);
+        PreCondition condition = new PreCondition(calltype, preference, coverage);
         return mBuilder.getPolicy(direction, condition);
     }
 
@@ -284,5 +454,353 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testAddThresholdGroup_RoveIn() {
+        List<ThresholdGroup> thresholdGroupList = new ArrayList<>();
+        List<AccessNetworkSelectionPolicyBuilder.AnspItem> anspItemList = new ArrayList<>();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRP_TOLERABLE);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_AVAILABLE);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(1, thresholdGroupList.size());
+        assertEquals(
+                -120,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                1,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRP_BAD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.NGRAN_SSRSRP_BAD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_GOOD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(2, thresholdGroupList.size());
+        assertEquals(
+                -118,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -110,
+                thresholdGroupList
+                        .get(1)
+                        .getThresholds(AccessNetworkType.NGRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -60,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -60,
+                thresholdGroupList
+                        .get(1)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRQ_BAD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_GOOD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new AccessNetworkSelectionPolicy.GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_ROAM,
+                        QnsConstants.GUARDING_WIFI));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(1, thresholdGroupList.size());
+        assertEquals(
+                -11,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -55,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRQ_TOLERABLE);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.NGRAN_SSRSRP_BAD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_GOOD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new AccessNetworkSelectionPolicy.GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME,
+                        QnsConstants.GUARDING_CELLULAR));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(2, thresholdGroupList.size());
+        assertEquals(
+                -20,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -100,
+                thresholdGroupList
+                        .get(1)
+                        .getThresholds(AccessNetworkType.NGRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -70,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -70,
+                thresholdGroupList
+                        .get(1)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRP_TOLERABLE);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME));
+        assertEquals(
+                -123,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_GOOD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_IN,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME));
+        assertEquals(
+                -60,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+    }
+
+    @Test
+    public void testAddThresholdGroup_RoveOut() {
+        List<ThresholdGroup> thresholdGroupList = new ArrayList<>();
+        List<AccessNetworkSelectionPolicyBuilder.AnspItem> anspItemList = new ArrayList<>();
+
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_AVAILABLE);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_BAD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_OUT,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(1, thresholdGroupList.size());
+        assertEquals(
+                1,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -86,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRQ_GOOD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRP_GOOD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_BAD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_OUT,
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(1, thresholdGroupList.size());
+        assertEquals(2, thresholdGroupList.get(0).getThresholds(AccessNetworkType.EUTRAN).size());
+        assertEquals(
+                -10,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -100,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(1)
+                        .getThreshold());
+        assertEquals(
+                -85,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+
+        anspItemList.clear();
+        thresholdGroupList.clear();
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.EUTRAN_RSRP_GOOD);
+        anspItemList.add(AccessNetworkSelectionPolicyBuilder.AnspItem.IWLAN_RSSI_BAD);
+        mBuilder.addThresholdGroup(
+                thresholdGroupList,
+                anspItemList,
+                QnsConstants.ROVE_OUT,
+                new AccessNetworkSelectionPolicy.GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_ROAM,
+                        QnsConstants.GUARDING_WIFI));
+
+        assertFalse(thresholdGroupList.isEmpty());
+        assertEquals(1, thresholdGroupList.size());
+        assertEquals(
+                -95,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.EUTRAN)
+                        .get(0)
+                        .getThreshold());
+        assertEquals(
+                -86,
+                thresholdGroupList
+                        .get(0)
+                        .getThresholds(AccessNetworkType.IWLAN)
+                        .get(0)
+                        .getThreshold());
+    }
+
+    @Test
+    public void testMakeUnavailableThreshold() {
+        when(mConfig.getCellularSSBackHaulTimer()).thenReturn(20000);
+        when(mConfig.getWIFIRssiBackHaulTimer()).thenReturn(50000);
+        verifyUnavailableThreshold(
+                mBuilder.makeUnavailableThreshold(AccessNetworkType.EUTRAN), 20000);
+        verifyUnavailableThreshold(
+                mBuilder.makeUnavailableThreshold(AccessNetworkType.IWLAN), 50000);
+    }
+
+    private void verifyUnavailableThreshold(Threshold threshold, int waitTime) {
+        assertEquals(QnsConstants.SIGNAL_MEASUREMENT_AVAILABILITY, threshold.getMeasurementType());
+        assertEquals(QnsConstants.THRESHOLD_MATCH_TYPE_EQUAL_TO, threshold.getMatchType());
+        assertEquals(UNAVAIL, threshold.getThreshold());
+        assertEquals(waitTime, threshold.getWaitTime());
+    }
+
+    @Test
+    public void testMakeThresholdsWifiWithoutCellular() {
+        when(mConfig.getWifiRssiThresholdWithoutCellular(anyInt()))
+                .thenReturn(null, new QnsConfigArray(-60, -70));
+        List<Threshold> thsList =
+                mBuilder.makeThresholdsWifiWithoutCellular(
+                        QnsConstants.ROVE_IN,
+                        new PreCondition(
+                                QnsConstants.CALL_TYPE_VOICE,
+                                QnsConstants.WIFI_PREF,
+                                QnsConstants.COVERAGE_HOME));
+        assertTrue(thsList.isEmpty());
+
+        thsList =
+                mBuilder.makeThresholdsWifiWithoutCellular(
+                        QnsConstants.ROVE_IN,
+                        new PreCondition(
+                                QnsConstants.CALL_TYPE_VOICE,
+                                QnsConstants.WIFI_PREF,
+                                QnsConstants.COVERAGE_HOME));
+        assertNotNull(thsList.get(0));
+        assertEquals(-60, thsList.get(0).getThreshold());
+
+        thsList =
+                mBuilder.makeThresholdsWifiWithoutCellular(
+                        QnsConstants.ROVE_OUT,
+                        new PreCondition(
+                                QnsConstants.CALL_TYPE_VOICE,
+                                QnsConstants.WIFI_PREF,
+                                QnsConstants.COVERAGE_HOME));
+        assertNotNull(thsList.get(0));
+        assertEquals(-70, thsList.get(0).getThreshold());
     }
 }

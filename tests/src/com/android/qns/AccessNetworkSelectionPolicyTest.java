@@ -19,6 +19,7 @@ package com.android.qns;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +27,7 @@ import android.telephony.AccessNetworkConstants;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.data.ApnSetting;
 
+import com.android.qns.AccessNetworkSelectionPolicy.GuardingPreCondition;
 import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
 
 import org.junit.After;
@@ -43,8 +45,11 @@ import java.util.List;
 public class AccessNetworkSelectionPolicyTest extends QnsTest {
     int apnType = ApnSetting.TYPE_IMS;
     int targetTransportType = AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
-    PreCondition preCondition = new PreCondition(
-            QnsConstants.CALL_TYPE_IDLE, QnsConstants.CELL_PREF, QnsConstants.COVERAGE_HOME);
+    private PreCondition mPreCondition =
+            new PreCondition(
+                    QnsConstants.CALL_TYPE_IDLE,
+                    QnsConstants.CELL_PREF,
+                    QnsConstants.COVERAGE_HOME);
     List<Threshold> ths = new ArrayList<>();
     List<ThresholdGroup> thgroups = new ArrayList<>();
     @Mock private WifiQualityMonitor mockWifiQualityMonitor;
@@ -60,7 +65,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     public void testCanHandleApnType() {
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, preCondition, thgroups);
+                        apnType, targetTransportType, mPreCondition, thgroups);
         assertTrue(ansp.canHandleApnType(ApnSetting.TYPE_IMS));
         assertFalse(ansp.canHandleApnType(ApnSetting.TYPE_EMERGENCY));
         assertFalse(ansp.canHandleApnType(ApnSetting.TYPE_XCAP));
@@ -71,7 +76,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     public void testGetTargetTransportType() {
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, preCondition, thgroups);
+                        apnType, targetTransportType, mPreCondition, thgroups);
         assertEquals(targetTransportType, ansp.getTargetTransportType());
         assertNotEquals(AccessNetworkConstants.TRANSPORT_TYPE_WLAN, ansp.getTargetTransportType());
     }
@@ -80,7 +85,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     public void testSatisfyPrecondition() {
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, preCondition, thgroups);
+                        apnType, targetTransportType, mPreCondition, thgroups);
         assertTrue(
                 ansp.satisfyPrecondition(
                         new PreCondition(
@@ -144,7 +149,11 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
 
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, preCondition, thgroups);
+                        apnType, targetTransportType, mPreCondition, thgroups);
+
+        assertFalse(
+                ansp.satisfiedByThreshold(
+                        null, null, false, true, AccessNetworkConstants.AccessNetworkType.EUTRAN));
 
         boolean result =
                 ansp.satisfiedByThreshold(
@@ -188,7 +197,11 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                 .thenReturn(-80);
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, preCondition, thgroups);
+                        apnType, targetTransportType, mPreCondition, thgroups);
+
+        assertNull(ansp.findUnmatchedThresholds(null, mockCellularQualityMonitor));
+        assertNull(ansp.findUnmatchedThresholds(mockWifiQualityMonitor, null));
+
         List<Threshold> unmatched =
                 ansp.findUnmatchedThresholds(mockWifiQualityMonitor, mockCellularQualityMonitor);
         assertEquals(expected, unmatched.size());
@@ -245,6 +258,144 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
         thgroups.add(new ThresholdGroup(ths));
         return thgroups;
     }
+
+    @Test
+    public void testGuardingPreconditionSatisfied() {
+        GuardingPreCondition guardingPreCondition =
+                new GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME,
+                        QnsConstants.GUARDING_WIFI);
+
+        PreCondition preCondition =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME);
+        assertTrue(guardingPreCondition.satisfied(preCondition));
+
+        preCondition =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME);
+        assertFalse(guardingPreCondition.satisfied(preCondition));
+
+        preCondition =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME);
+        assertFalse(guardingPreCondition.satisfied(preCondition));
+
+        preCondition =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_ROAM);
+        assertFalse(guardingPreCondition.satisfied(preCondition));
+
+        preCondition =
+                new GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME,
+                        QnsConstants.GUARDING_WIFI);
+        assertTrue(guardingPreCondition.satisfied(preCondition));
+
+        preCondition =
+                new GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.WIFI_PREF,
+                        QnsConstants.COVERAGE_HOME,
+                        QnsConstants.GUARDING_CELLULAR);
+        assertFalse(guardingPreCondition.satisfied(preCondition));
+    }
+
+    @Test
+    public void testGuardingPreconditionEquals() {
+        GuardingPreCondition guardingPreCondition =
+                new GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_ROAM,
+                        QnsConstants.GUARDING_CELLULAR);
+
+        GuardingPreCondition copy = guardingPreCondition;
+        assertTrue(guardingPreCondition.equals(copy));
+
+        PreCondition preCondition = guardingPreCondition;
+        assertTrue(guardingPreCondition.equals(preCondition));
+
+        preCondition =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_ROAM);
+        assertFalse(guardingPreCondition.equals(preCondition));
+
+        preCondition =
+                new GuardingPreCondition(
+                        QnsConstants.CALL_TYPE_IDLE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME,
+                        QnsConstants.GUARDING_CELLULAR);
+        assertFalse(guardingPreCondition.equals(preCondition));
+    }
+
+    @Test
+    public void testHasWifiThresholdWithoutCellularCondition() {
+        AccessNetworkSelectionPolicy ansp =
+                new AccessNetworkSelectionPolicy(apnType, targetTransportType, mPreCondition, null);
+        AccessNetworkSelectionPolicy.PostCondition postCondition = ansp.new PostCondition(null);
+        assertFalse(postCondition.hasWifiThresholdWithoutCellularCondition());
+
+        List<ThresholdGroup> thgroups = new ArrayList<>();
+        List<Threshold> ths = new ArrayList<>();
+        ths.add(
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP,
+                        -117,
+                        QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER));
+        ths.add(
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        -65,
+                        QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER));
+        thgroups.add(new ThresholdGroup(ths));
+
+        postCondition = ansp.new PostCondition(thgroups);
+        assertFalse(postCondition.hasWifiThresholdWithoutCellularCondition());
+
+        thgroups.clear();
+        ths.clear();
+        ths.add(
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        -65,
+                        QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER));
+        ths.add(
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        QnsConstants.SIGNAL_MEASUREMENT_AVAILABILITY,
+                        QnsConstants.SIGNAL_UNAVAILABLE,
+                        QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER));
+        thgroups.add(new ThresholdGroup(ths));
+
+        postCondition = ansp.new PostCondition(thgroups);
+        assertTrue(postCondition.hasWifiThresholdWithoutCellularCondition());
+    }
+
+    @Test
+    public void testSatisfiedWithWifiLowSignalStrength() {}
 
     @After
     public void tearDown() {
