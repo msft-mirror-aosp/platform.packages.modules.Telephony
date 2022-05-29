@@ -28,7 +28,6 @@ public class QnsConstants {
 
     public static final int INVALID_ID = -1;
     public static final int INVALID_SUB_ID = -1;
-    public static final int KEY_HANDOVER_NOT_ALLOWED = -1;
     public static final int KEY_DEFAULT_VALUE = 0;
 
     public static final int KEY_DEFAULT_HYST_TIMER = 30000;

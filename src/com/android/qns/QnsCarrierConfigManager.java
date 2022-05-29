@@ -2248,32 +2248,6 @@ public class QnsCarrierConfigManager {
             @QnsConstants.RoveDirection int direction,
             AccessNetworkSelectionPolicy.PreCondition preCondition) {
 
-        if (preCondition instanceof AccessNetworkSelectionPolicy.GuardingPreCondition) {
-            AccessNetworkSelectionPolicy.GuardingPreCondition guardingCondition =
-                    (AccessNetworkSelectionPolicy.GuardingPreCondition) preCondition;
-            String guardingKey =
-                    "qns.condition_"
-                            + QnsConstants.directionToString(direction).toLowerCase()
-                            + "_"
-                            + QnsConstants.callTypeToString(preCondition.getCallType())
-                                    .toLowerCase()
-                            + "_"
-                            + QnsConstants.preferenceToString(preCondition.getPreference())
-                                    .toLowerCase()
-                            + "_"
-                            + QnsConstants.coverageToString(preCondition.getCoverage())
-                                    .toLowerCase()
-                            + "_"
-                            + QnsConstants.guardingToString(guardingCondition.getGuarding())
-                                    .toLowerCase()
-                            + "_string_array";
-
-            String[] guardingPolicy = mAnspConfigMgr.getAnspCarrierPolicy(guardingKey);
-            if (guardingPolicy != null) {
-                return guardingPolicy;
-            }
-        }
-
         String key =
                 "qns.condition_"
                         + QnsConstants.directionToString(direction).toLowerCase()
@@ -2284,8 +2258,22 @@ public class QnsCarrierConfigManager {
                                 .toLowerCase()
                         + "_"
                         + QnsConstants.coverageToString(preCondition.getCoverage()).toLowerCase()
-                        + "_string_array";
+                        + "_";
 
+        if (preCondition instanceof AccessNetworkSelectionPolicy.GuardingPreCondition) {
+            AccessNetworkSelectionPolicy.GuardingPreCondition guardingCondition =
+                    (AccessNetworkSelectionPolicy.GuardingPreCondition) preCondition;
+            String guardingKey =
+                    key
+                            + QnsConstants.guardingToString(guardingCondition.getGuarding())
+                                    .toLowerCase()
+                            + "_string_array";
+            String[] guardingPolicy = mAnspConfigMgr.getAnspCarrierPolicy(guardingKey);
+            if (guardingPolicy != null) {
+                return guardingPolicy;
+            }
+        }
+        key = key + "string_array";
         return mAnspConfigMgr.getAnspCarrierPolicy(key);
     }
 
@@ -2613,6 +2601,7 @@ public class QnsCarrierConfigManager {
                     && fallback_config[4] != null
                     && !fallback_config[4].isEmpty()) {
                 fallbackConfigOnDataFail[3] = Integer.parseInt(fallback_config[4]);
+
             }
         }
         return fallbackConfigOnDataFail;
