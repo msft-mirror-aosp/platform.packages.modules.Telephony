@@ -485,7 +485,7 @@ public class QnsCarrierConfigManager {
             "qns.non_ims_wlan_hysteresis_timer_ms_int_array";
 
     /**
-     * List of 3 items indicating the RTP media metrics criteria to be set ,to make HO decision
+     * List of 4 items indicating the RTP media metrics criteria to be set ,to make HO decision
      * during Call. The three items part of integer array is jitter , Packet loss rate & RTP
      * interval.
      *

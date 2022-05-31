@@ -94,7 +94,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -304,7 +304,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -330,7 +330,7 @@ public class QnsCarrierAnspSupportConfig {
      * a default value set will apply.
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -353,7 +353,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -377,7 +377,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -401,7 +401,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -424,7 +424,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -448,7 +448,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -472,8 +472,8 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
-     *  <LI>"Bad:65535"</LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_RSCP_GOOD}"</LI>
+     *  <LI>"Bad: {@link QnsConstants#KEY_DEFAULT_THRESHOLD_RSCP_BAD}"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
      * <p>
@@ -495,7 +495,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -518,7 +518,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -539,7 +539,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -562,7 +562,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -585,8 +585,8 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
-     *  <LI>"Bad:65535"</LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD}"</LI>
+     *  <LI>"Bad: {@link QnsConstants#KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD}"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
      * <p>
@@ -608,7 +608,7 @@ public class QnsCarrierAnspSupportConfig {
      *
      * {@code 3 values defined by default(Good, Bad, Worst)}
      * <UL>
-     *  <LI>"Good:65535"/LI>
+     *  <LI>"Good:65535"</LI>
      *  <LI>"Bad:65535"</LI>
      *  <LI>"Worst:65535"</LI>
      * </UL>
@@ -628,7 +628,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -647,7 +647,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -666,7 +666,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -686,7 +686,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -707,7 +707,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -728,7 +728,7 @@ public class QnsCarrierAnspSupportConfig {
      *<p>
      * {@code 2 values defined by default(Good, Bad)}
      * <UL>
-     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"/LI>
+     *  <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"</LI>
      *  <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD}"</LI>
      * </UL>
      * <p>
@@ -738,10 +738,69 @@ public class QnsCarrierAnspSupportConfig {
     public static final String KEY_OVERRIDE_WIFI_PREF_VIDEO_WIFI_RSSI_INT_ARRAY =
             "qns.override_wifi_pref_video_wifi_rssi_int_array";
 
+    /**
+     * List of 2 customized wifi RSSI thresholds to be considered for rove-in & rove-out in
+     * wifi (IMS registered) & in idle state.
+     * Without cellular coverage, it sets the wifi rove-in & rove-out threshold of the UE.
+     * <p>
+     * 2 threshold integers must be within the boundaries:
+     * {@link WifiInfo#MIN_RSSI}
+     * {@link WifiInfo#MIN_RSSI}
+     * <p>
+     * {@code 3 values defined by default(Good, Bad, Worst)}
+     * <UL>
+     *  <LI>"Good:65535"</LI>
+     *  <LI>"Bad:65535"</LI>
+     *  <LI>"Worst:65535"</LI>
+     * </UL>
+     * <p>
+     * This key is considered invalid if the format is violated. If the key not configured,
+     * a default value set will apply.
+     */
     public static final String KEY_IDLE_WIFI_RSSI_WITHOUT_CELLULAR_INT_ARRAY =
             "qns.idle_wifi_rssi_without_cellular_int_array";
+
+    /**
+     * List of 2 customized wifi RSSI thresholds to be considered for rove-in & rove-out in
+     * wifi (IMS registered) & in voice call state.
+     * Without cellular coverage, it sets the wifi rove-in & rove-out threshold of the UE.
+     * <p>
+     * 2 threshold integers must be within the boundaries:
+     * {@link WifiInfo#MIN_RSSI}
+     * {@link WifiInfo#MIN_RSSI}
+     * <p>
+     * {@code 3 values defined by default(Good, Bad, Worst)}
+     * <UL>
+     *  <LI>"Good:65535"</LI>
+     *  <LI>"Bad:65535"</LI>
+     *  <LI>"Worst:65535"</LI>
+     * </UL>
+     * <p>
+     * This key is considered invalid if the format is violated. If the key not configured,
+     * a default value set will apply.
+     */
     public static final String KEY_VOICE_WIFI_RSSI_WITHOUT_CELLULAR_INT_ARRAY =
             "qns.voice_wifi_rssi_without_cellular_int_array";
+
+    /**
+     * List of 2 customized wifi RSSI thresholds to be considered for rove-in & rove-out in
+     * wifi (IMS registered) & in video call state.
+     * Without cellular coverage, it sets the wifi rove-in & rove-out threshold of the UE.
+     * <p>
+     * 2 threshold integers must be within the boundaries:
+     * {@link WifiInfo#MIN_RSSI}
+     * {@link WifiInfo#MIN_RSSI}
+     * <p>
+     * {@code 3 values defined by default(Good, Bad, Worst)}
+     * <UL>
+     *  <LI>"Good:65535"</LI>
+     *  <LI>"Bad:65535"</LI>
+     *  <LI>"Worst:65535"</LI>
+     * </UL>
+     * <p>
+     * This key is considered invalid if the format is violated. If the key not configured,
+     * a default value set will apply.
+     */
     public static final String KEY_VIDEO_WIFI_RSSI_WITHOUT_CELLULAR_INT_ARRAY =
             "qns.video_wifi_rssi_without_cellular_int_array";
 
