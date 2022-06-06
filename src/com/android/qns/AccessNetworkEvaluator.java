@@ -654,7 +654,7 @@ public class AccessNetworkEvaluator {
         }
         log(
                 "onEmergencyPreferredTransportTypeChanged transport:"
-                        + AccessNetworkConstants.transportTypeToString(transport));
+                        + QnsConstants.transportTypeToString(transport));
         if (mDataConnectionStatusTracker.isInactiveState()) {
             int accessNetwork;
             List<Integer> accessNetworkTypes = new ArrayList<>();
@@ -696,9 +696,7 @@ public class AccessNetworkEvaluator {
     private void onDataConnectionConnected(int transportType) {
         int otherTransportType;
         if (DBG) {
-            log(
-                    "onDataConnectionConnected :"
-                            + AccessNetworkConstants.transportTypeToString(transportType));
+            log("onDataConnectionConnected :" + QnsConstants.transportTypeToString(transportType));
         }
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
             log("Error: onDataConnectionConnected invalid transport type.");
@@ -824,7 +822,7 @@ public class AccessNetworkEvaluator {
                         || event == QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED)) {
             log(
                     "onImsRegStateChanged, "
-                            + AccessNetworkConstants.transportTypeToString(transportType)
+                            + QnsConstants.transportTypeToString(transportType)
                             + ","
                             + QnsConstants.imsRegistrationEventToString(event));
             evaluate();
@@ -907,7 +905,7 @@ public class AccessNetworkEvaluator {
     private boolean isAllowed(int transportType) {
         StringBuilder sb = new StringBuilder();
         sb.append(" evaluate isAllowed for transportType:")
-                .append(AccessNetworkConstants.transportTypeToString(transportType));
+                .append(QnsConstants.transportTypeToString(transportType));
 
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
             boolean isWfcEnabled = isWfcEnabled();
@@ -1019,7 +1017,7 @@ public class AccessNetworkEvaluator {
 
         StringBuilder sb = new StringBuilder();
         sb.append(" evaluate Available for transportType:")
-                .append(AccessNetworkConstants.transportTypeToString(transportType));
+                .append(QnsConstants.transportTypeToString(transportType));
 
         sb.append(" isAvailable:").append(isAvailable);
         if (!isAvailable) {
@@ -1539,7 +1537,7 @@ public class AccessNetworkEvaluator {
                     mCellularAccessNetworkType)) {
                 log(
                         "  satisfiedByThreshold TargetTransportType:"
-                                + AccessNetworkConstants.transportTypeToString(
+                                + QnsConstants.transportTypeToString(
                                         policy.getTargetTransportType()));
                 if (policy.getTargetTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
                     if (!accessNetworkTypes.contains(AccessNetworkType.IWLAN)) {
@@ -1848,14 +1846,16 @@ public class AccessNetworkEvaluator {
         pw.println(
                 prefix
                         + "mCellularAccessNetworkType="
-                        + AccessNetworkType.toString(mCellularAccessNetworkType) // API to replace
+                        + QnsConstants.accessNetworkTypeToString(mCellularAccessNetworkType)
                         + ", mLatestAvailableCellularAccessNetwork="
-                        + AccessNetworkType.toString(mLatestAvailableCellularAccessNetwork)
+                        + QnsConstants.accessNetworkTypeToString(
+                                mLatestAvailableCellularAccessNetwork)
                         + ", mIsNotifiedLastQualifiedAccessNetworkTypes="
                         + mIsNotifiedLastQualifiedAccessNetworkTypes);
         pw.print(prefix + "mLastQualifiedAccessNetworkTypes=");
         mLastQualifiedAccessNetworkTypes.forEach(
-                accessNetwork -> pw.print(AccessNetworkType.toString(accessNetwork) + "|"));
+                accessNetwork ->
+                        pw.print(QnsConstants.accessNetworkTypeToString(accessNetwork) + "|"));
         pw.println(
                 ", mIsNotifiedLastQualifiedAccessNetworkTypes="
                         + mIsNotifiedLastQualifiedAccessNetworkTypes);

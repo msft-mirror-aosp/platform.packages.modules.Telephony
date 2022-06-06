@@ -69,6 +69,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
+        when(mockTelephonyManager.getActiveModemCount()).thenReturn(2);
         mMockitoSession =
                 mockitoSession()
                         .mockStatic(QnsCarrierConfigManager.class)

@@ -30,6 +30,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.PersistableBundle;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CarrierConfigManager;
@@ -55,7 +56,9 @@ import org.mockito.MockitoSession;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @RunWith(JUnit4.class)
 public class QnsUtilsTest {
@@ -512,9 +515,7 @@ public class QnsUtilsTest {
         assertArrayEquals(
                 defaultRtpMetricsIntArray,
                 QnsUtils.getConfig(
-                        testBundle,
-                        null,
-                        QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
+                        testBundle, null, QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
         assertArrayEquals(
                 defaultWaitingTimetIntArray,
                 QnsUtils.getConfig(
@@ -1012,6 +1013,129 @@ public class QnsUtilsTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> QnsUtils.apnTypeToNetworkCapability(ApnSetting.AUTH_TYPE_UNKNOWN));
+    }
+
+    @Test
+    public void testIsValidSlotIndex() {
+        when(mTelephonyManager.getActiveModemCount()).thenReturn(-1, 1, 2, 3);
+        assertFalse(QnsUtils.isValidSlotIndex(mContext, 0));
+        assertFalse(QnsUtils.isValidSlotIndex(mContext, 1));
+        assertTrue(QnsUtils.isValidSlotIndex(mContext, 1));
+        assertTrue(QnsUtils.isValidSlotIndex(mContext, 2));
+    }
+
+    @Test
+    public void testGetNetworkCapabilitiesFromString() {
+        Set<Integer> capabilities = QnsUtils.getNetworkCapabilitiesFromString("MMS|XCAP");
+        assertEquals(2, capabilities.size());
+        assertTrue(capabilities.contains(NetworkCapabilities.NET_CAPABILITY_MMS));
+        assertTrue(capabilities.contains(NetworkCapabilities.NET_CAPABILITY_XCAP));
+    }
+
+    @Test
+    public void testNetworkCapabilitiesToString() {
+        Set<Integer> set = new HashSet<>();
+        set.add(NetworkCapabilities.NET_CAPABILITY_MMS);
+        set.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        set.add(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        String capabilities = QnsUtils.networkCapabilitiesToString(set);
+        assertEquals("[MMS|XCAP|INTERNET]", capabilities);
+    }
+
+    @Test
+    public void testGetNetworkCapabilityFromString() {
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_INTERNET,
+                QnsUtils.getNetworkCapabilityFromString("INTERNET"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_MMS,
+                QnsUtils.getNetworkCapabilityFromString("MMS"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_SUPL,
+                QnsUtils.getNetworkCapabilityFromString("SUPL"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_DUN,
+                QnsUtils.getNetworkCapabilityFromString("DUN"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_FOTA,
+                QnsUtils.getNetworkCapabilityFromString("FOTA"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_IMS,
+                QnsUtils.getNetworkCapabilityFromString("IMS"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_CBS,
+                QnsUtils.getNetworkCapabilityFromString("CBS"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_XCAP,
+                QnsUtils.getNetworkCapabilityFromString("XCAP"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_EIMS,
+                QnsUtils.getNetworkCapabilityFromString("EIMS"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_MCX,
+                QnsUtils.getNetworkCapabilityFromString("MCX"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_VSIM,
+                QnsUtils.getNetworkCapabilityFromString("VSIM"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_BIP,
+                QnsUtils.getNetworkCapabilityFromString("BIP"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_ENTERPRISE,
+                QnsUtils.getNetworkCapabilityFromString("ENTERPRISE"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_BANDWIDTH,
+                QnsUtils.getNetworkCapabilityFromString("PRIORITIZE_BANDWIDTH"));
+        assertEquals(
+                NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_LATENCY,
+                QnsUtils.getNetworkCapabilityFromString("PRIORITIZE_LATENCY"));
+        assertEquals(-1, QnsUtils.getNetworkCapabilityFromString("FOO"));
+    }
+
+    @Test
+    public void testNetworkCapabilityToString() {
+        assertEquals(
+                "INTERNET",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_INTERNET));
+        assertEquals(
+                "MMS", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_MMS));
+        assertEquals(
+                "SUPL",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_SUPL));
+        assertEquals(
+                "DUN", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_DUN));
+        assertEquals(
+                "FOTA",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_FOTA));
+        assertEquals(
+                "IMS", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertEquals(
+                "CBS", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_CBS));
+        assertEquals(
+                "XCAP",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_XCAP));
+        assertEquals(
+                "EIMS",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_EIMS));
+        assertEquals(
+                "MCX", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_MCX));
+        assertEquals(
+                "VSIM",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_VSIM));
+        assertEquals(
+                "BIP", QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_BIP));
+        assertEquals(
+                "ENTERPRISE",
+                QnsUtils.networkCapabilityToString(NetworkCapabilities.NET_CAPABILITY_ENTERPRISE));
+        assertEquals(
+                "PRIORITIZE_BANDWIDTH",
+                QnsUtils.networkCapabilityToString(
+                        NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_BANDWIDTH));
+        assertEquals(
+                "PRIORITIZE_LATENCY",
+                QnsUtils.networkCapabilityToString(
+                        NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_LATENCY));
+        assertEquals("Unknown(-1)", QnsUtils.networkCapabilityToString(-1));
     }
 
     @After

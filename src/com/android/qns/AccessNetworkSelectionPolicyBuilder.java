@@ -98,21 +98,29 @@ public class AccessNetworkSelectionPolicyBuilder {
                     if (mConfig.isAccessNetworkAllowed(accessNetwork, mApnType)) {
                         if (preCondition.getPreference() == QnsConstants.CELL_PREF
                                 && direction == QnsConstants.ROVE_OUT) {
-                            String name = AccessNetworkType.toString(accessNetwork) + "_AVAILABLE";
+                            String name =
+                                    QnsConstants.accessNetworkTypeToString(accessNetwork)
+                                            + "_AVAILABLE";
                             policyImsOverIwlan.add("Condition:WIFI_AVAILABLE," + name);
                         } else if (preCondition.getPreference() == QnsConstants.WIFI_PREF
                                 && direction == QnsConstants.ROVE_IN) {
-                            String name = AccessNetworkType.toString(accessNetwork) + "_AVAILABLE";
+                            String name =
+                                    QnsConstants.accessNetworkTypeToString(accessNetwork)
+                                            + "_AVAILABLE";
                             policyImsOverIwlan.add("Condition:WIFI_AVAILABLE," + name);
                         }
                     } else {
                         if (preCondition.getPreference() == QnsConstants.CELL_PREF
                                 && direction == QnsConstants.ROVE_IN) {
-                            String name = AccessNetworkType.toString(accessNetwork) + "_AVAILABLE";
+                            String name =
+                                    QnsConstants.accessNetworkTypeToString(accessNetwork)
+                                            + "_AVAILABLE";
                             policyImsOverIwlan.add("Condition:WIFI_AVAILABLE," + name);
                         } else if (preCondition.getPreference() == QnsConstants.WIFI_PREF
                                 && direction == QnsConstants.ROVE_IN) {
-                            String name = AccessNetworkType.toString(accessNetwork) + "_AVAILABLE";
+                            String name =
+                                    QnsConstants.accessNetworkTypeToString(accessNetwork)
+                                            + "_AVAILABLE";
                             policyImsOverIwlan.add("Condition:WIFI_AVAILABLE," + name);
                         }
                     }
@@ -136,8 +144,7 @@ public class AccessNetworkSelectionPolicyBuilder {
                 && preCondition.getPreference() == QnsConstants.CELL_PREF) {
             return new String[] {"Condition:WIFI_BAD"};
         }
-        if (mConfig.isChooseWfcPreferredTransportInBothBadCondition(
-                preCondition.getPreference())) {
+        if (mConfig.isChooseWfcPreferredTransportInBothBadCondition(preCondition.getPreference())) {
             if (direction == QnsConstants.ROVE_OUT
                     && preCondition.getPreference() == QnsConstants.CELL_PREF) {
                 return new String[] {"Condition:WIFI_BAD", "Condition:CELLULAR_GOOD"};
@@ -294,7 +301,9 @@ public class AccessNetworkSelectionPolicyBuilder {
             }
 
             if (!bHasThreshold && bAddAvailable) {
-                String itemName = AccessNetworkType.toString(supportedAccessNetwork) + "_AVAILABLE";
+                String itemName =
+                        QnsConstants.accessNetworkTypeToString(supportedAccessNetwork)
+                                + "_AVAILABLE";
                 if (supportedAccessNetwork == IWLAN) {
                     wifiAvailableAnspItems.add(AnspItem.find(itemName));
                 } else {
@@ -584,8 +593,7 @@ public class AccessNetworkSelectionPolicyBuilder {
                 "NGRAN_GOOD",
                 new AnspItem[] {NGRAN_SSRSRP_GOOD, NGRAN_SSRSRQ_GOOD, NGRAN_SSSINR_GOOD}),
         NGRAN_BAD(
-                "NGRAN_BAD",
-                new AnspItem[] {NGRAN_SSRSRP_BAD, NGRAN_SSRSRQ_BAD, NGRAN_SSSINR_BAD}),
+                "NGRAN_BAD", new AnspItem[] {NGRAN_SSRSRP_BAD, NGRAN_SSRSRQ_BAD, NGRAN_SSSINR_BAD}),
         NGRAN_TOLERABLE(
                 "NGRAN_TOLERABLE",
                 new AnspItem[] {
@@ -596,23 +604,17 @@ public class AccessNetworkSelectionPolicyBuilder {
                 "EUTRAN_GOOD",
                 new AnspItem[] {EUTRAN_RSRP_GOOD, EUTRAN_RSRQ_GOOD, EUTRAN_RSSNR_GOOD}),
         EUTRAN_BAD(
-                "EUTRAN_BAD",
-                new AnspItem[] {EUTRAN_RSRP_BAD, EUTRAN_RSRQ_BAD, EUTRAN_RSSNR_BAD}),
+                "EUTRAN_BAD", new AnspItem[] {EUTRAN_RSRP_BAD, EUTRAN_RSRQ_BAD, EUTRAN_RSSNR_BAD}),
         EUTRAN_TOLERABLE(
                 "EUTRAN_TOLERABLE",
                 new AnspItem[] {
                     EUTRAN_RSRP_TOLERABLE, EUTRAN_RSRQ_TOLERABLE, EUTRAN_RSSNR_TOLERABLE
                 }),
 
-        UTRAN_GOOD(
-                "UTRAN_GOOD",
-                new AnspItem[] {UTRAN_RSCP_GOOD, UTRAN_ECNO_GOOD}),
-        UTRAN_BAD(
-                "UTRAN_BAD",
-                new AnspItem[] {UTRAN_RSCP_BAD, UTRAN_ECNO_BAD}),
+        UTRAN_GOOD("UTRAN_GOOD", new AnspItem[] {UTRAN_RSCP_GOOD, UTRAN_ECNO_GOOD}),
+        UTRAN_BAD("UTRAN_BAD", new AnspItem[] {UTRAN_RSCP_BAD, UTRAN_ECNO_BAD}),
         UTRAN_TOLERABLE(
-                "UTRAN_TOLERABLE",
-                new AnspItem[] {UTRAN_RSCP_TOLERABLE, UTRAN_ECNO_TOLERABLE}),
+                "UTRAN_TOLERABLE", new AnspItem[] {UTRAN_RSCP_TOLERABLE, UTRAN_ECNO_TOLERABLE}),
 
         GERAN_GOOD("GERAN_GOOD", new AnspItem[] {GERAN_RSSI_GOOD}),
         GERAN_BAD("GERAN_BAD", new AnspItem[] {GERAN_RSSI_BAD}),
@@ -629,11 +631,8 @@ public class AccessNetworkSelectionPolicyBuilder {
                     NGRAN_UNAVAILABLE, EUTRAN_UNAVAILABLE, UTRAN_UNAVAILABLE, GERAN_UNAVAILABLE
                 }),
         CELLULAR_GOOD(
-                "CELLULAR_GOOD",
-                new AnspItem[] {NGRAN_GOOD, EUTRAN_GOOD, UTRAN_GOOD, GERAN_GOOD}),
-        CELLULAR_BAD(
-                "CELLULAR_BAD",
-                new AnspItem[] {NGRAN_BAD, EUTRAN_BAD, UTRAN_BAD, GERAN_BAD}),
+                "CELLULAR_GOOD", new AnspItem[] {NGRAN_GOOD, EUTRAN_GOOD, UTRAN_GOOD, GERAN_GOOD}),
+        CELLULAR_BAD("CELLULAR_BAD", new AnspItem[] {NGRAN_BAD, EUTRAN_BAD, UTRAN_BAD, GERAN_BAD}),
         CELLULAR_TOLERABLE(
                 "CELLULAR_TOLERABLE",
                 new AnspItem[] {

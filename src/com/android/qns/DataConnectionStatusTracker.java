@@ -26,7 +26,6 @@ import android.os.Message;
 import android.os.Registrant;
 import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
-import android.telephony.DataFailCause;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
@@ -34,7 +33,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.telephony.util.TelephonyUtils;
 
 public class DataConnectionStatusTracker {
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = 11001;
@@ -166,11 +164,11 @@ public class DataConnectionStatusTracker {
         mDataConnectionFailCause = status.getLastCauseCode();
         log(
                 "onDataConnectionChanged transportType:"
-                        + AccessNetworkConstants.transportTypeToString(transportType)
+                        + QnsConstants.transportTypeToString(transportType)
                         + " state:"
-                        + TelephonyUtils.dataStateToString(status.getState())
+                        + QnsConstants.dataStateToString(status.getState())
                         + " cause:"
-                        + DataFailCause.toString(status.getLastCauseCode()));
+                        + status.getLastCauseCode());
 
         switch (state) {
             case TelephonyManager.DATA_DISCONNECTED:
@@ -195,7 +193,7 @@ public class DataConnectionStatusTracker {
                     mState = STATE_CONNECTING;
                     log(
                             "Initial Connect inited transport: "
-                                    + AccessNetworkConstants.transportTypeToString(transportType));
+                                    + QnsConstants.transportTypeToString(transportType));
                     notifyDataConnectionStarted(transportType);
                 }
                 break;
@@ -206,20 +204,20 @@ public class DataConnectionStatusTracker {
                     mTransportType = transportType;
                     log(
                             "Data Connected Transport: "
-                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                                    + QnsConstants.transportTypeToString(mTransportType));
                     notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_CONNECTED);
                 } else if (mState == STATE_HANDOVER && mTransportType != transportType) {
                     mState = STATE_CONNECTED;
                     mTransportType = transportType;
                     log(
                             "Handover completed to: "
-                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                                    + QnsConstants.transportTypeToString(mTransportType));
                     notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_HANDOVER_SUCCESS);
                 } else if (mState == STATE_HANDOVER && mTransportType == transportType) {
                     mState = STATE_CONNECTED;
                     log(
                             "Handover failed and return to: "
-                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                                    + QnsConstants.transportTypeToString(mTransportType));
                     notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_HANDOVER_FAILED);
                 }
                 break;
@@ -230,7 +228,7 @@ public class DataConnectionStatusTracker {
                     mTransportType = transportType;
                     log(
                             "QNS assumes Handover completed to: "
-                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                                    + QnsConstants.transportTypeToString(mTransportType));
                     notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_HANDOVER_SUCCESS);
                 }
                 break;
@@ -240,12 +238,12 @@ public class DataConnectionStatusTracker {
                     mState = STATE_HANDOVER;
                     log(
                             "Handover initiated from "
-                                    + AccessNetworkConstants.transportTypeToString(transportType));
+                                    + QnsConstants.transportTypeToString(transportType));
                     notifyDataConnectionStatusChangedEvent(EVENT_DATA_CONNECTION_HANDOVER_STARTED);
                 } else {
                     log(
                             "Ignore STATE_HANDOVER since request is not for Src TransportType: "
-                                    + AccessNetworkConstants.transportTypeToString(mTransportType));
+                                    + QnsConstants.transportTypeToString(mTransportType));
                 }
                 break;
 
@@ -328,7 +326,7 @@ public class DataConnectionStatusTracker {
                     + ", mState="
                     + stateToString(mState)
                     + ", mCurrentTransportType="
-                    + AccessNetworkConstants.transportTypeToString(mCurrentTransportType)
+                    + QnsConstants.transportTypeToString(mCurrentTransportType)
                     + '}';
         }
 

@@ -24,7 +24,6 @@ import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
-import android.telephony.SubscriptionManager;
 import android.telephony.data.ApnSetting;
 import android.telephony.data.QualifiedNetworksService;
 import android.telephony.data.ThrottleStatus;
@@ -72,7 +71,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
     @Override
     public NetworkAvailabilityProvider onCreateNetworkAvailabilityProvider(int slotIndex) {
         log("Qualified Networks Service created for slot " + slotIndex);
-        if (!SubscriptionManager.isValidSlotIndex(slotIndex)) {
+        if (!QnsUtils.isValidSlotIndex(mContext, slotIndex)) {
             log("Invalid slotIndex " + slotIndex + ". fail to create NetworkAvailabilityProvider");
             return null;
         }

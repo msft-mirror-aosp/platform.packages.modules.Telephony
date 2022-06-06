@@ -15,6 +15,8 @@
  */
 package com.android.qns;
 
+import static android.telephony.CellInfo.UNAVAILABLE;
+
 import android.content.Context;
 import android.os.AsyncResult;
 import android.os.Binder;
@@ -24,7 +26,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.NonNull;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
-import android.telephony.CellInfo;
 import android.telephony.CellSignalStrength;
 import android.telephony.CellSignalStrengthCdma;
 import android.telephony.CellSignalStrengthGsm;
@@ -92,7 +93,7 @@ public class CellularQualityMonitor extends QualityMonitor {
         mTag = CellularQualityMonitor.class.getSimpleName() + "-" + slotIndex;
         mContext = context;
         mSlotIndex = slotIndex;
-        mSubId = getSubId();
+        mSubId = QnsUtils.getSubId(mContext, mSlotIndex);
         mIsQnsListenerRegistered = false;
         mSignalThresholdInfoList = new ArrayList<>();
         mHandlerThread = new HandlerThread(mTag);
@@ -178,27 +179,65 @@ public class CellularQualityMonitor extends QualityMonitor {
     private void onSignalStrengthsChanged(SignalStrength signalStrength) {
         List<CellSignalStrength> ss = signalStrength.getCellSignalStrengths();
         if (!ss.isEmpty()) {
-            int accessNetwork = AccessNetworkType.UNKNOWN;
+            int accessNetwork;
             for (CellSignalStrength cs : ss) {
-                if (cs.isValid()) {
-                    if (cs instanceof CellSignalStrengthNr) {
-                        accessNetwork = AccessNetworkType.NGRAN;
-                    } else if (cs instanceof CellSignalStrengthLte) {
-                        accessNetwork = AccessNetworkType.EUTRAN;
-                    } else if (cs instanceof CellSignalStrengthWcdma) {
-                        accessNetwork = AccessNetworkType.UTRAN;
-                    } else if (cs instanceof CellSignalStrengthCdma) {
-                        accessNetwork = AccessNetworkType.CDMA2000;
-                    } else if (cs instanceof CellSignalStrengthGsm) {
-                        accessNetwork = AccessNetworkType.GERAN;
-                    } else {
-                        Log.d(mTag, "Unknown signal strength :" + cs);
-                        continue;
-                    }
+                accessNetwork = getAccessNetworkForSignalStrength(cs);
+                if (accessNetwork != AccessNetworkType.UNKNOWN) {
                     checkAndNotifySignalStrength(cs, accessNetwork);
                 }
             }
         }
+    }
+
+    private int getAccessNetworkForSignalStrength(CellSignalStrength cs) {
+        int accessNetwork = AccessNetworkType.UNKNOWN;
+        if (cs instanceof CellSignalStrengthNr) {
+            CellSignalStrengthNr ss = (CellSignalStrengthNr) cs;
+            if (ss.getCsiRsrp() != UNAVAILABLE
+                    && ss.getCsiRsrq() != UNAVAILABLE
+                    && ss.getCsiSinr() != UNAVAILABLE
+                    && ss.getSsRsrp() != UNAVAILABLE
+                    && ss.getSsRsrq() != UNAVAILABLE
+                    && ss.getSsSinr() != UNAVAILABLE
+                    && ss.getCsiCqiTableIndex() != UNAVAILABLE) {
+                accessNetwork = AccessNetworkType.NGRAN;
+            }
+        } else if (cs instanceof CellSignalStrengthLte) {
+            CellSignalStrengthLte ss = (CellSignalStrengthLte) cs;
+            if (ss.getRssi() != UNAVAILABLE
+                    && ss.getRsrp() != UNAVAILABLE
+                    && ss.getRsrq() != UNAVAILABLE
+                    && ss.getRssnr() != UNAVAILABLE
+                    && ss.getCqiTableIndex() != UNAVAILABLE
+                    && ss.getCqi() != UNAVAILABLE
+                    && ss.getTimingAdvance() != UNAVAILABLE) {
+                accessNetwork = AccessNetworkType.EUTRAN;
+            }
+        } else if (cs instanceof CellSignalStrengthWcdma) {
+            CellSignalStrengthWcdma ss = (CellSignalStrengthWcdma) cs;
+            if (ss.getDbm() != UNAVAILABLE && ss.getEcNo() != UNAVAILABLE) {
+                accessNetwork = AccessNetworkType.UTRAN;
+            }
+        } else if (cs instanceof CellSignalStrengthCdma) {
+            CellSignalStrengthCdma ss = (CellSignalStrengthCdma) cs;
+            if (ss.getCdmaDbm() != UNAVAILABLE
+                    && ss.getCdmaEcio() != UNAVAILABLE
+                    && ss.getEvdoDbm() != UNAVAILABLE
+                    && ss.getEvdoEcio() != UNAVAILABLE
+                    && ss.getEvdoSnr() != UNAVAILABLE) {
+                accessNetwork = AccessNetworkType.CDMA2000;
+            }
+        } else if (cs instanceof CellSignalStrengthGsm) {
+            CellSignalStrengthGsm ss = (CellSignalStrengthGsm) cs;
+            if (ss.getRssi() != UNAVAILABLE
+                    && ss.getBitErrorRate() != UNAVAILABLE
+                    && ss.getTimingAdvance() != UNAVAILABLE) {
+                accessNetwork = AccessNetworkType.GERAN;
+            }
+        } else {
+            Log.d(mTag, "Unknown signal strength :" + cs);
+        }
+        return accessNetwork;
     }
 
     private void checkAndNotifySignalStrength(
@@ -239,7 +278,7 @@ public class CellularQualityMonitor extends QualityMonitor {
             List<CellSignalStrength> cellSignalStrengthList = ss.getCellSignalStrengths();
             for (CellSignalStrength cs : cellSignalStrengthList) {
                 quality = getSignalStrength(accessNetwork, measurementType, cs);
-                if (quality != CellInfo.UNAVAILABLE) {
+                if (quality != UNAVAILABLE) {
                     return quality;
                 }
             }

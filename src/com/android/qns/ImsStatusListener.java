@@ -58,7 +58,7 @@ public class ImsStatusListener {
 
     static class ImsRegistrationChangedEv {
         @QnsConstants.QnsImsRegiEvent private final int mEvent;
-        @AccessNetworkConstants.TransportType private final int mTransportType;
+        private final int mTransportType;
         private final ImsReasonInfo mReasonInfo;
 
         ImsRegistrationChangedEv(int event, int transportType, ImsReasonInfo reason) {
@@ -82,7 +82,7 @@ public class ImsStatusListener {
         public String toString() {
             String reason = mReasonInfo == null ? "null" : mReasonInfo.toString();
             return "ImsRegistrationChangedEv["
-                    + AccessNetworkConstants.transportTypeToString(mTransportType)
+                    + QnsConstants.transportTypeToString(mTransportType)
                     + "] "
                     + "Event:"
                     + mEvent
@@ -100,7 +100,7 @@ public class ImsStatusListener {
                     Log.d(
                             TAG,
                             "on IMS registered on :"
-                                    + AccessNetworkConstants.transportTypeToString(transportType));
+                                    + QnsConstants.transportTypeToString(transportType));
                     notifyImsRegistrationChangedEvent(
                             QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, transportType, null);
                 }
@@ -110,7 +110,7 @@ public class ImsStatusListener {
                     Log.d(
                             TAG,
                             "onTechnologyChangeFailed["
-                                    + AccessNetworkConstants.transportTypeToString(transportType)
+                                    + QnsConstants.transportTypeToString(transportType)
                                     + "] "
                                     + reason.toString());
                     notifyImsRegistrationChangedEvent(

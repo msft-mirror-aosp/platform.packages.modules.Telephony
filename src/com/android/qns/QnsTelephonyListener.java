@@ -469,9 +469,9 @@ public class QnsTelephonyListener {
 
         if ((newIwlanNrs != null)
                 && (oldIwlanNrs != null)
-                && (newIwlanNrs.isInService() != oldIwlanNrs.isInService())) {
-            log("Iwlan is in service: " + newIwlanNrs.isInService());
-            notifyIwlanServiceStateInfo(newIwlanNrs.isInService());
+                && (newIwlanNrs.isRegistered() != oldIwlanNrs.isRegistered())) {
+            log("Iwlan is in service: " + newIwlanNrs.isRegistered());
+            notifyIwlanServiceStateInfo(newIwlanNrs.isRegistered());
         }
 
         NetworkRegistrationInfo newWwanNrs =
@@ -518,12 +518,12 @@ public class QnsTelephonyListener {
         boolean hasAirplaneModeOnChanged =
                 mLastServiceState.getVoiceRegState() != ServiceState.STATE_POWER_OFF
                         && serviceState.getVoiceRegState() == ServiceState.STATE_POWER_OFF;
-        if ((oldWwanNrs == null || !oldWwanNrs.isInService() || hasAirplaneModeOnChanged)
-                && (newWwanNrs != null && newWwanNrs.isInService())) {
+        if ((oldWwanNrs == null || !oldWwanNrs.isRegistered() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isRegistered())) {
             newInfo.setCellularAvailable(true);
         }
-        if ((oldWwanNrs != null && oldWwanNrs.isInService())
-                && (newWwanNrs == null || !newWwanNrs.isInService())) {
+        if ((oldWwanNrs != null && oldWwanNrs.isRegistered())
+                && (newWwanNrs == null || !newWwanNrs.isRegistered())) {
             newInfo.setCellularAvailable(false);
         }
 

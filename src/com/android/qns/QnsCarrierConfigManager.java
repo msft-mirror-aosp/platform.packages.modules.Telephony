@@ -48,7 +48,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.telephony.data.DataUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -965,18 +964,14 @@ public class QnsCarrierConfigManager {
                             source =
                                     Arrays.stream(value.split("\\s*\\|\\s*"))
                                             .map(String::trim)
-                                            .map(
-                                                    AccessNetworkConstants.AccessNetworkType
-                                                            ::fromString)
+                                            .map(QnsConstants::accessNetworkTypeFromString)
                                             .collect(Collectors.toSet());
                             break;
                         case RULE_TAG_TARGET_ACCESS_NETWORKS:
                             target =
                                     Arrays.stream(value.split("\\s*\\|\\s*"))
                                             .map(String::trim)
-                                            .map(
-                                                    AccessNetworkConstants.AccessNetworkType
-                                                            ::fromString)
+                                            .map(QnsConstants::accessNetworkTypeFromString)
                                             .collect(Collectors.toSet());
                             break;
                         case RULE_TAG_TYPE:
@@ -989,7 +984,7 @@ public class QnsCarrierConfigManager {
                             }
                             break;
                         case RULE_TAG_CAPABILITIES:
-                            capabilities = DataUtils.getNetworkCapabilitiesFromString(value);
+                            capabilities = QnsUtils.getNetworkCapabilitiesFromString(value);
                             break;
                         case RULE_TAG_ROAMING:
                             roaming = Boolean.parseBoolean(value);
@@ -1051,16 +1046,16 @@ public class QnsCarrierConfigManager {
                     + (type == RULE_TYPE_ALLOWED ? "allowed" : "disallowed")
                     + ", source="
                     + sourceAccessNetworks.stream()
-                            .map(AccessNetworkConstants.AccessNetworkType::toString)
+                            .map(QnsConstants::accessNetworkTypeToString)
                             .collect(Collectors.joining("|"))
                     + ", target="
                     + targetAccessNetworks.stream()
-                            .map(AccessNetworkConstants.AccessNetworkType::toString)
+                            .map(QnsConstants::accessNetworkTypeToString)
                             .collect(Collectors.joining("|"))
                     + ", isRoaming="
                     + isOnlyForRoaming
                     + ", capabilities="
-                    + DataUtils.networkCapabilitiesToString(networkCapabilities)
+                    + QnsUtils.networkCapabilitiesToString(networkCapabilities)
                     + "]";
         }
     }
@@ -1777,9 +1772,9 @@ public class QnsCarrierConfigManager {
                 "isHandoverAllowedByPolicy apnType: "
                         + ApnSetting.getApnTypeString(apnType)
                         + " srcAccessNetwork:"
-                        + AccessNetworkConstants.AccessNetworkType.toString(srcAn)
+                        + QnsConstants.accessNetworkTypeToString(srcAn)
                         + " destAccessNetwork:"
-                        + AccessNetworkConstants.AccessNetworkType.toString(destAn)
+                        + QnsConstants.accessNetworkTypeToString(destAn)
                         + "  "
                         + QnsConstants.coverageToString(coverage));
         @NetCapability int capability = QnsUtils.apnTypeToNetworkCapability(apnType);

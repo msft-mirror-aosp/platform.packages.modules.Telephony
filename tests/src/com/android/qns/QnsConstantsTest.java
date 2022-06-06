@@ -16,6 +16,10 @@
 
 package com.android.qns;
 
+import android.telephony.AccessNetworkConstants;
+import android.telephony.AccessNetworkConstants.AccessNetworkType;
+import android.telephony.TelephonyManager;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -78,7 +82,7 @@ public class QnsConstantsTest {
     }
 
     @Test
-    public void guardingToString() {
+    public void testGuardingToString() {
         String guarding_str = null;
 
         guarding_str = QnsConstants.guardingToString(QnsConstants.GUARDING_NONE);
@@ -110,5 +114,86 @@ public class QnsConstantsTest {
         Assert.assertEquals(imsRegEvent_str, "IMS_REGISTRATION_CHANGED_REGISTERED");
         imsRegEvent_str = QnsConstants.imsRegistrationEventToString(QnsConstants.INVALID_ID);
         Assert.assertEquals(imsRegEvent_str, "");
+    }
+
+    @Test
+    public void testAccessNetworkTypeToString() {
+        String accessNetwork;
+
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.UNKNOWN);
+        Assert.assertEquals("UNKNOWN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.NGRAN);
+        Assert.assertEquals("NGRAN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.EUTRAN);
+        Assert.assertEquals("EUTRAN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.UTRAN);
+        Assert.assertEquals("UTRAN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.CDMA2000);
+        Assert.assertEquals("CDMA2000", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.GERAN);
+        Assert.assertEquals("GERAN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(AccessNetworkType.IWLAN);
+        Assert.assertEquals("IWLAN", accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeToString(-1);
+        Assert.assertEquals("-1", accessNetwork);
+    }
+
+    @Test
+    public void testAccessNetworkTypeFromString() {
+        int accessNetwork;
+
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("TEST");
+        Assert.assertEquals(AccessNetworkType.UNKNOWN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("NGRAN");
+        Assert.assertEquals(AccessNetworkType.NGRAN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("EUTRAN");
+        Assert.assertEquals(AccessNetworkType.EUTRAN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("UTRAN");
+        Assert.assertEquals(AccessNetworkType.UTRAN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("CDMA2000");
+        Assert.assertEquals(AccessNetworkType.CDMA2000, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("GERAN");
+        Assert.assertEquals(AccessNetworkType.GERAN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("IWLAN");
+        Assert.assertEquals(AccessNetworkType.IWLAN, accessNetwork);
+        accessNetwork = QnsConstants.accessNetworkTypeFromString("eutran");
+        Assert.assertEquals(AccessNetworkType.EUTRAN, accessNetwork);
+    }
+
+    @Test
+    public void testTransportTypeToString() {
+        String transportType;
+        transportType =
+                QnsConstants.transportTypeToString(AccessNetworkConstants.TRANSPORT_TYPE_INVALID);
+        Assert.assertEquals("INVALID", transportType);
+        transportType =
+                QnsConstants.transportTypeToString(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        Assert.assertEquals("WLAN", transportType);
+        transportType =
+                QnsConstants.transportTypeToString(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        Assert.assertEquals("WWAN", transportType);
+        transportType = QnsConstants.transportTypeToString(0);
+        Assert.assertEquals("0", transportType);
+    }
+
+    @Test
+    public void testDataStateToString() {
+        String dataState;
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_DISCONNECTED);
+        Assert.assertEquals("DISCONNECTED", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_CONNECTED);
+        Assert.assertEquals("CONNECTED", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_CONNECTING);
+        Assert.assertEquals("CONNECTING", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_DISCONNECTING);
+        Assert.assertEquals("DISCONNECTING", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_SUSPENDED);
+        Assert.assertEquals("SUSPENDED", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_HANDOVER_IN_PROGRESS);
+        Assert.assertEquals("HANDOVERINPROGRESS", dataState);
+        dataState = QnsConstants.dataStateToString(TelephonyManager.DATA_UNKNOWN);
+        Assert.assertEquals("UNKNOWN", dataState);
+        dataState = QnsConstants.dataStateToString(123);
+        Assert.assertEquals("UNKNOWN(123)", dataState);
     }
 }

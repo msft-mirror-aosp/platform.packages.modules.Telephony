@@ -17,7 +17,6 @@ package com.android.qns;
 
 import static android.telephony.SignalStrength.INVALID;
 
-import android.telephony.AccessNetworkConstants;
 import android.telephony.SignalThresholdInfo;
 
 import java.util.Objects;
@@ -191,7 +190,7 @@ public class Threshold {
 
     public String toShortString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(AccessNetworkConstants.AccessNetworkType.toString(mAccessNetwork)).append(".");
+        sb.append(QnsConstants.accessNetworkTypeToString(mAccessNetwork)).append(".");
         switch (mMeasurementType) {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_UNKNOWN:
                 sb.append("UNKNOWN");

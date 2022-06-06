@@ -217,7 +217,7 @@ public class RestrictManager {
                     Log.d(
                             TAG,
                             "EVENT_RELEASE_RESTRICTION : "
-                                    + AccessNetworkConstants.transportTypeToString(transportType)
+                                    + QnsConstants.transportTypeToString(transportType)
                                     + " "
                                     + restrictTypeToString(restriction.mRestrictType));
                     if (restriction
@@ -360,14 +360,20 @@ public class RestrictManager {
             return mRestrictionMap.size() != 0;
         }
 
-        public boolean hasRestrictonType(@RestrictType int restrictType) {
+        /**
+         * This method returns if the restriction info has given restriction type.
+         *
+         * @param restrictType integer value of restriction type.
+         * @return true if restrictinfo has the restriction; otherwise false.
+         */
+        public boolean hasRestrictionType(@RestrictType int restrictType) {
             return mRestrictionMap.get(restrictType) != null;
         }
 
         public String toString() {
             StringBuilder builder = new StringBuilder();
             builder.append("RestrictInfo[")
-                    .append(AccessNetworkConstants.transportTypeToString(mTransportMode))
+                    .append(QnsConstants.transportTypeToString(mTransportMode))
                     .append("] : ");
             if (isRestricted()) {
                 for (Restriction restriction : mRestrictionMap.values()) {
@@ -515,7 +521,7 @@ public class RestrictManager {
                 Log.d(
                         TAG,
                         "prevent "
-                                + AccessNetworkConstants.transportTypeToString(preventTransportType)
+                                + QnsConstants.transportTypeToString(preventTransportType)
                                 + " "
                                 + waitingTimer
                                 + " milli seconds");
@@ -818,7 +824,7 @@ public class RestrictManager {
                 "Start Initial Data Connection fail retry_timer On TransportType"
                         + fallbackRetryTimer
                         + "_"
-                        + AccessNetworkConstants.transportTypeToString(transportType));
+                        + QnsConstants.transportTypeToString(transportType));
         if (fallbackRetryTimer > 0 && !mIsTimerRunningOnDataConnectionFail) {
             Message msg =
                     mHandler.obtainMessage(
@@ -840,7 +846,7 @@ public class RestrictManager {
                         + "_"
                         + mRetryCounterOnDataConnectionFail
                         + "_"
-                        + AccessNetworkConstants.transportTypeToString(transportType));
+                        + QnsConstants.transportTypeToString(transportType));
         if (fallbackRetryCount > 0) {
             if (mRetryCounterOnDataConnectionFail == fallbackRetryCount) {
                 fallbackToOtherTransportOnDataConnectionFail(transportType);
@@ -866,9 +872,9 @@ public class RestrictManager {
         Log.d(
                 TAG,
                 "onImsRegistrationStateChanged["
-                        + AccessNetworkConstants.transportTypeToString(mTransportType)
+                        + QnsConstants.transportTypeToString(mTransportType)
                         + "] transportType["
-                        + AccessNetworkConstants.transportTypeToString(event.getTransportType())
+                        + QnsConstants.transportTypeToString(event.getTransportType())
                         + "] RegistrationState["
                         + QnsConstants.imsRegistrationEventToString(event.getEvent()));
         int prefMode =
@@ -886,8 +892,7 @@ public class RestrictManager {
                 Log.d(
                         TAG,
                         "On Ims Registered: "
-                                + AccessNetworkConstants.transportTypeToString(
-                                        event.getTransportType()));
+                                + QnsConstants.transportTypeToString(event.getTransportType()));
                 if (event.getTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                         && hasRestrictionType(
                                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
@@ -950,7 +955,7 @@ public class RestrictManager {
             Log.d(
                     TAG,
                     "updateLastEvaluatedTransportType: "
-                            + AccessNetworkConstants.transportTypeToString(transportType));
+                            + QnsConstants.transportTypeToString(transportType));
         }
         mLastEvaluatedTransportType = transportType;
         if (mDataConnectionStatusTracker.isActiveState() && mTransportType != transportType) {
@@ -1048,7 +1053,7 @@ public class RestrictManager {
         Log.d(
                 TAG,
                 "addRestriction["
-                        + AccessNetworkConstants.transportTypeToString(transport)
+                        + QnsConstants.transportTypeToString(transport)
                         + "] "
                         + restrictTypeToString(type)
                         + " was restrict:"
@@ -1059,7 +1064,7 @@ public class RestrictManager {
             Log.d(
                     TAG,
                     "addRestriction["
-                            + AccessNetworkConstants.transportTypeToString(transport)
+                            + QnsConstants.transportTypeToString(transport)
                             + "] "
                             + restriction);
             needNotify = true;
@@ -1071,7 +1076,7 @@ public class RestrictManager {
             Log.d(
                     TAG,
                     "updateRestriction["
-                            + AccessNetworkConstants.transportTypeToString(transport)
+                            + QnsConstants.transportTypeToString(transport)
                             + "] "
                             + restriction);
         }
@@ -1095,7 +1100,7 @@ public class RestrictManager {
         Log.d(
                 TAG,
                 "releaseRestriction["
-                        + AccessNetworkConstants.transportTypeToString(transport)
+                        + QnsConstants.transportTypeToString(transport)
                         + "] "
                         + restrictTypeToString(type)
                         + " was restrict:"
@@ -1121,7 +1126,7 @@ public class RestrictManager {
         Log.d(
                 TAG,
                 "processReleaseEvent["
-                        + AccessNetworkConstants.transportTypeToString(transportType)
+                        + QnsConstants.transportTypeToString(transportType)
                         + "] "
                         + event);
 
@@ -1191,7 +1196,7 @@ public class RestrictManager {
         try {
             RestrictInfo info = mRestrictInfos.get(transportType);
             int size = info.getRestrictionMap().size();
-            if (info.hasRestrictonType(RESTRICT_TYPE_GUARDING)) {
+            if (info.hasRestrictionType(RESTRICT_TYPE_GUARDING)) {
                 size--;
             }
             return size > 0;
@@ -1204,7 +1209,7 @@ public class RestrictManager {
     public boolean hasRestrictionType(int transportType, int restrictType) {
         try {
             if (mRestrictInfos != null) {
-                return mRestrictInfos.get(transportType).hasRestrictonType(restrictType);
+                return mRestrictInfos.get(transportType).hasRestrictionType(restrictType);
             }
         } catch (Exception e) {
 
@@ -1229,12 +1234,12 @@ public class RestrictManager {
         Log.d(
                 TAG,
                 "isAllowedOnSingleTransport ("
-                        + AccessNetworkConstants.transportTypeToString(transportType)
+                        + QnsConstants.transportTypeToString(transportType)
                         + ")  restriction :"
                         + mRestrictInfos.get(transportType).toString());
         int countIgnorableRestriction = 0;
         for (int restrictType : ignorableRestrictionsOnSingleRat) {
-            if (mRestrictInfos.get(transportType).hasRestrictonType(restrictType)) {
+            if (mRestrictInfos.get(transportType).hasRestrictionType(restrictType)) {
                 countIgnorableRestriction++;
             }
         }
@@ -1363,7 +1368,7 @@ public class RestrictManager {
                 "getGuardingTimeMillis: timer = "
                         + delayMillis
                         + " for transport type = "
-                        + AccessNetworkConstants.transportTypeToString(transportType)
+                        + QnsConstants.transportTypeToString(transportType)
                         + " in "
                         + QnsConstants.callTypeToString(callType)
                         + " state.");
@@ -1383,7 +1388,7 @@ public class RestrictManager {
             Log.d(
                     TAG,
                     "RESTRICT_TYPE_GUARDING cleared from Guarding for:"
-                            + AccessNetworkConstants.transportTypeToString(mTransportType));
+                            + QnsConstants.transportTypeToString(mTransportType));
             // addRestriction() will take care to notify the ANE of Restrict Info status
             releaseRestriction(getOtherTransport(transportType), RESTRICT_TYPE_GUARDING, true);
         }
@@ -1407,7 +1412,7 @@ public class RestrictManager {
                         + "  throttleTime:"
                         + throttleTime
                         + "  transportType:"
-                        + AccessNetworkConstants.transportTypeToString(transportType));
+                        + QnsConstants.transportTypeToString(transportType));
         if (throttle) {
             long delayMillis = throttleTime - SystemClock.elapsedRealtime();
             if (delayMillis > 0) {
@@ -1464,12 +1469,11 @@ public class RestrictManager {
         pw.println(
                 prefix
                         + "mTransportType="
-                        + AccessNetworkConstants.transportTypeToString(mTransportType)
+                        + QnsConstants.transportTypeToString(mTransportType)
                         + ", mLastEvaluatedTransportType="
-                        + AccessNetworkConstants.transportTypeToString(mLastEvaluatedTransportType)
+                        + QnsConstants.transportTypeToString(mLastEvaluatedTransportType)
                         + ", mLastDataConnectionTransportType="
-                        + AccessNetworkConstants.transportTypeToString(
-                                mLastDataConnectionTransportType));
+                        + QnsConstants.transportTypeToString(mLastDataConnectionTransportType));
         pw.println(
                 prefix
                         + "mCounterForIwlanRestrictionInCall="

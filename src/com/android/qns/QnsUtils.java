@@ -19,19 +19,21 @@ package com.android.qns;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.PersistableBundle;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
-import android.telephony.Rlog;
 import android.telephony.ServiceState;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.Xml;
 
 import com.android.ims.ImsManager;
@@ -42,7 +44,13 @@ import org.xmlpull.v1.XmlPullParserException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** This class contains QualifiedNetworksService specific utility functions */
 public class QnsUtils {
@@ -66,7 +74,7 @@ public class QnsUtils {
         }
         List<String> types = new ArrayList<>();
         for (Integer net : accessNetworkTypes) {
-            types.add(AccessNetworkConstants.AccessNetworkType.toString(net));
+            types.add(QnsConstants.accessNetworkTypeToString(net));
         }
         return TextUtils.join("|", types);
     }
@@ -80,6 +88,18 @@ public class QnsUtils {
             subid = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         }
         return subid;
+    }
+
+    /**
+     * This method validates the slot index.
+     *
+     * @param context Context
+     * @param slotIndex slot index
+     * @return returns true if slotIndex is valid; otherwise false.
+     */
+    public static boolean isValidSlotIndex(Context context, int slotIndex) {
+        TelephonyManager tm = context.getSystemService(TelephonyManager.class);
+        return slotIndex >= 0 && tm != null && slotIndex < tm.getActiveModemCount();
     }
 
     public static boolean isDefaultDataSubs(int slotId) {
@@ -133,12 +153,12 @@ public class QnsUtils {
                             listener.getLastProvisioningWfcRoamingEnagledInfo();
                     bWfcEnabledByUser = bWfcEnabledByUser && (bWfcRoamingEnabled);
                 } catch (Exception e) {
-                    slog("got exception e:" + e);
+                    log("got exception e:" + e);
                 }
             } else {
                 bWfcEnabledByUser = imsManager.isWfcEnabledByUser();
             }
-            slog(
+            log(
                     "isWfcEnabled slot:"
                             + slotIndex
                             + " byUser:"
@@ -151,7 +171,7 @@ public class QnsUtils {
                             + roaming);
             return bWfcEnabledByUser && bWfcEnabledByPlatform && bWfcProvisionedOnDevice;
         } catch (Exception e) {
-            sloge("isWfcEnabled exception:" + e);
+            loge("isWfcEnabled exception:" + e);
             // Fail to query, just return false to avoid an exception.
         }
         return false;
@@ -161,10 +181,10 @@ public class QnsUtils {
         try {
             ImsManager imsManager = getImsManager(context, slotIndex);
             boolean bWfcEnabledByPlatform = imsManager.isWfcEnabledByPlatform();
-            slog("isWfcEnabledByPlatform:" + bWfcEnabledByPlatform + " slot:" + slotIndex);
+            log("isWfcEnabledByPlatform:" + bWfcEnabledByPlatform + " slot:" + slotIndex);
             return bWfcEnabledByPlatform;
         } catch (Exception e) {
-            sloge("isWfcEnabledByPlatform exception:" + e);
+            loge("isWfcEnabledByPlatform exception:" + e);
             // Fail to query, just return false to avoid an exception.
         }
         return false;
@@ -174,7 +194,7 @@ public class QnsUtils {
         try {
             ImsManager imsManager = getImsManager(context, slotIndex);
             int wfcMode = imsManager.getWfcMode(roaming);
-            slog("getWfcMode slot:" + slotIndex + " wfcMode:" + wfcMode + " roaming:" + roaming);
+            log("getWfcMode slot:" + slotIndex + " wfcMode:" + wfcMode + " roaming:" + roaming);
             return wfcMode;
         } catch (Exception e) {
             // Fail to query, just return false to avoid an exception.
@@ -196,9 +216,178 @@ public class QnsUtils {
                     context.getSystemService(TelephonyManager.class).createForSubscriptionId(subId);
             return telephonyManager.isWifiCallingAvailable();
         } catch (Exception e) {
-            sloge("isWifiCallingAvailable has exception : " + e);
+            loge("isWifiCallingAvailable has exception : " + e);
         }
         return false;
+    }
+
+    /**
+     * Get Set of network capabilities from string joined by {@code |}, space is ignored. If input
+     * string contains unknown capability or malformatted(e.g. empty string), -1 is included in the
+     * returned set.
+     *
+     * @param capabilitiesString capability strings joined by {@code |}
+     * @return Set of capabilities
+     */
+    public static @NetCapability Set<Integer> getNetworkCapabilitiesFromString(
+            @NonNull String capabilitiesString) {
+        // e.g. "IMS|" is not allowed
+        if (!capabilitiesString.matches("(\\s*[a-zA-Z]+\\s*)(\\|\\s*[a-zA-Z]+\\s*)*")) {
+            return Collections.singleton(-1);
+        }
+        return Arrays.stream(capabilitiesString.split("\\s*\\|\\s*"))
+                .map(String::trim)
+                .map(QnsUtils::getNetworkCapabilityFromString)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Convert network capabilities to string.
+     *
+     * <p>This is for debugging and logging purposes only.
+     *
+     * @param netCaps Network capabilities.
+     * @return Network capabilities in string format.
+     */
+    public static @NonNull String networkCapabilitiesToString(
+            @NetCapability @Nullable Collection<Integer> netCaps) {
+        if (netCaps == null || netCaps.isEmpty()) return "";
+        return "["
+                + netCaps.stream()
+                        .map(QnsUtils::networkCapabilityToString)
+                        .collect(Collectors.joining("|"))
+                + "]";
+    }
+
+    /**
+     * Convert a network capability to string.
+     *
+     * <p>This is for debugging and logging purposes only.
+     *
+     * @param netCap Network capability.
+     * @return Network capability in string format.
+     */
+    public static @NonNull String networkCapabilityToString(@NetCapability int netCap) {
+        switch (netCap) {
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+                return "MMS";
+            case NetworkCapabilities.NET_CAPABILITY_SUPL:
+                return "SUPL";
+            case NetworkCapabilities.NET_CAPABILITY_DUN:
+                return "DUN";
+            case NetworkCapabilities.NET_CAPABILITY_FOTA:
+                return "FOTA";
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                return "IMS";
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
+                return "CBS";
+            case NetworkCapabilities.NET_CAPABILITY_WIFI_P2P:
+                return "WIFI_P2P";
+            case NetworkCapabilities.NET_CAPABILITY_IA:
+                return "IA";
+            case NetworkCapabilities.NET_CAPABILITY_RCS:
+                return "RCS";
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return "XCAP";
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+                return "EIMS";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_METERED:
+                return "NOT_METERED";
+            case NetworkCapabilities.NET_CAPABILITY_INTERNET:
+                return "INTERNET";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED:
+                return "NOT_RESTRICTED";
+            case NetworkCapabilities.NET_CAPABILITY_TRUSTED:
+                return "TRUSTED";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_VPN:
+                return "NOT_VPN";
+            case NetworkCapabilities.NET_CAPABILITY_VALIDATED:
+                return "VALIDATED";
+            case NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL:
+                return "CAPTIVE_PORTAL";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING:
+                return "NOT_ROAMING";
+            case NetworkCapabilities.NET_CAPABILITY_FOREGROUND:
+                return "FOREGROUND";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED:
+                return "NOT_CONGESTED";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED:
+                return "NOT_SUSPENDED";
+            case NetworkCapabilities.NET_CAPABILITY_OEM_PAID:
+                return "OEM_PAID";
+            case NetworkCapabilities.NET_CAPABILITY_MCX:
+                return "MCX";
+            case NetworkCapabilities.NET_CAPABILITY_PARTIAL_CONNECTIVITY:
+                return "PARTIAL_CONNECTIVITY";
+            case NetworkCapabilities.NET_CAPABILITY_TEMPORARILY_NOT_METERED:
+                return "TEMPORARILY_NOT_METERED";
+            case NetworkCapabilities.NET_CAPABILITY_OEM_PRIVATE:
+                return "OEM_PRIVATE";
+            case NetworkCapabilities.NET_CAPABILITY_VEHICLE_INTERNAL:
+                return "VEHICLE_INTERNAL";
+            case NetworkCapabilities.NET_CAPABILITY_NOT_VCN_MANAGED:
+                return "NOT_VCN_MANAGED";
+            case NetworkCapabilities.NET_CAPABILITY_ENTERPRISE:
+                return "ENTERPRISE";
+            case NetworkCapabilities.NET_CAPABILITY_VSIM:
+                return "VSIM";
+            case NetworkCapabilities.NET_CAPABILITY_BIP:
+                return "BIP";
+            case NetworkCapabilities.NET_CAPABILITY_HEAD_UNIT:
+                return "HEAD_UNIT";
+            case NetworkCapabilities.NET_CAPABILITY_MMTEL:
+                return "MMTEL";
+            case NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_LATENCY:
+                return "PRIORITIZE_LATENCY";
+            case NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_BANDWIDTH:
+                return "PRIORITIZE_BANDWIDTH";
+            default:
+                return "Unknown(" + netCap + ")";
+        }
+    }
+
+    /**
+     * Get the network capability from the string.
+     *
+     * @param capabilityString The capability in string format
+     * @return The network capability. -1 if not found.
+     */
+    public static @NetCapability int getNetworkCapabilityFromString(
+            @NonNull String capabilityString) {
+        switch (capabilityString.toUpperCase(Locale.ROOT)) {
+            case "MMS":
+                return NetworkCapabilities.NET_CAPABILITY_MMS;
+            case "SUPL":
+                return NetworkCapabilities.NET_CAPABILITY_SUPL;
+            case "DUN":
+                return NetworkCapabilities.NET_CAPABILITY_DUN;
+            case "FOTA":
+                return NetworkCapabilities.NET_CAPABILITY_FOTA;
+            case "IMS":
+                return NetworkCapabilities.NET_CAPABILITY_IMS;
+            case "CBS":
+                return NetworkCapabilities.NET_CAPABILITY_CBS;
+            case "XCAP":
+                return NetworkCapabilities.NET_CAPABILITY_XCAP;
+            case "EIMS":
+                return NetworkCapabilities.NET_CAPABILITY_EIMS;
+            case "INTERNET":
+                return NetworkCapabilities.NET_CAPABILITY_INTERNET;
+            case "MCX":
+                return NetworkCapabilities.NET_CAPABILITY_MCX;
+            case "VSIM":
+                return NetworkCapabilities.NET_CAPABILITY_VSIM;
+            case "BIP":
+                return NetworkCapabilities.NET_CAPABILITY_BIP;
+            case "ENTERPRISE":
+                return NetworkCapabilities.NET_CAPABILITY_ENTERPRISE;
+            case "PRIORITIZE_BANDWIDTH":
+                return NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_BANDWIDTH;
+            case "PRIORITIZE_LATENCY":
+                return NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_LATENCY;
+            default:
+                return -1;
+        }
     }
 
     public static PersistableBundle readQnsDefaultConfigFromAssets(
@@ -220,7 +409,7 @@ public class QnsUtils {
             String key) {
 
         if (carrierConfigBundle == null || carrierConfigBundle.get(key) == null) {
-            slog("key not set in pb file: " + key);
+            log("key not set in pb file: " + key);
 
             if (assetConfigBundle == null || assetConfigBundle.get(key) == null)
                 return (T) getDefaultValueForKey(key);
@@ -389,7 +578,7 @@ public class QnsUtils {
 
             for (String fileName : configName) {
                 if (fileName.startsWith(carrierIDConfig)) {
-                    slog("matched file: " + fileName);
+                    log("matched file: " + fileName);
                     XmlPullParser parser = Xml.newPullParser();
                     parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
 
@@ -401,7 +590,7 @@ public class QnsUtils {
                 }
             }
         } catch (Exception e) {
-            sloge("Error: " + e);
+            loge("Error: " + e);
         }
         return bundleFromAssets;
     }
@@ -411,7 +600,7 @@ public class QnsUtils {
         PersistableBundle bundleFromXml = new PersistableBundle();
 
         if (parser == null) {
-            slog("parser is null");
+            log("parser is null");
             return bundleFromXml;
         }
 
@@ -419,19 +608,19 @@ public class QnsUtils {
         while (((event = parser.next()) != XmlPullParser.END_DOCUMENT)) {
             if (event == XmlPullParser.START_TAG && "carrier_config".equals(parser.getName())) {
                 PersistableBundle configFragment = PersistableBundle.restoreFromXml(parser);
-                slog("bundle created : " + configFragment);
+                log("bundle created : " + configFragment);
                 bundleFromXml.putAll(configFragment);
             }
         }
         return bundleFromXml;
     }
 
-    protected static void sloge(String log) {
-        Rlog.e(QnsUtils.class.getSimpleName(), log);
+    protected static void loge(String log) {
+        Log.e(QnsUtils.class.getSimpleName(), log);
     }
 
-    protected static void slog(String log) {
-        Rlog.d(QnsUtils.class.getSimpleName(), log);
+    protected static void log(String log) {
+        Log.d(QnsUtils.class.getSimpleName(), log);
     }
 
     protected static @NetCapability int apnTypeToNetworkCapability(int apnType) {

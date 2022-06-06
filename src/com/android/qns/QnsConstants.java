@@ -19,6 +19,9 @@ package com.android.qns;
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
+import android.telephony.AccessNetworkConstants;
+import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.Annotation;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsMmTelManager;
@@ -288,5 +291,102 @@ public class QnsConstants {
                 return "IMS_REGISTRATION_CHANGED_REGISTERED";
         }
         return "";
+    }
+
+    /**
+     * This method converts AccessNetworkType from int to string.
+     *
+     * @param type int value of AccessNetworkType
+     * @return String value of the access network type.
+     */
+    public static String accessNetworkTypeToString(int type) {
+        switch (type) {
+            case AccessNetworkType.UNKNOWN:
+                return "UNKNOWN";
+            case AccessNetworkType.GERAN:
+                return "GERAN";
+            case AccessNetworkType.UTRAN:
+                return "UTRAN";
+            case AccessNetworkType.EUTRAN:
+                return "EUTRAN";
+            case AccessNetworkType.CDMA2000:
+                return "CDMA2000";
+            case AccessNetworkType.IWLAN:
+                return "IWLAN";
+            case AccessNetworkType.NGRAN:
+                return "NGRAN";
+            default:
+                return Integer.toString(type);
+        }
+    }
+
+    /**
+     * This method coverts AccessNetworkType from string to int.
+     *
+     * @param str String value of AccessNetworkType
+     * @return Integer value of AccessNetworkType.
+     */
+    public static int accessNetworkTypeFromString(@NonNull String str) {
+        switch (str.toUpperCase()) {
+            case "GERAN":
+                return AccessNetworkType.GERAN;
+            case "UTRAN":
+                return AccessNetworkType.UTRAN;
+            case "EUTRAN":
+                return AccessNetworkType.EUTRAN;
+            case "CDMA2000":
+                return AccessNetworkType.CDMA2000;
+            case "IWLAN":
+                return AccessNetworkType.IWLAN;
+            case "NGRAN":
+                return AccessNetworkType.NGRAN;
+            default:
+                return AccessNetworkType.UNKNOWN;
+        }
+    }
+
+    /**
+     * This method coverts TransportType from int to string.
+     *
+     * @param transportType Integer value of TransportType
+     * @return String value of TransportType.
+     */
+    public static String transportTypeToString(int transportType) {
+        switch (transportType) {
+            case AccessNetworkConstants.TRANSPORT_TYPE_WWAN:
+                return "WWAN";
+            case AccessNetworkConstants.TRANSPORT_TYPE_WLAN:
+                return "WLAN";
+            case AccessNetworkConstants.TRANSPORT_TYPE_INVALID:
+                return "INVALID";
+            default:
+                return Integer.toString(transportType);
+        }
+    }
+
+    /**
+     * Convert data state to string
+     *
+     * @return The data state in string format.
+     */
+    public static String dataStateToString(@Annotation.DataState int state) {
+        switch (state) {
+            case TelephonyManager.DATA_DISCONNECTED:
+                return "DISCONNECTED";
+            case TelephonyManager.DATA_CONNECTING:
+                return "CONNECTING";
+            case TelephonyManager.DATA_CONNECTED:
+                return "CONNECTED";
+            case TelephonyManager.DATA_SUSPENDED:
+                return "SUSPENDED";
+            case TelephonyManager.DATA_DISCONNECTING:
+                return "DISCONNECTING";
+            case TelephonyManager.DATA_HANDOVER_IN_PROGRESS:
+                return "HANDOVERINPROGRESS";
+            case TelephonyManager.DATA_UNKNOWN:
+                return "UNKNOWN";
+        }
+        // This is the error case. The well-defined value for UNKNOWN is -1.
+        return "UNKNOWN(" + state + ")";
     }
 }

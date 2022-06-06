@@ -63,7 +63,7 @@ public class AccessNetworkSelectionPolicy {
                 + ":"
                 + QnsUtils.getStringApnTypes(mApnType)
                 + "]"
-                + AccessNetworkConstants.transportTypeToString(mTargetTransportType)
+                + QnsConstants.transportTypeToString(mTargetTransportType)
                 + ","
                 + mPreCondition.toString()
                 + mPostCondition.toString();
