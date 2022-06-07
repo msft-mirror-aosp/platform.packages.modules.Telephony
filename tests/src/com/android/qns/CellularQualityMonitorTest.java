@@ -27,6 +27,7 @@ import android.telephony.SignalStrength;
 import android.telephony.SignalStrengthUpdateRequest;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.TelephonyCallback;
+import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 
 import org.junit.After;
@@ -703,7 +704,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
     public void testOnQnsTelephonyInfoChanged() {
         testRegisterThresholdChange();
         when(mQnsTelephonyInfo.getDataRegState()).thenReturn(ServiceState.STATE_IN_SERVICE);
-        when(mQnsTelephonyInfo.getDataTech()).thenReturn(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        when(mQnsTelephonyInfo.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
         when(mQnsTelephonyInfo.isCellularAvailable()).thenReturn(true, false);
         when(mQnsTelephonyInfo.getDataRegState()).thenReturn(ServiceState.STATE_IN_SERVICE);
         Message.obtain(

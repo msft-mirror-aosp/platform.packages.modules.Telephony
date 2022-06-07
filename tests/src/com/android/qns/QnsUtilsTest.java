@@ -276,35 +276,35 @@ public class QnsUtilsTest {
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.UNKNOWN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_OUT_OF_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_LTE));
+                        ServiceState.STATE_OUT_OF_SERVICE, TelephonyManager.NETWORK_TYPE_LTE));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.UNKNOWN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_EMERGENCY_ONLY, ServiceState.RIL_RADIO_TECHNOLOGY_LTE));
+                        ServiceState.STATE_EMERGENCY_ONLY, TelephonyManager.NETWORK_TYPE_LTE));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.UNKNOWN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_POWER_OFF, ServiceState.RIL_RADIO_TECHNOLOGY_LTE));
+                        ServiceState.STATE_POWER_OFF, TelephonyManager.NETWORK_TYPE_LTE_CA));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.EUTRAN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_IN_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_LTE));
+                        ServiceState.STATE_IN_SERVICE, TelephonyManager.NETWORK_TYPE_LTE));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.EUTRAN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_IN_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_LTE_CA));
+                        ServiceState.STATE_IN_SERVICE, TelephonyManager.NETWORK_TYPE_LTE_CA));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.GERAN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_IN_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_GPRS));
+                        ServiceState.STATE_IN_SERVICE, TelephonyManager.NETWORK_TYPE_GPRS));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.UTRAN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_IN_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_TD_SCDMA));
+                        ServiceState.STATE_IN_SERVICE, TelephonyManager.NETWORK_TYPE_TD_SCDMA));
         assertEquals(
                 AccessNetworkConstants.AccessNetworkType.NGRAN,
                 QnsUtils.getCellularAccessNetworkType(
-                        ServiceState.STATE_IN_SERVICE, ServiceState.RIL_RADIO_TECHNOLOGY_NR));
+                        ServiceState.STATE_IN_SERVICE, TelephonyManager.NETWORK_TYPE_NR));
     }
 
     @Test

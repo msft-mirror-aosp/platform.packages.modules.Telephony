@@ -196,4 +196,90 @@ public class QnsConstantsTest {
         dataState = QnsConstants.dataStateToString(123);
         Assert.assertEquals("UNKNOWN(123)", dataState);
     }
+
+    @Test
+    public void testCallStateToString() {
+        Assert.assertEquals(
+                "CALL_STATE_IDLE",
+                QnsConstants.callStateToString(TelephonyManager.CALL_STATE_IDLE));
+        Assert.assertEquals(
+                "CALL_STATE_RINGING",
+                QnsConstants.callStateToString(TelephonyManager.CALL_STATE_RINGING));
+        Assert.assertEquals(
+                "CALL_STATE_OFFHOOK",
+                QnsConstants.callStateToString(TelephonyManager.CALL_STATE_OFFHOOK));
+        Assert.assertEquals("CALL_STATE_UNKNOWN_-1", QnsConstants.callStateToString(-1));
+    }
+
+    @Test
+    public void testNetworkTypeToAccessNetworkType() {
+        Assert.assertEquals(
+                AccessNetworkType.GERAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_GPRS));
+        Assert.assertEquals(
+                AccessNetworkType.GERAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_EDGE));
+        Assert.assertEquals(
+                AccessNetworkType.GERAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_GSM));
+
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_UMTS));
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_HSDPA));
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_HSUPA));
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_HSPAP));
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_HSPA));
+        Assert.assertEquals(
+                AccessNetworkType.UTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(
+                        TelephonyManager.NETWORK_TYPE_TD_SCDMA));
+
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_1xRTT));
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_CDMA));
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_EVDO_0));
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_EVDO_A));
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_EVDO_B));
+        Assert.assertEquals(
+                AccessNetworkType.CDMA2000,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_EHRPD));
+
+        Assert.assertEquals(
+                AccessNetworkType.EUTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_LTE));
+        Assert.assertEquals(
+                AccessNetworkType.EUTRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_LTE_CA));
+
+        Assert.assertEquals(
+                AccessNetworkType.NGRAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_NR));
+        Assert.assertEquals(
+                AccessNetworkType.IWLAN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_IWLAN));
+
+        Assert.assertEquals(
+                AccessNetworkType.UNKNOWN,
+                QnsConstants.networkTypeToAccessNetworkType(TelephonyManager.NETWORK_TYPE_UNKNOWN));
+        Assert.assertEquals(
+                AccessNetworkType.UNKNOWN, QnsConstants.networkTypeToAccessNetworkType(-1));
+    }
 }

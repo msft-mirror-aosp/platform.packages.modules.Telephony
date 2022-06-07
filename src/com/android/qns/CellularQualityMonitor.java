@@ -617,7 +617,7 @@ public class CellularQualityMonitor extends QualityMonitor {
 
         private void onQnsTelephonyInfoChanged(QnsTelephonyListener.QnsTelephonyInfo info) {
             if (mLastQnsTelephonyInfo == null
-                    || mLastQnsTelephonyInfo.getDataTech() != info.getDataTech()
+                    || mLastQnsTelephonyInfo.getDataNetworkType() != info.getDataNetworkType()
                     || mLastQnsTelephonyInfo.getDataRegState() != info.getDataRegState()
                     || mLastQnsTelephonyInfo.isCellularAvailable() != info.isCellularAvailable()) {
                 if (!info.isCellularAvailable()) {

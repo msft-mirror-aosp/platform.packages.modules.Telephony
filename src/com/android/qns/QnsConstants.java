@@ -389,4 +389,42 @@ public class QnsConstants {
         // This is the error case. The well-defined value for UNKNOWN is -1.
         return "UNKNOWN(" + state + ")";
     }
+
+    /**
+     * This method converts Network Type to AccessNetworkType.
+     *
+     * @param networkType integer value of network type
+     * @return integer value of AccessNetworkType.
+     */
+    public static int networkTypeToAccessNetworkType(int networkType) {
+        switch (networkType) {
+            case TelephonyManager.NETWORK_TYPE_GPRS:
+            case TelephonyManager.NETWORK_TYPE_EDGE:
+            case TelephonyManager.NETWORK_TYPE_GSM:
+                return AccessNetworkType.GERAN;
+            case TelephonyManager.NETWORK_TYPE_UMTS:
+            case TelephonyManager.NETWORK_TYPE_HSDPA:
+            case TelephonyManager.NETWORK_TYPE_HSUPA:
+            case TelephonyManager.NETWORK_TYPE_HSPAP:
+            case TelephonyManager.NETWORK_TYPE_HSPA:
+            case TelephonyManager.NETWORK_TYPE_TD_SCDMA:
+                return AccessNetworkType.UTRAN;
+            case TelephonyManager.NETWORK_TYPE_1xRTT:
+            case TelephonyManager.NETWORK_TYPE_CDMA:
+            case TelephonyManager.NETWORK_TYPE_EVDO_0:
+            case TelephonyManager.NETWORK_TYPE_EVDO_A:
+            case TelephonyManager.NETWORK_TYPE_EVDO_B:
+            case TelephonyManager.NETWORK_TYPE_EHRPD:
+                return AccessNetworkType.CDMA2000;
+            case TelephonyManager.NETWORK_TYPE_LTE:
+            case TelephonyManager.NETWORK_TYPE_LTE_CA:
+                return AccessNetworkType.EUTRAN;
+            case TelephonyManager.NETWORK_TYPE_NR:
+                return AccessNetworkType.NGRAN;
+            case TelephonyManager.NETWORK_TYPE_IWLAN:
+                return AccessNetworkType.IWLAN;
+            default:
+                return AccessNetworkType.UNKNOWN;
+        }
+    }
 }

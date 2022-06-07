@@ -107,7 +107,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void testNotifyQnsTelephonyInfo() {
         QnsTelephonyListener.QnsTelephonyInfo qtInfo = mQtListener.new QnsTelephonyInfo();
         qtInfo.setRegisteredPlmn("00102");
-        qtInfo.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_EDGE);
+        qtInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_EDGE);
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, h, 1, null, false);
 
         mQtListener.notifyQnsTelephonyInfo(qtInfo);
@@ -129,7 +129,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void testNotifyQnsTelephonyInfoIms() {
         QnsTelephonyListener.QnsTelephonyInfo qtInfo = mQtListener.new QnsTelephonyInfo();
         qtInfo.setRegisteredPlmn("00102");
-        qtInfo.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_EDGE);
+        qtInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_EDGE);
         QnsTelephonyListener.QnsTelephonyInfoIms qtInfoIms =
                 mQtListener.new QnsTelephonyInfoIms(qtInfo, true, true, true, true);
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, h, 1, null, false);
@@ -152,8 +152,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void testGetLastQnsTelephonyInfo() {
         QnsTelephonyListener.QnsTelephonyInfo qtInfo = mQtListener.getLastQnsTelephonyInfo();
         assertEquals(ServiceState.STATE_OUT_OF_SERVICE, qtInfo.getDataRegState());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN, qtInfo.getDataTech());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN, qtInfo.getVoiceTech());
+        assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getDataNetworkType());
+        assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getVoiceNetworkType());
         assertEquals("", qtInfo.getRegisteredPlmn());
         assertFalse(qtInfo.isCoverage());
         assertFalse(qtInfo.isCellularAvailable());
@@ -162,8 +162,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
         qtInfo = mQtListener.getLastQnsTelephonyInfo();
         assertEquals(ServiceState.STATE_IN_SERVICE, qtInfo.getDataRegState());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_LTE, qtInfo.getDataTech());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_LTE, qtInfo.getVoiceTech());
+        assertEquals(TelephonyManager.NETWORK_TYPE_LTE, qtInfo.getDataNetworkType());
+        assertEquals(TelephonyManager.NETWORK_TYPE_LTE, qtInfo.getVoiceNetworkType());
         assertEquals("00101", qtInfo.getRegisteredPlmn());
         assertFalse(qtInfo.isCoverage());
         assertTrue(qtInfo.isCellularAvailable());
@@ -445,11 +445,11 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                 ServiceState.STATE_IN_SERVICE,
                 mQtListener.mLastQnsTelephonyInfoIms.getDataRegState());
         assertEquals(
-                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
-                mQtListener.mLastQnsTelephonyInfoIms.getDataTech());
+                TelephonyManager.NETWORK_TYPE_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getDataNetworkType());
         assertEquals(
-                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
-                mQtListener.mLastQnsTelephonyInfoIms.getVoiceTech());
+                TelephonyManager.NETWORK_TYPE_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getVoiceNetworkType());
         assertEquals("00101", mQtListener.mLastQnsTelephonyInfoIms.getRegisteredPlmn());
         assertEquals(
                 ServiceState.ROAMING_TYPE_NOT_ROAMING,
@@ -477,11 +477,11 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                 ServiceState.STATE_IN_SERVICE,
                 mQtListener.mLastQnsTelephonyInfoIms.getDataRegState());
         assertEquals(
-                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
-                mQtListener.mLastQnsTelephonyInfoIms.getDataTech());
+                TelephonyManager.NETWORK_TYPE_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getDataNetworkType());
         assertEquals(
-                ServiceState.RIL_RADIO_TECHNOLOGY_LTE,
-                mQtListener.mLastQnsTelephonyInfoIms.getVoiceTech());
+                TelephonyManager.NETWORK_TYPE_LTE,
+                mQtListener.mLastQnsTelephonyInfoIms.getVoiceNetworkType());
         assertEquals("00101", mQtListener.mLastQnsTelephonyInfoIms.getRegisteredPlmn());
         assertTrue(mQtListener.mLastQnsTelephonyInfoIms.isCoverage());
         assertTrue(mQtListener.mLastQnsTelephonyInfoIms.isCellularAvailable());
@@ -834,8 +834,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         // test default values
         assertEquals(ServiceState.ROAMING_TYPE_NOT_ROAMING, qtInfo.getRoamingType());
         assertFalse(qtInfo.isCoverage());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN, qtInfo.getVoiceTech());
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN, qtInfo.getDataTech());
+        assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getVoiceNetworkType());
+        assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getDataNetworkType());
         assertFalse(qtInfo.isCellularAvailable());
         assertEquals("", qtInfo.getRegisteredPlmn());
         assertEquals(ServiceState.STATE_OUT_OF_SERVICE, qtInfo.getDataRegState());
@@ -847,11 +847,11 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         qtInfo.setCoverage(true);
         assertTrue(qtInfo.isCoverage());
 
-        qtInfo.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_LTE, qtInfo.getVoiceTech());
+        qtInfo.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        assertEquals(TelephonyManager.NETWORK_TYPE_LTE, qtInfo.getVoiceNetworkType());
 
-        qtInfo.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_EDGE);
-        assertEquals(ServiceState.RIL_RADIO_TECHNOLOGY_EDGE, qtInfo.getDataTech());
+        qtInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_EDGE);
+        assertEquals(TelephonyManager.NETWORK_TYPE_EDGE, qtInfo.getDataNetworkType());
 
         qtInfo.setCellularAvailable(true);
         assertTrue(qtInfo.isCellularAvailable());

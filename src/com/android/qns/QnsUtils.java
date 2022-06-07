@@ -202,9 +202,18 @@ public class QnsUtils {
         return roaming ? WIFI_MODE_WIFI_PREFERRED : WIFI_MODE_CELLULAR_PREFERRED;
     }
 
-    public static int getCellularAccessNetworkType(int dataRegState, int dataTech) {
+    /**
+     * This method provides the access network type for the given data registration state and
+     * Network Type. It will return value as UNKNOWN(0) if registration state is not in service.
+     *
+     * @param dataRegState Data registration state.
+     * @param dataNetworkType Data network type
+     * @return int value of the AccessNetworkType mapped to NetworkType. And UNKNOWN(0) if
+     *     registration state is not in service.
+     */
+    public static int getCellularAccessNetworkType(int dataRegState, int dataNetworkType) {
         if (dataRegState == ServiceState.STATE_IN_SERVICE) {
-            return ServiceState.rilRadioTechnologyToAccessNetworkType(dataTech);
+            return QnsConstants.networkTypeToAccessNetworkType(dataNetworkType);
         }
         return AccessNetworkConstants.AccessNetworkType.UNKNOWN;
     }

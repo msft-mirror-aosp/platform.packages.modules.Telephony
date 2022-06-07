@@ -415,7 +415,7 @@ public class AccessNetworkEvaluator {
             boolean volteRoamingSupported = true;
             int cellularAccessNetworkType =
                     QnsUtils.getCellularAccessNetworkType(
-                            infoIms.getDataRegState(), infoIms.getDataTech());
+                            infoIms.getDataRegState(), infoIms.getDataNetworkType());
 
             int coverage = getCoverage(infoIms, mApnType);
             if (mApnType == ApnSetting.TYPE_IMS && infoIms.isCellularAvailable()) {
@@ -447,10 +447,10 @@ public class AccessNetworkEvaluator {
         }
         if (mCellularAccessNetworkType
                 != QnsUtils.getCellularAccessNetworkType(
-                        info.getDataRegState(), info.getDataTech())) {
+                        info.getDataRegState(), info.getDataNetworkType())) {
             mCellularAccessNetworkType =
                     QnsUtils.getCellularAccessNetworkType(
-                            info.getDataRegState(), info.getDataTech());
+                            info.getDataRegState(), info.getDataNetworkType());
             mRestrictManager.setCellularAccessNetwork(mCellularAccessNetworkType);
             if (mCellularAccessNetworkType != AccessNetworkType.UNKNOWN) {
                 mLatestAvailableCellularAccessNetwork = mCellularAccessNetworkType;

@@ -483,23 +483,23 @@ public class QnsTelephonyListener {
                         NetworkRegistrationInfo.DOMAIN_PS,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
 
-        // Event for voice registration state changed
-        int voiceRadioTechnology = serviceState.getRilVoiceRadioTechnology();
-        newInfo.setVoiceTech(voiceRadioTechnology);
+        NetworkRegistrationInfo newWwanCsNrs =
+                serviceState.getNetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_CS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
 
-        // Event for cellular data tech changed
-        int dataTech = ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN;
-        int dataRegState = ServiceState.STATE_OUT_OF_SERVICE;
-        if (newWwanNrs != null) {
-            newInfo.setDataTech(
-                    ServiceState.networkTypeToRilRadioTechnology(
-                            newWwanNrs.getAccessNetworkTechnology()));
-            newInfo.setDataRegState(
-                    registrationStateToServiceState(newWwanNrs.getRegistrationState()));
+        // Event for voice registration state changed
+        if (newWwanCsNrs != null) {
+            newInfo.setVoiceNetworkType(newWwanCsNrs.getAccessNetworkTechnology());
         }
 
-        // Event for cellular data roaming registration state changed.
+        // Event for cellular data tech changed
         if (newWwanNrs != null) {
+            newInfo.setDataNetworkType(newWwanNrs.getAccessNetworkTechnology());
+            newInfo.setDataRegState(
+                    registrationStateToServiceState(newWwanNrs.getRegistrationState()));
+
+            // Event for cellular data roaming registration state changed.
             if (newWwanNrs.getRegistrationState()
                     == NetworkRegistrationInfo.REGISTRATION_STATE_HOME) {
                 mCoverage = QnsConstants.COVERAGE_HOME;
@@ -536,11 +536,11 @@ public class QnsTelephonyListener {
 
         if (!newInfo.equals(mLastQnsTelephonyInfo)) {
             StringBuilder sb = new StringBuilder();
-            if (newInfo.getVoiceTech() != mLastQnsTelephonyInfo.getVoiceTech()) {
-                sb.append(" voiceTech:").append(newInfo.getVoiceTech());
+            if (newInfo.getVoiceNetworkType() != mLastQnsTelephonyInfo.getVoiceNetworkType()) {
+                sb.append(" voiceTech:").append(newInfo.getVoiceNetworkType());
             }
-            if (newInfo.getDataTech() != mLastQnsTelephonyInfo.getDataTech()) {
-                sb.append(" dataTech:").append(newInfo.getDataTech());
+            if (newInfo.getDataNetworkType() != mLastQnsTelephonyInfo.getDataNetworkType()) {
+                sb.append(" dataTech:").append(newInfo.getDataNetworkType());
             }
             if (newInfo.getDataRegState() != mLastQnsTelephonyInfo.getDataRegState()) {
                 sb.append(" dataRegState:").append(newInfo.getDataRegState());
@@ -864,12 +864,12 @@ public class QnsTelephonyListener {
                     + mVoiceBarring
                     + ", mEmergencyBarring="
                     + mEmergencyBarring
-                    + ", mVoiceTech="
-                    + getVoiceTech()
+                    + ", mVoiceNetworkType="
+                    + getVoiceNetworkType()
                     + ", mDataRegState="
                     + getDataRegState()
-                    + ", mDataTech="
-                    + getDataTech()
+                    + ", mDataNetworkType="
+                    + getDataNetworkType()
                     + ", mCoverage="
                     + mCoverage
                     + ", mRoamingType="
@@ -902,18 +902,18 @@ public class QnsTelephonyListener {
     }
 
     public class QnsTelephonyInfo {
-        private int mVoiceTech;
+        private int mVoiceNetworkType;
         private int mDataRegState;
-        private int mDataTech;
+        private int mDataNetworkType;
         private boolean mCoverage;
         private int mRoamingType;
         private String mRegisteredPlmn;
         private boolean mCellularAvailable;
 
         public QnsTelephonyInfo() {
-            mVoiceTech = ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN;
+            mVoiceNetworkType = TelephonyManager.NETWORK_TYPE_UNKNOWN;
             mDataRegState = ServiceState.STATE_OUT_OF_SERVICE;
-            mDataTech = ServiceState.RIL_RADIO_TECHNOLOGY_UNKNOWN;
+            mDataNetworkType = TelephonyManager.NETWORK_TYPE_UNKNOWN;
             mCoverage = false; // home
             mCellularAvailable = false; // not available
             mRegisteredPlmn = "";
@@ -921,21 +921,21 @@ public class QnsTelephonyListener {
         }
 
         public QnsTelephonyInfo(QnsTelephonyInfo info) {
-            mVoiceTech = info.mVoiceTech;
+            mVoiceNetworkType = info.mVoiceNetworkType;
             mDataRegState = info.mDataRegState;
-            mDataTech = info.mDataTech;
+            mDataNetworkType = info.mDataNetworkType;
             mCoverage = info.mCoverage;
             mCellularAvailable = info.mCellularAvailable;
             mRegisteredPlmn = info.mRegisteredPlmn;
             mRoamingType = info.mRoamingType;
         }
 
-        public int getVoiceTech() {
-            return mVoiceTech;
+        public int getVoiceNetworkType() {
+            return mVoiceNetworkType;
         }
 
-        public void setVoiceTech(int voiceTech) {
-            mVoiceTech = voiceTech;
+        public void setVoiceNetworkType(int voiceNetworkType) {
+            mVoiceNetworkType = voiceNetworkType;
         }
 
         public int getDataRegState() {
@@ -946,12 +946,12 @@ public class QnsTelephonyListener {
             mDataRegState = dataRegState;
         }
 
-        public int getDataTech() {
-            return mDataTech;
+        public int getDataNetworkType() {
+            return mDataNetworkType;
         }
 
-        public void setDataTech(int dataTech) {
-            mDataTech = dataTech;
+        public void setDataNetworkType(int dataNetworkType) {
+            mDataNetworkType = dataNetworkType;
         }
 
         @ServiceState.RoamingType
@@ -980,9 +980,9 @@ public class QnsTelephonyListener {
             if (this == o) return true;
             if (!(o instanceof QnsTelephonyInfo)) return false;
             QnsTelephonyInfo that = (QnsTelephonyInfo) o;
-            return mVoiceTech == that.mVoiceTech
+            return mVoiceNetworkType == that.mVoiceNetworkType
                     && mDataRegState == that.mDataRegState
-                    && mDataTech == that.mDataTech
+                    && mDataNetworkType == that.mDataNetworkType
                     && mCoverage == that.mCoverage
                     && mRoamingType == that.mRoamingType
                     && mRegisteredPlmn.equals(that.mRegisteredPlmn)
@@ -992,18 +992,22 @@ public class QnsTelephonyListener {
         @Override
         public int hashCode() {
             return Objects.hash(
-                    mVoiceTech, mDataRegState, mDataTech, mCoverage, mCellularAvailable);
+                    mVoiceNetworkType,
+                    mDataRegState,
+                    mDataNetworkType,
+                    mCoverage,
+                    mCellularAvailable);
         }
 
         @Override
         public String toString() {
             return "QnsTelephonyInfo{"
-                    + "mVoiceTech="
-                    + mVoiceTech
+                    + "mVoiceNetworkType="
+                    + mVoiceNetworkType
                     + ", mDataRegState="
                     + mDataRegState
-                    + ", mDataTech="
-                    + mDataTech
+                    + ", mDataNetworkType="
+                    + mDataNetworkType
                     + ", mCoverage="
                     + mCoverage
                     + ", mRoamingType="
