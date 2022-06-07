@@ -26,6 +26,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.TelephonyNetworkSpecifier;
+import android.net.wifi.WifiManager;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -37,6 +38,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
@@ -57,6 +59,10 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     private NetworkCapabilities mNetworkCapabilities;
     @Mock private QnsEventDispatcher mMockQnsEventDispatcher;
     @Mock private QnsTelephonyListener mMockQnsTelephonyListener;
+
+    @Captor
+    private ArgumentCaptor<WifiManager.ActiveCountryCodeChangedCallback>
+            mWifiCountryCodeReceiverCaptor;
 
     private class TestHandlerThread extends HandlerThread {
         public TestHandlerThread() {
@@ -296,19 +302,21 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         assertFalse(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
     }
 
-    @Test
+    /* @Test
     public void testIsInternationalRoaming() {
         boolean isInternationalRoaming;
-        when(mockSharedPreferences.getString(any(), any())).thenReturn("US");
+        // when(mockSharedPreferences.getString(any(), any())).thenReturn("US");
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("US");
         isInternationalRoaming =
                 mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, anyInt());
         assertTrue(isInternationalRoaming);
 
-        when(mockSharedPreferences.getString(any(), any())).thenReturn("CA");
+        // when(mockSharedPreferences.getString(any(), any())).thenReturn("CA");
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("CA");
         isInternationalRoaming =
                 mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, anyInt());
         assertFalse(isInternationalRoaming);
-    }
+    }*/
 
     @Test
     public void testWifiDisabling() throws InterruptedException {
@@ -344,5 +352,62 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         mIwlanNetworkStatusTracker.onWifiEnabled();
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
+    }
+
+    @Test
+    public void testRegisterWifiCountryCode() {
+        mIwlanNetworkStatusTracker.registerWifiCountryCode();
+        verify(mockWifiManager)
+                .registerActiveCountryCodeChangedCallback(
+                        any(), mWifiCountryCodeReceiverCaptor.capture());
+
+        testOnActiveCountryCodeChanged();
+        testOnCountryCodeInactive();
+    }
+
+    private void testOnActiveCountryCodeChanged() {
+        String lastUpdatedCountryCode;
+        boolean isInternationalRoaming;
+
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("US");
+        lastUpdatedCountryCode = mIwlanNetworkStatusTracker.getLastUpdatedWifiCountryCode();
+        assertEquals("US", lastUpdatedCountryCode);
+        isInternationalRoaming =
+                mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, anyInt());
+        assertTrue(isInternationalRoaming);
+
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("IN");
+        lastUpdatedCountryCode = mIwlanNetworkStatusTracker.getLastUpdatedWifiCountryCode();
+        assertEquals("IN", lastUpdatedCountryCode);
+        isInternationalRoaming =
+                mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, anyInt());
+        assertTrue(isInternationalRoaming);
+
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("IN");
+        lastUpdatedCountryCode = mIwlanNetworkStatusTracker.getLastUpdatedWifiCountryCode();
+        assertEquals("IN", lastUpdatedCountryCode);
+
+        mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged("CA");
+        lastUpdatedCountryCode = mIwlanNetworkStatusTracker.getLastUpdatedWifiCountryCode();
+        assertEquals("CA", lastUpdatedCountryCode);
+        isInternationalRoaming =
+                mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, anyInt());
+        assertFalse(isInternationalRoaming);
+    }
+
+    private void testOnCountryCodeInactive() {
+        String lastUpdatedCountryCode;
+        mWifiCountryCodeReceiverCaptor.getValue().onCountryCodeInactive();
+        lastUpdatedCountryCode = mIwlanNetworkStatusTracker.getLastUpdatedWifiCountryCode();
+        assertNull(lastUpdatedCountryCode);
+    }
+
+    @Test
+    public void testUnRegisterWifiCountryCode() {
+        testRegisterWifiCountryCode();
+        mIwlanNetworkStatusTracker.unregisterWifiCountryCode();
+        verify(mockWifiManager)
+                .unregisterActiveCountryCodeChangedCallback(
+                        mWifiCountryCodeReceiverCaptor.capture());
     }
 }
