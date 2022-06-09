@@ -169,12 +169,6 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
         quality =
                 mCellularQualityMonitor.getCurrentQuality(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN,
-                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Assert.assertEquals(-94, quality);
-
-        quality =
-                mCellularQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
         Assert.assertEquals(-79, quality);

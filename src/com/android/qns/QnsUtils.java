@@ -16,6 +16,9 @@
 
 package com.android.qns;
 
+import static android.telephony.data.ApnSetting.TYPE_EMERGENCY;
+import static android.telephony.data.ApnSetting.TYPE_IMS;
+import static android.telephony.data.ApnSetting.TYPE_MMS;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
@@ -57,11 +60,53 @@ public class QnsUtils {
 
     private static final String CARRIER_ID_PREFIX = "carrier_config_carrierid_";
 
+    /**
+     * Get Supported APN Strings from Bit mask
+     *
+     * @param apnTypesMask bitmask of APN types.
+     * @return list of APN types Strings
+     */
     public static String getStringApnTypesFromBitmask(int apnTypesMask) {
         StringBuilder sb = new StringBuilder();
-        final String[] types = ApnSetting.getApnTypesStringFromBitmask(apnTypesMask).split(",");
+
+        List<Integer> apnTypes = getApnTypes(apnTypesMask);
+        final String[] types = getApnTypesString(apnTypes).split(",");
+
         sb.append(TextUtils.join("|", types));
         return sb.toString();
+    }
+
+    /**
+     * Get supported APN types
+     *
+     * @param apnTypeBitmask bitmask of APN types.
+     * @return list of APN types
+     */
+    @ApnSetting.ApnType
+    public static List<Integer> getApnTypes(int apnTypeBitmask) {
+        List<Integer> types = new ArrayList<>();
+
+        if ((apnTypeBitmask & ApnSetting.TYPE_DEFAULT) == ApnSetting.TYPE_DEFAULT) {
+            types.add(ApnSetting.TYPE_DEFAULT);
+            apnTypeBitmask &= ~ApnSetting.TYPE_DEFAULT;
+        }
+        while (apnTypeBitmask != 0) {
+            int highestApnTypeBit = Integer.highestOneBit(apnTypeBitmask);
+            types.add(highestApnTypeBit);
+            apnTypeBitmask &= ~highestApnTypeBit;
+        }
+        return types;
+    }
+
+    private static String getApnTypesString(List<Integer> apnTypes) {
+        List<String> apnstrings = new ArrayList<>();
+
+        Integer[] types = apnTypes.toArray(new Integer[0]);
+        for (int i = 0; i < types.length; i++) {
+            String apnString = ApnSetting.getApnTypeString(types[i]);
+            if (!TextUtils.isEmpty(apnString)) apnstrings.add(apnString);
+        }
+        return TextUtils.join(",", apnstrings);
     }
 
     public static String getStringApnTypes(int apnType) {
@@ -634,13 +679,13 @@ public class QnsUtils {
 
     protected static @NetCapability int apnTypeToNetworkCapability(int apnType) {
         switch (apnType) {
-            case ApnSetting.TYPE_IMS:
+            case TYPE_IMS:
                 return NetworkCapabilities.NET_CAPABILITY_IMS;
-            case ApnSetting.TYPE_MMS:
+            case TYPE_MMS:
                 return NetworkCapabilities.NET_CAPABILITY_MMS;
             case ApnSetting.TYPE_XCAP:
                 return NetworkCapabilities.NET_CAPABILITY_XCAP;
-            case ApnSetting.TYPE_EMERGENCY:
+            case TYPE_EMERGENCY:
                 return NetworkCapabilities.NET_CAPABILITY_EIMS;
             case ApnSetting.TYPE_CBS:
                 return NetworkCapabilities.NET_CAPABILITY_CBS;

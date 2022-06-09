@@ -169,24 +169,23 @@ public class QnsTelephonyListener {
 
     protected void notifyPreciseDataConnectionStateChanged(
             PreciseDataConnectionState connectionState) {
-        List<Integer> apnTypes = connectionState.getApnSetting().getApnTypes();
-        if (apnTypes != null) {
-            AsyncResult ar = new AsyncResult(null, connectionState, null);
-            for (int apnType : apnTypes) {
-                PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(apnType);
-                if (lastState == null || !lastState.equals(connectionState)) {
-                    mLastPreciseDataConnectionState.put(apnType, connectionState);
-                    sArchivingPreciseDataConnectionState.put(
-                            mSubId, connectionState.getTransportType(), apnType, connectionState);
-                    RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
-                    if (apnTypeRegistrantList != null) {
-                        apnTypeRegistrantList.notifyRegistrants(ar);
-                    }
-                } else {
-                    log(
-                            "onPreciseDataConnectionStateChanged state received for apn is same:"
-                                    + apnType);
+        int supportedApnTypeBitMask = connectionState.getApnSetting().getApnTypeBitmask();
+        List<Integer> apnTypes = QnsUtils.getApnTypes(supportedApnTypeBitMask);
+        AsyncResult ar = new AsyncResult(null, connectionState, null);
+        for (int apnType : apnTypes) {
+            PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(apnType);
+            if (lastState == null || !lastState.equals(connectionState)) {
+                mLastPreciseDataConnectionState.put(apnType, connectionState);
+                sArchivingPreciseDataConnectionState.put(
+                        mSubId, connectionState.getTransportType(), apnType, connectionState);
+                RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
+                if (apnTypeRegistrantList != null) {
+                    apnTypeRegistrantList.notifyRegistrants(ar);
                 }
+            } else {
+                log(
+                        "onPreciseDataConnectionStateChanged state received for apn is same:"
+                                + apnType);
             }
         }
     }
@@ -516,10 +515,10 @@ public class QnsTelephonyListener {
 
         // Event for cellular ps attach state changed.
         boolean hasAirplaneModeOnChanged =
-                mLastServiceState.getVoiceRegState() != ServiceState.STATE_POWER_OFF
-                        && serviceState.getVoiceRegState() == ServiceState.STATE_POWER_OFF;
-        if ((oldWwanNrs == null || !oldWwanNrs.isRegistered() || hasAirplaneModeOnChanged)
-                && (newWwanNrs != null && newWwanNrs.isRegistered())) {
+                mLastServiceState.getState() != ServiceState.STATE_POWER_OFF
+                        && serviceState.getState() == ServiceState.STATE_POWER_OFF;
+        if ((oldWwanNrs == null || !oldWwanNrs.isInService() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isInService())) {
             newInfo.setCellularAvailable(true);
         }
         if ((oldWwanNrs != null && oldWwanNrs.isRegistered())
@@ -644,7 +643,9 @@ public class QnsTelephonyListener {
         try {
             if (newState.getState() == TelephonyManager.DATA_CONNECTED
                     || newState.getState() == TelephonyManager.DATA_HANDOVER_IN_PROGRESS) {
-                for (int apnType : newState.getApnSetting().getApnTypes()) {
+                int supportedApnTypeBitMask = newState.getApnSetting().getApnTypeBitmask();
+                List<Integer> apnTypes = QnsUtils.getApnTypes(supportedApnTypeBitMask);
+                for (int apnType : apnTypes) {
                     PreciseDataConnectionState lastState =
                             getLastPreciseDataConnectionState(apnType);
                     PreciseDataConnectionState archiveState =

@@ -214,7 +214,8 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
             int qnsSupportedApnTypesMask = mConfigManager.getQnsSupportedApnTypes();
 
             HashMap<Integer, AccessNetworkEvaluator> evaluators = new HashMap<>();
-            int[] types = ApnSetting.getApnTypesFromBitmask(qnsSupportedApnTypesMask);
+            List<Integer> apnTypes = QnsUtils.getApnTypes(qnsSupportedApnTypesMask);
+            Integer[] types = apnTypes.toArray(new Integer[0]);
             ArrayList<Integer> prioritisedTypes = new ArrayList<>();
 
             for (int i = 0; i < types.length; i++) {

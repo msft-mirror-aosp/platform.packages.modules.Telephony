@@ -467,10 +467,7 @@ public class CellularQualityMonitor extends QualityMonitor {
         int signalStrength = SignalStrength.INVALID;
         switch (measurementType) {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI:
-                if (accessNetwork == AccessNetworkType.UTRAN
-                        && css instanceof CellSignalStrengthWcdma) {
-                    signalStrength = ((CellSignalStrengthWcdma) css).getRssi();
-                } else if (accessNetwork == AccessNetworkType.GERAN
+                if (accessNetwork == AccessNetworkType.GERAN
                         && css instanceof CellSignalStrengthGsm) {
                     signalStrength = ((CellSignalStrengthGsm) css).getRssi();
                 }
@@ -478,7 +475,7 @@ public class CellularQualityMonitor extends QualityMonitor {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP:
                 if (accessNetwork == AccessNetworkType.UTRAN
                         && css instanceof CellSignalStrengthWcdma) {
-                    signalStrength = ((CellSignalStrengthWcdma) css).getRscp();
+                    signalStrength = ((CellSignalStrengthWcdma) css).getDbm();
                 }
                 break;
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP:

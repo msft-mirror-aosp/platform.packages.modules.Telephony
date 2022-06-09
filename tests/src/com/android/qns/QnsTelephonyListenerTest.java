@@ -55,6 +55,8 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 @RunWith(JUnit4.class)
@@ -173,6 +175,12 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testGetLastPreciseDataConnectionState() {
         PreciseDataConnectionState output;
+        List<Integer> typeIMS = new ArrayList<>();
+        List<Integer> typeXcap = new ArrayList<>();
+        typeIMS.add(ApnSetting.TYPE_IMS);
+        typeXcap.add(ApnSetting.TYPE_XCAP);
+        lenient().when(QnsUtils.getApnTypes(anyInt())).thenReturn(typeXcap).thenReturn(typeIMS);
+
         PreciseDataConnectionState connectionStateIms =
                 new PreciseDataConnectionState.Builder()
                         .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
@@ -632,6 +640,10 @@ public final class QnsTelephonyListenerTest extends QnsTest {
      */
     @Test
     public void testOnPreciseDataConnectionStateChanged() {
+        List<Integer> types = new ArrayList<>();
+        types.add(ApnSetting.TYPE_IMS);
+        lenient().when(QnsUtils.getApnTypes(anyInt())).thenReturn(types);
+
         PreciseDataConnectionState connectionState =
                 new PreciseDataConnectionState.Builder()
                         .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
