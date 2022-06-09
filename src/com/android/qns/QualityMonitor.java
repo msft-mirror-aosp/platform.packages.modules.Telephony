@@ -22,6 +22,7 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -129,5 +130,17 @@ public abstract class QualityMonitor {
         mThresholdsList.clear();
         mWaitingThresholds.clear();
         mThresholdCallbackMap.clear();
+    }
+
+    /**
+     * Dumps the state of {@link QualityMonitor}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix String to append at start of dumped log.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "mThresholdCallbackMap=" + mThresholdCallbackMap);
+        pw.println(prefix + "mThresholdsList=" + mThresholdsList);
+        pw.println(prefix + "mWaitingThresholds=" + mWaitingThresholds);
     }
 }

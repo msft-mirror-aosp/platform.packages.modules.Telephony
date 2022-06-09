@@ -36,6 +36,7 @@ import android.util.Log;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.qns.DataConnectionStatusTracker.DataConnectionChangedInfo;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -1443,5 +1444,46 @@ public class RestrictManager {
                 return "RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL";
         }
         return "";
+    }
+
+    /**
+     * Dumps the state of {@link QualityMonitor}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix String to append at start of dumped log.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(
+                prefix
+                        + "RestrictManager["
+                        + ApnSetting.getApnTypeString(mApnType)
+                        + "_"
+                        + mSlotId
+                        + "]:");
+        pw.println(
+                prefix
+                        + "mTransportType="
+                        + AccessNetworkConstants.transportTypeToString(mTransportType)
+                        + ", mLastEvaluatedTransportType="
+                        + AccessNetworkConstants.transportTypeToString(mLastEvaluatedTransportType)
+                        + ", mLastDataConnectionTransportType="
+                        + AccessNetworkConstants.transportTypeToString(
+                                mLastDataConnectionTransportType));
+        pw.println(
+                prefix
+                        + "mCounterForIwlanRestrictionInCall="
+                        + mCounterForIwlanRestrictionInCall
+                        + ", mRetryCounterOnDataConnectionFail="
+                        + mRetryCounterOnDataConnectionFail
+                        + ", mFallbackCounterOnDataConnectionFail="
+                        + mFallbackCounterOnDataConnectionFail);
+        pw.println(
+                prefix
+                        + "mImsCallType="
+                        + QnsConstants.callTypeToString(mImsCallType)
+                        + ", mCallState="
+                        + QnsConstants.callStateToString(mCallState));
+        pw.println(prefix + "mRestrictInfos=" + mRestrictInfos);
     }
 }

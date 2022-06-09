@@ -40,6 +40,7 @@ import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
 import com.android.qns.IwlanNetworkStatusTracker.IwlanAvailabilityInfo;
 import com.android.qns.QualifiedNetworksServiceImpl.QualifiedNetworksInfo;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -422,7 +423,7 @@ public class AccessNetworkEvaluator {
                 volteRoamingSupported = mConfigManager.isVolteRoamingSupported(coverage);
             }
             boolean checkBarring = mConfigManager.isServiceBarringCheckSupported();
-            if (DBG)
+            if (DBG) {
                 log(
                         "checkVoPs:"
                                 + checkVoPs
@@ -430,6 +431,7 @@ public class AccessNetworkEvaluator {
                                 + checkBarring
                                 + ", volteRoamingSupported:"
                                 + volteRoamingSupported);
+            }
             boolean cellAvailable =
                     infoIms.isCellularAvailable(
                             mApnType, checkVoPs, checkBarring, volteRoamingSupported);
@@ -474,7 +476,7 @@ public class AccessNetworkEvaluator {
 
     @VisibleForTesting
     int getCoverage(QnsTelephonyListener.QnsTelephonyInfo info, int apnType) {
-        if (DBG)
+        if (DBG) {
             log(
                     "getCoverage roaming?"
                             + info.isCoverage()
@@ -482,6 +484,7 @@ public class AccessNetworkEvaluator {
                             + info.getRoamingType()
                             + " registeredPlmn:"
                             + info.getRegisteredPlmn());
+        }
         if (info.isCoverage()) {
             if (mConfigManager.needToCheckInternationalRoaming(apnType)) {
                 if (DBG) log("needToCheckInternationalRoaming : true ");
@@ -1822,5 +1825,64 @@ public class AccessNetworkEvaluator {
         public void onCellularThresholdChanged(Threshold[] thresholds) {
             onCellularQualityChanged(thresholds);
         }
+    }
+
+    /**
+     * Dumps the state of {@link QualityMonitor}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix String to append at start of dumped log.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(
+                prefix + "ANE[" + ApnSetting.getApnTypeString(mApnType) + "_" + mSlotIndex + "]:");
+        pw.println(prefix + "mInitialized=" + mInitialized);
+        pw.println(
+                prefix
+                        + "mQualifiedNetworksChangedRegistrant size="
+                        + mQualifiedNetworksChangedRegistrants.size());
+        pw.println(
+                prefix
+                        + "mCellularAccessNetworkType="
+                        + AccessNetworkType.toString(mCellularAccessNetworkType) // API to replace
+                        + ", mLatestAvailableCellularAccessNetwork="
+                        + AccessNetworkType.toString(mLatestAvailableCellularAccessNetwork)
+                        + ", mIsNotifiedLastQualifiedAccessNetworkTypes="
+                        + mIsNotifiedLastQualifiedAccessNetworkTypes);
+        pw.print(prefix + "mLastQualifiedAccessNetworkTypes=");
+        mLastQualifiedAccessNetworkTypes.forEach(
+                accessNetwork -> pw.print(AccessNetworkType.toString(accessNetwork) + "|"));
+        pw.println(
+                ", mIsNotifiedLastQualifiedAccessNetworkTypes="
+                        + mIsNotifiedLastQualifiedAccessNetworkTypes);
+        pw.println(
+                prefix
+                        + "mCellularAvailable="
+                        + mCellularAvailable
+                        + ", mIwlanAvailable="
+                        + mIwlanAvailable
+                        + ", mIsCrossWfc="
+                        + QnsConstants.callTypeToString(mCallType)
+                        + ", mCoverage"
+                        + QnsConstants.coverageToString(mCoverage));
+        pw.println(
+                prefix
+                        + "mWfcPlatformEnabled="
+                        + mWfcPlatformEnabled
+                        + ", mSettingWfcEnabled="
+                        + mSettingWfcEnabled
+                        + ", mSettingWfcMode="
+                        + QnsConstants.preferenceToString(mSettingWfcMode)
+                        + ", mSettingWfcRoamingEnabled="
+                        + mSettingWfcRoamingEnabled
+                        + ", mSettingWfcRoamingMode="
+                        + QnsConstants.preferenceToString(mSettingWfcRoamingMode)
+                        + ", mAllowIwlanForWfcActivation="
+                        + mAllowIwlanForWfcActivation);
+        pw.println(prefix + "mLastProvisioningInfo=" + mLastProvisioningInfo);
+        pw.println(prefix + "mAccessNetworkSelectionPolicies=" + mAccessNetworkSelectionPolicies);
+        pw.println(prefix + "mAnspPolicyMap=" + mAnspPolicyMap);
+        mRestrictManager.dump(pw, prefix + "  ");
     }
 }

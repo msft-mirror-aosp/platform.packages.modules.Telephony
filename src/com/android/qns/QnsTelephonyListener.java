@@ -45,6 +45,7 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
@@ -843,6 +844,35 @@ public class QnsTelephonyListener {
             return equal;
         }
 
+        @Override
+        public String toString() {
+            return "QnsTelephonyInfoIms{"
+                    + "mVopsSupport="
+                    + mVopsSupport
+                    + ", mVopsEmergencySupport="
+                    + mVopsEmergencySupport
+                    + ", mVoiceBarring="
+                    + mVoiceBarring
+                    + ", mEmergencyBarring="
+                    + mEmergencyBarring
+                    + ", mVoiceTech="
+                    + getVoiceTech()
+                    + ", mDataRegState="
+                    + getDataRegState()
+                    + ", mDataTech="
+                    + getDataTech()
+                    + ", mCoverage="
+                    + mCoverage
+                    + ", mRoamingType="
+                    + getRoamingType()
+                    + ", mRegisteredPlmn='"
+                    + getRegisteredPlmn()
+                    + "'"
+                    + ", mCellularAvailable="
+                    + isCellularAvailable()
+                    + '}';
+        }
+
         public boolean isCellularAvailable(
                 int apnType,
                 boolean checkVops,
@@ -954,6 +984,27 @@ public class QnsTelephonyListener {
         public int hashCode() {
             return Objects.hash(
                     mVoiceTech, mDataRegState, mDataTech, mCoverage, mCellularAvailable);
+        }
+
+        @Override
+        public String toString() {
+            return "QnsTelephonyInfo{"
+                    + "mVoiceTech="
+                    + mVoiceTech
+                    + ", mDataRegState="
+                    + mDataRegState
+                    + ", mDataTech="
+                    + mDataTech
+                    + ", mCoverage="
+                    + mCoverage
+                    + ", mRoamingType="
+                    + mRoamingType
+                    + ", mRegisteredPlmn='"
+                    + mRegisteredPlmn
+                    + "'"
+                    + ", mCellularAvailable="
+                    + mCellularAvailable
+                    + '}';
         }
 
         public boolean isCoverage() {
@@ -1082,5 +1133,20 @@ public class QnsTelephonyListener {
                 mSrvccStateListener.onSrvccStateChanged(state);
             }
         }
+    }
+
+    /**
+     * Dumps the state of {@link QualityMonitor}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix String to append at start of dumped log.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(prefix + "QnsTelephonyListener[" + mSlotIndex + "]:");
+        pw.println(prefix + "mLastQnsTelephonyInfo=" + mLastQnsTelephonyInfo);
+        pw.println(prefix + "mLastQnsTelephonyInfoIms=" + mLastQnsTelephonyInfoIms);
+        pw.println(prefix + "mLastServiceState=" + mLastServiceState);
+        pw.println(prefix + "mLastPreciseDataConnectionState=" + mLastPreciseDataConnectionState);
     }
 }

@@ -19,6 +19,8 @@ package com.android.qns;
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR;
 
 import android.annotation.IntDef;
+import android.telephony.Annotation;
+import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsMmTelManager;
 
 /** This class is a collection of constants */
@@ -255,6 +257,25 @@ public class QnsConstants {
                 return "GUARDING_WIFI";
         }
         return "";
+    }
+
+    /**
+     * This method coverts call state value from int to string
+     *
+     * @param state int value of call state.
+     * @return returns the string value for the given int call state in parameter.
+     */
+    public static String callStateToString(@Annotation.CallState int state) {
+        switch (state) {
+            case TelephonyManager.CALL_STATE_IDLE:
+                return "CALL_STATE_IDLE";
+            case TelephonyManager.CALL_STATE_RINGING:
+                return "CALL_STATE_RINGING";
+            case TelephonyManager.CALL_STATE_OFFHOOK:
+                return "CALL_STATE_OFFHOOK";
+            default:
+                return "CALL_STATE_UNKNOWN_" + state;
+        }
     }
 
     public static String imsRegistrationEventToString(@QnsConstants.QnsImsRegiEvent int event) {

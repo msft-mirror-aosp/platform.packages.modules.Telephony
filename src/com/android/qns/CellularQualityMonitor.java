@@ -43,6 +43,7 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -600,5 +601,19 @@ public class CellularQualityMonitor extends QualityMonitor {
             mHandlerThread.quit();
         }
         sCellularQualityMonitors.remove(mSlotIndex);
+    }
+
+    @Override
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(prefix + "CellularQualityMonitor[" + mSlotIndex + "]:");
+        pw.println(prefix + "mSubId=" + mSubId);
+        super.dump(pw, prefix);
+        pw.println(prefix + "mIsQnsListenerRegistered=" + mIsQnsListenerRegistered);
+        pw.println(prefix + "mSignalThresholdInfoList=" + mSignalThresholdInfoList);
+        pw.println(prefix + "mSSUpdateRequest=" + mSSUpdateRequest);
+        pw.println(prefix + "mThresholdMatrix=" + mThresholdMatrix);
+        pw.println(prefix + "mThresholdsRegistered=" + mThresholdsRegistered);
+        pw.println(prefix + "mThresholdWaitTimer=" + mThresholdWaitTimer);
     }
 }

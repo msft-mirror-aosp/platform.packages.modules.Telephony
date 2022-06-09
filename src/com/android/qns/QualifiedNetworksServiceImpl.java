@@ -32,9 +32,12 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of the qualified networks service, which is a service providing up-to-date
@@ -318,5 +321,37 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
         protected void log(String s) {
             if (DBG) Log.d(mLogTag, s);
         }
+
+        /**
+         * Dumps the state of {@link QualityMonitor}
+         *
+         * @param pw {@link PrintWriter} to write the state of the object.
+         * @param prefix String to append at start of dumped log.
+         */
+        public void dump(PrintWriter pw, String prefix) {
+            pw.println(prefix + "------------------------------");
+            pw.println(prefix + "NetworkAvailabilityProviderImpl[" + mSlotIndex + "]:");
+            for (Map.Entry<Integer, AccessNetworkEvaluator> aneMap : mEvaluators.entrySet()) {
+                AccessNetworkEvaluator ane = aneMap.getValue();
+                ane.dump(pw, prefix + "  ");
+            }
+            mQnsTelephonyListener.dump(pw, prefix + "  ");
+            CellularQualityMonitor.getInstance(mContext, mSlotIndex).dump(pw, prefix + "  ");
+        }
+    }
+
+    @Override
+    protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        super.dump(fd, pw, args);
+        pw.println("QualifiedNetworksServiceImpl:");
+        pw.println("==============================");
+        for (Map.Entry<Integer, NetworkAvailabilityProviderImpl> providerMap :
+                mProviderMap.entrySet()) {
+            NetworkAvailabilityProviderImpl provider = providerMap.getValue();
+            provider.dump(pw, "  ");
+        }
+        IwlanNetworkStatusTracker.getInstance(mContext).dump(pw, "  ");
+        WifiQualityMonitor.getInstance(mContext).dump(pw, "  ");
+        pw.println("==============================");
     }
 }

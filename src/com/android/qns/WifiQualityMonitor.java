@@ -38,6 +38,7 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -428,5 +429,28 @@ public class WifiQualityMonitor extends QualityMonitor {
         mIsRegistered = false;
         mRegisteredThreshold = SIGNAL_STRENGTH_UNSPECIFIED;
         sWiFiQualityMonitor = null;
+    }
+
+    @Override
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(prefix + "WifiQualityMonitor:");
+        super.dump(pw, prefix);
+        pw.println(
+                prefix
+                        + "mIsWifiConnected="
+                        + mIsWifiConnected
+                        + ", mIsRegistered="
+                        + mIsRegistered
+                        + ", mWifiStateIntentEnabled="
+                        + mWifiStateIntentEnabled
+                        + ", mIsBackhaulRunning="
+                        + mIsBackhaulRunning);
+        pw.println(
+                prefix
+                        + "mWifiRssi="
+                        + mWifiRssi
+                        + ", mRegisteredThreshold="
+                        + mRegisteredThreshold);
     }
 }

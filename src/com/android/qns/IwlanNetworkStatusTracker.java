@@ -42,6 +42,7 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -635,5 +636,28 @@ public class IwlanNetworkStatusTracker {
                 updateLastKnownCountryCode(newCountryCode);
             }
         }
+    }
+
+    /**
+     * Dumps the state of {@link QualityMonitor}
+     *
+     * @param pw {@link PrintWriter} to write the state of the object.
+     * @param prefix String to append at start of dumped log.
+     */
+    public void dump(PrintWriter pw, String prefix) {
+        pw.println(prefix + "------------------------------");
+        pw.println(prefix + "IwlanNetworkStatusTracker:");
+        pw.println(
+                prefix
+                        + "mWifiAvailable="
+                        + mWifiAvailable
+                        + ", mWifiToggleOn="
+                        + mWifiToggleOn
+                        + ", mConnectedDds="
+                        + mConnectedDds
+                        + ", mIwlanRegistered="
+                        + mIwlanRegistered);
+        pw.println(prefix + "sLinkProtocolType=" + sLinkProtocolType);
+        pw.println(prefix + "getLastKnownCountryCode=" + getLastKnownCountryCode());
     }
 }
