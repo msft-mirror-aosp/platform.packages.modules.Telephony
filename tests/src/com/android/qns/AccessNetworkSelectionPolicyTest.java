@@ -119,6 +119,54 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     }
 
     @Test
+    public void testCompatibleEmergencyCallSatisfyPrecondition() {
+        AccessNetworkSelectionPolicy anspEmergency =
+                new AccessNetworkSelectionPolicy(
+                        ApnSetting.TYPE_EMERGENCY,
+                        targetTransportType,
+                        new PreCondition(
+                                QnsConstants.CALL_TYPE_VOICE,
+                                QnsConstants.CELL_PREF,
+                                QnsConstants.COVERAGE_HOME),
+                        thgroups);
+        AccessNetworkSelectionPolicy anspIms =
+                new AccessNetworkSelectionPolicy(
+                        ApnSetting.TYPE_IMS,
+                        targetTransportType,
+                        new PreCondition(
+                                QnsConstants.CALL_TYPE_VOICE,
+                                QnsConstants.CELL_PREF,
+                                QnsConstants.COVERAGE_HOME),
+                        thgroups);
+
+        PreCondition preConditionEmergencyCall =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_EMERGENCY,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME);
+        PreCondition preConditionVoiceCall =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VOICE,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME);
+        PreCondition preConditionVideoCall =
+                new PreCondition(
+                        QnsConstants.CALL_TYPE_VIDEO,
+                        QnsConstants.CELL_PREF,
+                        QnsConstants.COVERAGE_HOME);
+
+        // Emergency ANSP
+        assertTrue(anspEmergency.satisfyPrecondition(preConditionEmergencyCall));
+        assertTrue(anspEmergency.satisfyPrecondition(preConditionVoiceCall));
+        assertFalse(anspEmergency.satisfyPrecondition(preConditionVideoCall));
+
+        // IMS ANSP
+        assertFalse(anspIms.satisfyPrecondition(preConditionEmergencyCall));
+        assertTrue(anspIms.satisfyPrecondition(preConditionVoiceCall));
+        assertFalse(anspIms.satisfyPrecondition(preConditionVideoCall));
+    }
+
+    @Test
     public void testSatisfiedByThreshold_thresholdgroup() {
         List<Threshold> ths = new ArrayList<>();
         ths.add(
