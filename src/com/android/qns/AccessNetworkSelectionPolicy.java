@@ -17,7 +17,6 @@
 package com.android.qns;
 
 import android.telephony.AccessNetworkConstants;
-import android.telephony.data.ApnSetting;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -78,13 +77,6 @@ public class AccessNetworkSelectionPolicy {
     }
 
     public boolean satisfyPrecondition(PreCondition preCondition) {
-        if (mApnType == ApnSetting.TYPE_EMERGENCY
-                && mPreCondition.getCallType() == QnsConstants.CALL_TYPE_VOICE
-                && preCondition.getCallType() == QnsConstants.CALL_TYPE_EMERGENCY) {
-            // Emergency call is compatible with normal call policy.
-            return (mPreCondition.mCoverage == preCondition.mCoverage)
-                    && (mPreCondition.mPreference == preCondition.mPreference);
-        }
         return mPreCondition.satisfied(preCondition);
     }
 
