@@ -1315,4 +1315,106 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         setObject(AccessNetworkEvaluator.class, "mCoverage", ane, QnsConstants.COVERAGE_ROAM);
         assertFalse((Boolean) method.invoke(ane, transport));
     }
+
+    @Test
+    public void testGetMatchingPreconditionForEmergency() {
+        AccessNetworkEvaluator aneSos =
+                new AccessNetworkEvaluator(
+                        mSlotIndex,
+                        ApnSetting.TYPE_EMERGENCY,
+                        sMockContext,
+                        restrictManager,
+                        configManager,
+                        wifiQualityMonitor,
+                        cellularQualityMonitor,
+                        cellularNetworkStatusTracker,
+                        iwlanNetworkStatusTracker,
+                        dataConnectionStatusTracker,
+                        qnsEventDispatcher,
+                        altEventListener,
+                        mQnsProvisioningListener,
+                        qnsImsStatusListener);
+        AccessNetworkEvaluator aneIms =
+                new AccessNetworkEvaluator(
+                        mSlotIndex,
+                        ApnSetting.TYPE_IMS,
+                        sMockContext,
+                        restrictManager,
+                        configManager,
+                        wifiQualityMonitor,
+                        cellularQualityMonitor,
+                        cellularNetworkStatusTracker,
+                        iwlanNetworkStatusTracker,
+                        dataConnectionStatusTracker,
+                        qnsEventDispatcher,
+                        altEventListener,
+                        mQnsProvisioningListener,
+                        qnsImsStatusListener);
+
+        List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
+        satisfiedAccessNetworkTypes.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(dataConnectionStatusTracker.isInactiveState()).thenReturn(true);
+        try {
+            Field field = AccessNetworkEvaluator.class.getDeclaredField("mCallType");
+            field.setAccessible(true);
+            field.set(aneSos, QnsConstants.CALL_TYPE_VOICE);
+            field.set(aneIms, QnsConstants.CALL_TYPE_VOICE);
+        } catch (Exception e) {
+        }
+        aneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        aneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        ArrayList<AccessNetworkSelectionPolicy> matchedAnspSos = null;
+        ArrayList<AccessNetworkSelectionPolicy> matchedAnspIms = null;
+        try {
+            Field field =
+                    AccessNetworkEvaluator.class.getDeclaredField(
+                            "mAccessNetworkSelectionPolicies");
+            field.setAccessible(true);
+            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneSos);
+            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneIms);
+        } catch (Exception e) {
+            assertTrue(matchedAnspSos != null);
+            assertTrue(matchedAnspIms != null);
+        }
+
+        assertTrue(matchedAnspSos != null);
+        assertTrue(matchedAnspIms != null);
+        assertTrue(matchedAnspSos.size() > 0);
+        assertTrue(matchedAnspIms.size() > 0);
+        assertTrue(
+                matchedAnspSos.get(0).getPreCondition().getCallType()
+                        == QnsConstants.CALL_TYPE_VOICE);
+        assertTrue(
+                matchedAnspIms.get(0).getPreCondition().getCallType()
+                        == QnsConstants.CALL_TYPE_VOICE);
+
+        try {
+            Field field = AccessNetworkEvaluator.class.getDeclaredField("mCallType");
+            field.setAccessible(true);
+            field.set(aneSos, QnsConstants.CALL_TYPE_EMERGENCY);
+            field.set(aneIms, QnsConstants.CALL_TYPE_EMERGENCY);
+        } catch (Exception e) {
+        }
+        aneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        aneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        try {
+            Field field =
+                    AccessNetworkEvaluator.class.getDeclaredField(
+                            "mAccessNetworkSelectionPolicies");
+            field.setAccessible(true);
+            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneSos);
+            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneIms);
+        } catch (Exception e) {
+            assertTrue(matchedAnspSos != null);
+            assertTrue(matchedAnspIms != null);
+        }
+
+        assertTrue(matchedAnspSos != null);
+        assertTrue(matchedAnspIms != null);
+        assertTrue(matchedAnspSos.size() > 0);
+        assertTrue(matchedAnspIms.size() == 0);
+        assertTrue(
+                matchedAnspSos.get(0).getPreCondition().getCallType()
+                        == QnsConstants.CALL_TYPE_VOICE);
+    }
 }

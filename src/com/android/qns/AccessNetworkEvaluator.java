@@ -1034,7 +1034,7 @@ public class AccessNetworkEvaluator {
         }
 
         if (isRestricted) {
-            PreCondition cond = getCurrentPreCondition();
+            PreCondition cond = getMatchingPreCondition();
             if (cond instanceof GuardingPreCondition
                     && ((GuardingPreCondition) cond).getGuarding() != QnsConstants.GUARDING_NONE) {
                 isRestricted = mRestrictManager.isRestrictedExceptGuarding(transportType);
@@ -1664,7 +1664,7 @@ public class AccessNetworkEvaluator {
 
         log("Create a list of AccessNetworkSelectionPolicy that match the preconditions.");
 
-        PreCondition preCondition = getCurrentPreCondition();
+        PreCondition preCondition = getMatchingPreCondition();
         List<AccessNetworkSelectionPolicy> matchedPolicies = new ArrayList<>();
         List<AccessNetworkSelectionPolicy> list = map.get(preCondition);
         if (list != null) {
@@ -1692,9 +1692,14 @@ public class AccessNetworkEvaluator {
         mAccessNetworkSelectionPolicies = matchedPolicies;
     }
 
-    private PreCondition getCurrentPreCondition() {
-        if (mConfigManager.hasThresholdGapWithGuardTimer()) {
+    private PreCondition getMatchingPreCondition() {
+        int callType = mCallType;
+        if (mApnType == ApnSetting.TYPE_EMERGENCY
+                && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
+            callType = QnsConstants.CALL_TYPE_VOICE;
+        }
 
+        if (mConfigManager.hasThresholdGapWithGuardTimer()) {
             @QnsConstants.QnsGuarding int guarding = QnsConstants.GUARDING_NONE;
             int source = getLastQualifiedTransportType();
             if (source != AccessNetworkConstants.TRANSPORT_TYPE_WLAN
@@ -1708,11 +1713,9 @@ public class AccessNetworkEvaluator {
                             RestrictManager.RESTRICT_TYPE_GUARDING)) {
                 guarding = QnsConstants.GUARDING_CELLULAR;
             }
-
-            return new GuardingPreCondition(mCallType, getPreferredMode(), mCoverage, guarding);
+            return new GuardingPreCondition(callType, getPreferredMode(), mCoverage, guarding);
         }
-        // TODO make member variable and updatable.
-        return new PreCondition(mCallType, getPreferredMode(), mCoverage);
+        return new PreCondition(callType, getPreferredMode(), mCoverage);
     }
 
     private String evaluateSpecificReasonToString(int specificReason) {
