@@ -69,12 +69,17 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 new AnspKey(ROVE_IN, IDLE, CELL_PREF, HOME),
                 new String[] {
                     "Condition:WIFI_GOOD,EUTRAN_BAD",
-                    "Condition:UTRAN_AVAILABLE",
-                    "Condition:GERAN_AVAILABLE"
+                    "Condition:WIFI_GOOD,UTRAN_AVAILABLE",
+                    "Condition:WIFI_GOOD,GERAN_AVAILABLE"
                 });
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, IDLE, CELL_PREF, HOME),
-                new String[] {"Condition:EUTRAN_GOOD"});
+                new String[] {
+                    "Condition:EUTRAN_GOOD",
+                    "Condition:WIFI_BAD,EUTRAN_TOLERABLE",
+                    "Condition:WIFI_BAD,UTRAN_GOOD",
+                    "Condition:WIFI_BAD,GERAN_GOOD"
+                });
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VOICE, CELL_PREF, HOME),
                 new String[] {
@@ -84,7 +89,12 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 });
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VOICE, CELL_PREF, HOME),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
+                new String[] {
+                    "Condition:EUTRAN_GOOD",
+                    "Condition:WIFI_BAD,EUTRAN_TOLERABLE",
+                    "Condition:WIFI_BAD,UTRAN_GOOD",
+                    "Condition:WIFI_BAD,GERAN_GOOD"
+                });
         sPolicyMap.put(
                 new AnspKey(ROVE_IN, VIDEO, CELL_PREF, HOME),
                 new String[] {
@@ -94,7 +104,12 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
                 });
         sPolicyMap.put(
                 new AnspKey(ROVE_OUT, VIDEO, CELL_PREF, HOME),
-                new String[] {"Condition:WIFI_BAD,EUTRAN_TOLERABLE"});
+                new String[] {
+                    "Condition:EUTRAN_GOOD",
+                    "Condition:WIFI_BAD,EUTRAN_TOLERABLE",
+                    "Condition:WIFI_BAD,UTRAN_GOOD",
+                    "Condition:WIFI_BAD,GERAN_GOOD"
+                });
     }
 
     @Override

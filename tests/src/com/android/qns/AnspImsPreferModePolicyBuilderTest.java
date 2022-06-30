@@ -104,8 +104,8 @@ public class AnspImsPreferModePolicyBuilderTest extends QnsTest {
                         new AccessNetworkSelectionPolicy.PreCondition(
                                 CALL_TYPE_IDLE, CELL_PREF, COVERAGE_HOME));
         Assert.assertEquals("Condition:WIFI_GOOD,EUTRAN_BAD", result[0]);
-        Assert.assertEquals("Condition:UTRAN_AVAILABLE", result[1]);
-        Assert.assertEquals("Condition:GERAN_AVAILABLE", result[2]);
+        Assert.assertEquals("Condition:WIFI_GOOD,UTRAN_AVAILABLE", result[1]);
+        Assert.assertEquals("Condition:WIFI_GOOD,GERAN_AVAILABLE", result[2]);
 
         result =
                 mBuilder.getPolicyInMap(
@@ -176,20 +176,29 @@ public class AnspImsPreferModePolicyBuilderTest extends QnsTest {
                         new AccessNetworkSelectionPolicy.PreCondition(
                                 CALL_TYPE_IDLE, CELL_PREF, COVERAGE_HOME));
         Assert.assertEquals("Condition:EUTRAN_GOOD", result[0]);
+        Assert.assertEquals("Condition:WIFI_BAD,EUTRAN_TOLERABLE", result[1]);
+        Assert.assertEquals("Condition:WIFI_BAD,UTRAN_GOOD", result[2]);
+        Assert.assertEquals("Condition:WIFI_BAD,GERAN_GOOD", result[3]);
 
         result =
                 mBuilder.getPolicyInMap(
                         ROVE_OUT,
                         new AccessNetworkSelectionPolicy.PreCondition(
                                 CALL_TYPE_VOICE, CELL_PREF, COVERAGE_HOME));
-        Assert.assertEquals("Condition:WIFI_BAD,EUTRAN_TOLERABLE", result[0]);
+        Assert.assertEquals("Condition:EUTRAN_GOOD", result[0]);
+        Assert.assertEquals("Condition:WIFI_BAD,EUTRAN_TOLERABLE", result[1]);
+        Assert.assertEquals("Condition:WIFI_BAD,UTRAN_GOOD", result[2]);
+        Assert.assertEquals("Condition:WIFI_BAD,GERAN_GOOD", result[3]);
 
         result =
                 mBuilder.getPolicyInMap(
                         ROVE_OUT,
                         new AccessNetworkSelectionPolicy.PreCondition(
                                 CALL_TYPE_VIDEO, CELL_PREF, COVERAGE_HOME));
-        Assert.assertEquals("Condition:WIFI_BAD,EUTRAN_TOLERABLE", result[0]);
+        Assert.assertEquals("Condition:EUTRAN_GOOD", result[0]);
+        Assert.assertEquals("Condition:WIFI_BAD,EUTRAN_TOLERABLE", result[1]);
+        Assert.assertEquals("Condition:WIFI_BAD,UTRAN_GOOD", result[2]);
+        Assert.assertEquals("Condition:WIFI_BAD,GERAN_GOOD", result[3]);
     }
 
     @Test
