@@ -777,7 +777,8 @@ public class RestrictManager {
     }
 
     private void processDataConnectionFailed(int dataConnectionTransportType) {
-        if (!mCellularNetworkStatusTracker.isAirplaneModeEnabled()) {
+        if (mCellularNetworkStatusTracker != null
+                && !mCellularNetworkStatusTracker.isAirplaneModeEnabled()) {
             Log.d(TAG, "Initiate data connection fail Fallback support check");
             checkFallbackOnDataConnectionFail(dataConnectionTransportType);
         } else {
