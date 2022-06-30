@@ -152,17 +152,18 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     @Test
     public void testHandleMessage_ValidSubID() throws InterruptedException {
         int dds = 1, currentSlot = 0;
-        mHandlers[0].mLatch = new CountDownLatch(2);
+        mHandlers[0].mLatch = new CountDownLatch(1);
         lenient().when(QnsUtils.getSubId(sMockContext, currentSlot)).thenReturn(0);
         lenient()
                 .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, currentSlot))
                 .thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(currentSlot, mHandlers[0], 1);
+        assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         studSubIdToNetworkCapabilities(dds);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, currentSlot);
         mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(currentSlot, true);
-        assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
+        waitFor(100);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
     }
@@ -218,7 +219,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
             throws InterruptedException {
         mHandlers[0].mLatch = new CountDownLatch(1);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
-        assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         ConnectivityManager.NetworkCallback networkCallback = setupNetworkCallback();
         TelephonyNetworkSpecifier tns = new TelephonyNetworkSpecifier(0);
         mNetworkCapabilities =

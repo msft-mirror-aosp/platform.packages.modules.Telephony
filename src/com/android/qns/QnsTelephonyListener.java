@@ -315,6 +315,14 @@ public class QnsTelephonyListener {
         if (h != null) {
             Registrant r = new Registrant(h, what, userObj);
             mIwlanServiceStateListener.add(r);
+
+            NetworkRegistrationInfo lastIwlanNrs =
+                    mLastServiceState.getNetworkRegistrationInfo(
+                            NetworkRegistrationInfo.DOMAIN_PS,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+            if (lastIwlanNrs != null) {
+                r.notifyRegistrant(new AsyncResult(null, lastIwlanNrs.isInService(), null));
+            }
         }
     }
 
@@ -719,6 +727,7 @@ public class QnsTelephonyListener {
         mApnTypeRegistrantMap.clear();
         mQnsTelephonyInfoRegistrantMap.clear();
         mLastPreciseDataConnectionState.clear();
+        mIwlanServiceStateListener.removeAll();
         sQnsTelephonyListener.remove(mSlotIndex);
     }
 

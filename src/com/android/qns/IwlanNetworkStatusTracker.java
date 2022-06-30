@@ -209,6 +209,18 @@ public class IwlanNetworkStatusTracker {
         notifyIwlanNetworkStatus(slotId, false);
     }
 
+    private void notifyIwlanNetworkStatusToRegister(int slotId, Registrant r) {
+        if (DBG) {
+            Log.d(TAG, "notifyIwlanNetworkStatusToRegister");
+        }
+        IwlanAvailabilityInfo info = mLastIwlanAvailabilityInfo.get(slotId);
+        if (info == null) {
+            info = makeIwlanAvailabilityInfo(slotId);
+            mLastIwlanAvailabilityInfo.put(slotId, info);
+        }
+        r.notifyResult(info);
+    }
+
     private void registerDefaultNetworkCb() {
         if (mDefaultNetworkCallback == null) {
             mDefaultNetworkCallback = new DefaultNetworkCallback();
@@ -248,16 +260,13 @@ public class IwlanNetworkStatusTracker {
                 mIwlanNetworkListenersArray.put(slotId, new RegistrantList());
             }
             mIwlanNetworkListenersArray.get(slotId).add(r);
-            if (mHandlerSparseArray.get(slotId) == null) {
-                IwlanEventHandler iwlanEventHandler =
-                        new IwlanEventHandler(slotId, mHandlerThread.getLooper());
+            IwlanEventHandler iwlanEventHandler = mHandlerSparseArray.get(slotId);
+            if (iwlanEventHandler == null) {
+                iwlanEventHandler = new IwlanEventHandler(slotId, mHandlerThread.getLooper());
                 mHandlerSparseArray.put(slotId, iwlanEventHandler);
                 Log.d(TAG, "make IwlanEventHandler for slot:" + slotId);
             }
-            IwlanAvailabilityInfo info = makeIwlanAvailabilityInfo(slotId);
-            Log.d(TAG, "notify when registered.");
-            mLastIwlanAvailabilityInfo.put(slotId, info);
-            r.notifyResult(info);
+            iwlanEventHandler.post(() -> notifyIwlanNetworkStatusToRegister(slotId, r));
         }
     }
 
