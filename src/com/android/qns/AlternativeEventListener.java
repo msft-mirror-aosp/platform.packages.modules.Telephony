@@ -17,6 +17,8 @@
 package com.android.qns;
 
 import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_ACTIVE;
+import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_ALERTING;
+import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_DIALING;
 import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED;
 import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_HOLDING;
 import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_IDLE;
@@ -30,6 +32,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.Registrant;
 import android.telephony.Annotation;
+import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.util.Log;
@@ -359,6 +362,12 @@ public class AlternativeEventListener {
         }
     }
 
+    void clearNormalCallInfo() {
+        mCallInfoManager.clearCallInfo();
+        mCallInfoManager.mLastReportedCallType = QnsConstants.CALL_TYPE_IDLE;
+        unregisterLowRtpQualityEvent(ApnSetting.TYPE_IMS, null);
+    }
+
     @VisibleForTesting
     void notifyRtpLowQuality(int callType, int reason) {
         if (callType == QnsConstants.CALL_TYPE_VOICE) {
@@ -372,6 +381,14 @@ public class AlternativeEventListener {
                 mEmcLowRtpQuallityListener.notifyResult(reason);
             } else {
                 log("notifyRtpLowQuality mEmcLowRtpQuallityListener is null.");
+            }
+            if (mCallInfoManager.mLastReportedCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
+                if (mLowRtpQuallityListener != null) {
+                    log("notifyRtpLowQuality for emergency call to IMS ANE");
+                    mLowRtpQuallityListener.notifyResult(reason);
+                } else {
+                    log("notifyRtpLowQuality mLowRtpQuallityListener is null.");
+                }
             }
         }
     }
@@ -393,6 +410,29 @@ public class AlternativeEventListener {
                     } else if (state == PRECISE_CALL_STATE_ACTIVE) {
                         mEmergencyCallTypeChangedEventListener.notifyResult(
                                 QnsConstants.CALL_TYPE_EMERGENCY);
+                    }
+                }
+                if (mCallTypeChangedEventListener != null) {
+                    if ((state == PRECISE_CALL_STATE_ACTIVE
+                                    || state == PRECISE_CALL_STATE_DIALING
+                                    || state == PRECISE_CALL_STATE_ALERTING)
+                            && !isDataNetworkConnected(ApnSetting.TYPE_EMERGENCY)
+                            && isDataNetworkConnected(ApnSetting.TYPE_IMS)) {
+                        log("Emergency call is progressing without emergency PDN");
+                        if (mCallInfoManager.mLastReportedCallType
+                                != QnsConstants.CALL_TYPE_EMERGENCY) {
+                            mCallTypeChangedEventListener.notifyResult(
+                                    QnsConstants.CALL_TYPE_EMERGENCY);
+                            mCallInfoManager.mLastReportedCallType =
+                                    QnsConstants.CALL_TYPE_EMERGENCY;
+                        }
+                    } else if (state == PRECISE_CALL_STATE_DISCONNECTED) {
+                        log("Emergency call disconnected");
+                        if (mCallInfoManager.mLastReportedCallType
+                                == QnsConstants.CALL_TYPE_EMERGENCY) {
+                            mCallTypeChangedEventListener.notifyResult(QnsConstants.CALL_TYPE_IDLE);
+                            mCallInfoManager.mLastReportedCallType = QnsConstants.CALL_TYPE_IDLE;
+                        }
                     }
                 }
                 return;
@@ -444,6 +484,17 @@ public class AlternativeEventListener {
         if (mEventProvider != null) {
             mEventProvider.setEcnoSignalThreshold(threshold);
         }
+    }
+
+    private boolean isDataNetworkConnected(int apnType) {
+        PreciseDataConnectionState preciseDataStatus =
+                QnsTelephonyListener.getInstance(mContext, mSlotIndex)
+                        .getLastPreciseDataConnectionState(apnType);
+        if (preciseDataStatus == null) return false;
+        int state = preciseDataStatus.getState();
+        return (state == TelephonyManager.DATA_CONNECTED
+                || state == TelephonyManager.DATA_HANDOVER_IN_PROGRESS
+                || state == TelephonyManager.DATA_SUSPENDED);
     }
 
     @VisibleForTesting

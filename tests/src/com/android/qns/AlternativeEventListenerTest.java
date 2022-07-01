@@ -19,12 +19,14 @@ package com.android.qns;
 import static org.junit.Assert.*;
 
 import android.content.Context;
+import android.net.LinkProperties;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.PreciseCallState;
+import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 
@@ -49,6 +51,7 @@ public class AlternativeEventListenerTest extends QnsTest {
     private Handler mHandler;
     CountDownLatch mLatch;
     int[] mThresholds;
+    QnsTelephonyListener mQtListener;
 
     class AltEventProvider extends AlternativeEventProvider {
 
@@ -82,11 +85,13 @@ public class AlternativeEventListenerTest extends QnsTest {
         mHandler = new Handler(mTestLooper.getLooper());
         mListener = AlternativeEventListener.getInstance(sMockContext, SLOT_INDEX);
         mAltEventProvider = new AltEventProvider(sMockContext, SLOT_INDEX);
+        mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
         // mListener.setEventProvider(mAltEventProvider);
     }
 
     @After
     public void tearDown() {
+        mQtListener.close();
         mListener.close();
     }
 
@@ -316,6 +321,112 @@ public class AlternativeEventListenerTest extends QnsTest {
                 1,
                 QnsConstants.CALL_TYPE_EMERGENCY,
                 PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
+        msg = mTestLooper.nextMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    public void testEmergencyOverImsCallTypeChangedScenarios() {
+        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
+        PreciseDataConnectionState emergencyDataStatus =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_INVALID)
+                        .setState(TelephonyManager.DATA_DISCONNECTED)
+                        .setNetworkType(AccessNetworkConstants.AccessNetworkType.EUTRAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("sos")
+                                        .setEntryName("sos")
+                                        .build())
+                        .setLinkProperties(new LinkProperties())
+                        .build();
+        PreciseDataConnectionState imsDataStatus =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(AccessNetworkConstants.AccessNetworkType.IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(emergencyDataStatus);
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+        // Test1:
+        mAltEventProvider.notifyCallInfo(
+                1, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_DIALING);
+
+        Message msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        AsyncResult result = (AsyncResult) msg.obj;
+        assertNotNull(result.result);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, (int) result.result);
+
+        // Test2:
+        mAltEventProvider.notifyCallInfo(
+                1, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
+        msg = mTestLooper.nextMessage();
+
+        // Should not notify if call type is not changed
+        assertNull(msg);
+
+        // Test3:
+        imsDataStatus =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_INVALID)
+                        .setState(TelephonyManager.DATA_DISCONNECTED)
+                        .setNetworkType(AccessNetworkConstants.AccessNetworkType.EUTRAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+
+        mAltEventProvider.notifyCallInfo(
+                1,
+                QnsConstants.CALL_TYPE_EMERGENCY,
+                PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
+        msg = mTestLooper.nextMessage();
+        assertNotNull(msg);
+        result = (AsyncResult) msg.obj;
+        assertNotNull(result.result);
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.result);
+
+        // Test4:
+        emergencyDataStatus =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(AccessNetworkConstants.AccessNetworkType.IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("sos")
+                                        .setEntryName("sos")
+                                        .build())
+                        .build();
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(emergencyDataStatus);
+        imsDataStatus =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(AccessNetworkConstants.AccessNetworkType.IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+        mAltEventProvider.notifyCallInfo(
+                2, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
         msg = mTestLooper.nextMessage();
         assertNull(msg);
     }

@@ -66,12 +66,6 @@ import java.util.stream.Collectors;
  * management & listing related Access Network to pass to Telephony
  */
 public class QnsCarrierConfigManager {
-
-    /**
-     * Keys supporting the configurations to support ANE in HO decision and Access Network
-     * candidating
-     */
-
     /**
      * Boolean indicating the WFC services in QNS Side is enabled, when airplane mode is On
      *

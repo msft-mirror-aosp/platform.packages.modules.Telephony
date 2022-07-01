@@ -336,6 +336,68 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     }
 
     @Test
+    public void testMoveTransportTypeAllowedEmergencyOverIms() {
+        when(configManager.isHandoverAllowedByPolicy(
+                        ApnSetting.TYPE_IMS,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        QnsConstants.COVERAGE_HOME))
+                .thenReturn(true);
+        when(configManager.isHandoverAllowedByPolicy(
+                        ApnSetting.TYPE_IMS,
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        QnsConstants.COVERAGE_HOME))
+                .thenReturn(true);
+        when(configManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
+        when(dataConnectionStatusTracker.isActiveState()).thenReturn(true);
+        when(dataConnectionStatusTracker.getLastTransportType())
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        List<Integer> accessNetworks = new ArrayList<>();
+        accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
+        QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
+        info.setCellularAvailable(true);
+        info.setCoverage(false);
+        info.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        info.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        info.setDataRegState(ServiceState.STATE_IN_SERVICE);
+        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
+                qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        ane.onQnsTelephonyInfoChanged(infoIms);
+        ane.updateLastNotifiedQualifiedNetwork(accessNetworks);
+        ane.onSetCallType(QnsConstants.CALL_TYPE_EMERGENCY);
+        assertTrue(ane.needHandoverPolicyCheck());
+        assertFalse(ane.moveTransportTypeAllowed());
+
+        when(configManager.isHandoverAllowedByPolicy(
+                        ApnSetting.TYPE_IMS,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        QnsConstants.COVERAGE_HOME))
+                .thenReturn(false);
+        info = qnsTelephonyListener.new QnsTelephonyInfo();
+        info.setCellularAvailable(true);
+        info.setCoverage(false);
+        info.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_UMTS);
+        info.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_UMTS);
+        info.setDataRegState(ServiceState.STATE_IN_SERVICE);
+        infoIms = qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        ane.onQnsTelephonyInfoChanged(infoIms);
+        ane.updateLastNotifiedQualifiedNetwork(accessNetworks);
+        ane.onSetCallType(QnsConstants.CALL_TYPE_VOICE);
+        assertTrue(ane.needHandoverPolicyCheck());
+        assertFalse(ane.moveTransportTypeAllowed());
+        ane.updateLastNotifiedQualifiedNetwork(accessNetworks);
+        ane.onSetCallType(QnsConstants.CALL_TYPE_IDLE);
+        assertTrue(ane.needHandoverPolicyCheck());
+        assertTrue(ane.moveTransportTypeAllowed());
+        ane.updateLastNotifiedQualifiedNetwork(accessNetworks);
+        ane.onSetCallType(QnsConstants.CALL_TYPE_EMERGENCY);
+        assertTrue(ane.needHandoverPolicyCheck());
+        assertFalse(ane.moveTransportTypeAllowed());
+    }
+
+    @Test
     public void testVopsCheckRequired() {
         when(dataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);

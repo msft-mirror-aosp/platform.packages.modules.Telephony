@@ -636,7 +636,11 @@ public class AccessNetworkEvaluator {
         evaluate();
     }
 
-    private void onSetCallType(@QnsConstants.QnsCallType int callType) {
+    @VisibleForTesting
+    void onSetCallType(@QnsConstants.QnsCallType int callType) {
+        if (mApnType == ApnSetting.TYPE_IMS && callType == QnsConstants.CALL_TYPE_EMERGENCY) {
+            if (!mDataConnectionStatusTracker.isActiveState()) return;
+        }
         mCallType = callType;
         mRestrictManager.setQnsCallType(mCallType);
         log("onSetCallType CallType:" + mCallType);
@@ -680,6 +684,10 @@ public class AccessNetworkEvaluator {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
                 needEvaluate = true;
                 initLastNotifiedQualifiedNetwork();
+                if (mApnType == ApnSetting.TYPE_IMS) {
+                    if (mAltEventListener != null) mAltEventListener.clearNormalCallInfo();
+                }
+                mCallType = QnsConstants.CALL_TYPE_IDLE;
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED:
                 mHandler.post(() -> onDataConnectionConnected(info.getTransportType()));
@@ -1241,6 +1249,9 @@ public class AccessNetworkEvaluator {
                         : AccessNetworkType.IWLAN;
         if (mConfigManager.isHandoverAllowedByPolicy(
                 mApnType, srcAccessNetwork, dstAccessNetwork, mCoverage)) {
+            if (mApnType == ApnSetting.TYPE_IMS && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
+                return false;
+            }
             return true;
         } else {
             if (mApnType == ApnSetting.TYPE_IMS && mCallType == QnsConstants.CALL_TYPE_IDLE) {
