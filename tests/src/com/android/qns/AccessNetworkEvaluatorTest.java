@@ -358,8 +358,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
-        info.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
-        info.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
         QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
                 qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
@@ -378,8 +378,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         info = qnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
-        info.setDataTech(ServiceState.RIL_RADIO_TECHNOLOGY_UMTS);
-        info.setVoiceTech(ServiceState.RIL_RADIO_TECHNOLOGY_UMTS);
+        info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_UMTS);
+        info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_UMTS);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
         infoIms = qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         ane.onQnsTelephonyInfoChanged(infoIms);
