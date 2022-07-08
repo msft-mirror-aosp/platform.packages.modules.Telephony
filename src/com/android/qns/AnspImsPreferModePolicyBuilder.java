@@ -26,7 +26,7 @@ public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicy
 
     public AnspImsPreferModePolicyBuilder(Context context, int slotIndex, int apnType) {
         super(context, slotIndex, apnType);
-        LOG_TAG = "QnsAnspBuilderDtag";
+        LOG_TAG = "QnsAnspImsPrefBuilder";
     }
 
     static {
