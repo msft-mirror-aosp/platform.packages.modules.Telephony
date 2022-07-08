@@ -41,8 +41,6 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.Xml;
 
-import com.android.ims.ImsManager;
-
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
@@ -177,13 +175,14 @@ public class QnsUtils {
         return info;
     }
 
-    protected static ImsManager getImsManager(Context context, int slotIndex) {
-        return com.android.ims.ImsManager.getInstance(context, slotIndex);
+    protected static QnsImsManager getImsManager(Context context, int slotIndex) {
+        return QnsImsManager.getInstance(context, slotIndex);
     }
 
+    /** isCrossSimCallingEnabled */
     public static boolean isCrossSimCallingEnabled(Context context, int slotIndex) {
         try {
-            ImsManager imsManager = getImsManager(context, slotIndex);
+            QnsImsManager imsManager = getImsManager(context, slotIndex);
             return imsManager.isCrossSimCallingEnabled();
         } catch (Exception e) {
             // Fail to query Cross-SIM calling setting, just return false to avoid an exception.
@@ -191,9 +190,10 @@ public class QnsUtils {
         return false;
     }
 
+    /** isWfcEnabled */
     public static boolean isWfcEnabled(Context context, int slotIndex, boolean roaming) {
         try {
-            ImsManager imsManager = getImsManager(context, slotIndex);
+            QnsImsManager imsManager = getImsManager(context, slotIndex);
             boolean bWfcEnabledByUser;
             boolean bWfcEnabledByPlatform = imsManager.isWfcEnabledByPlatform();
             boolean bWfcProvisionedOnDevice = imsManager.isWfcProvisionedOnDevice();
@@ -230,9 +230,10 @@ public class QnsUtils {
         return false;
     }
 
+    /** isWfcEnabledByPlatform */
     public static boolean isWfcEnabledByPlatform(Context context, int slotIndex) {
         try {
-            ImsManager imsManager = getImsManager(context, slotIndex);
+            QnsImsManager imsManager = getImsManager(context, slotIndex);
             boolean bWfcEnabledByPlatform = imsManager.isWfcEnabledByPlatform();
             log("isWfcEnabledByPlatform:" + bWfcEnabledByPlatform + " slot:" + slotIndex);
             return bWfcEnabledByPlatform;
@@ -243,9 +244,10 @@ public class QnsUtils {
         return false;
     }
 
+    /** getWfcMode */
     public static int getWfcMode(Context context, int slotIndex, boolean roaming) {
         try {
-            ImsManager imsManager = getImsManager(context, slotIndex);
+            QnsImsManager imsManager = getImsManager(context, slotIndex);
             int wfcMode = imsManager.getWfcMode(roaming);
             log("getWfcMode slot:" + slotIndex + " wfcMode:" + wfcMode + " roaming:" + roaming);
             return wfcMode;

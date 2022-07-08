@@ -157,6 +157,39 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         verify(iwlanNetworkStatusTracker)
                 .registerIwlanNetworksChanged(anyInt(), capture.capture(), anyInt());
         mEvaluatorHandler = capture.getValue();
+        stubQnsDefaultWfcSettings();
+    }
+
+    @Mock QnsImsManager mWfcSettingQnsImsManager;
+    @Mock QnsProvisioningListener mWfcSettingQnsProvListener;
+
+    private void stubQnsDefaultWfcSettings() {
+        mMockitoSession =
+                mockitoSession()
+                        .strictness(Strictness.LENIENT)
+                        .mockStatic(QnsImsManager.class)
+                        .mockStatic(QnsProvisioningListener.class)
+                        .startMocking();
+        when(QnsImsManager.getInstance(sMockContext, mSlotIndex))
+                .thenReturn(mWfcSettingQnsImsManager);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(true);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
+        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(true);
+        when(mWfcSettingQnsImsManager.isWfcProvisionedOnDevice()).thenReturn(true);
+        when(mWfcSettingQnsImsManager.isCrossSimCallingEnabled()).thenReturn(false);
+        when(mWfcSettingQnsImsManager.getWfcMode(true)).thenReturn(QnsConstants.WIFI_PREF);
+        when(mWfcSettingQnsImsManager.getWfcMode(false)).thenReturn(QnsConstants.CELL_PREF);
+        when(QnsProvisioningListener.getInstance(sMockContext, mSlotIndex))
+                .thenReturn(mWfcSettingQnsProvListener);
+        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
+                .thenReturn(true);
+
+        try {
+            Method method = AccessNetworkEvaluator.class.getDeclaredMethod("initSettings");
+            method.setAccessible(true);
+            method.invoke(ane);
+        } catch (Exception e) {
+        }
     }
 
     private void stubQnsStatics(
@@ -165,19 +198,33 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
             boolean wfcPlatformEnabled,
             boolean settingWfcEnabled,
             boolean settingWfcRoamingEnabled) {
-        when(QnsUtils.isWfcEnabledByPlatform(sMockContext, mSlotIndex))
-                .thenReturn(wfcPlatformEnabled);
-        when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, false)).thenReturn(settingWfcEnabled);
-        when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, false)).thenReturn(settingWfcMode);
-        when(QnsUtils.isWfcEnabled(sMockContext, mSlotIndex, true))
+
+        when(QnsImsManager.getInstance(sMockContext, mSlotIndex))
+                .thenReturn(mWfcSettingQnsImsManager);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(wfcPlatformEnabled);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(settingWfcEnabled);
+        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser())
                 .thenReturn(settingWfcRoamingEnabled);
-        when(QnsUtils.getWfcMode(sMockContext, mSlotIndex, true)).thenReturn(settingWfcRoamingMode);
+        when(mWfcSettingQnsImsManager.getWfcMode(true)).thenReturn(settingWfcRoamingMode);
+        when(mWfcSettingQnsImsManager.getWfcMode(false)).thenReturn(settingWfcMode);
+        when(QnsProvisioningListener.getInstance(sMockContext, mSlotIndex))
+                .thenReturn(mWfcSettingQnsProvListener);
+        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
+                .thenReturn(settingWfcRoamingEnabled);
+
+        try {
+            Method method = AccessNetworkEvaluator.class.getDeclaredMethod("initSettings");
+            method.setAccessible(true);
+            method.invoke(ane);
+        } catch (Exception e) {
+        }
     }
 
     @After
     public void tearDown() throws Exception {
         if (mMockitoSession != null) {
             mMockitoSession.finishMocking();
+            mMockitoSession = null;
         }
         if (ane != null) {
             ane.close();
@@ -525,13 +572,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnTryWfcConnectionStateChanged() {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsUtils.class)
-                        .startMocking();
         stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, false, false, false);
-        ane.rebuild();
         waitFor(100);
         ane.onTryWfcConnectionStateChanged(true);
         Message.obtain(
@@ -862,13 +903,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Home() throws InterruptedException {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsUtils.class)
-                        .startMocking();
         stubQnsStatics(QnsConstants.WIFI_PREF, QnsConstants.WIFI_PREF, true, false, false);
-        ane.rebuild();
         ane.onIwlanNetworkStatusChanged(
                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         ane.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
@@ -876,6 +911,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Enabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         assertTrue(latch.await(200, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -885,6 +921,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(false);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_DISABLED);
         assertTrue(latch.await(200, TimeUnit.MILLISECONDS));
         assertFalse(
@@ -895,11 +932,6 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Roaming() throws InterruptedException {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsUtils.class)
-                        .startMocking();
         stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
         QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
         QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
@@ -909,7 +941,6 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         infoIms.setRegisteredPlmn(TEST_PLMN);
         ane.onQnsTelephonyInfoChanged(infoIms);
 
-        ane.rebuild();
         ane.onIwlanNetworkStatusChanged(
                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         ane.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
@@ -917,6 +948,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Enabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(true);
+        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
+                .thenReturn(true);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
         assertTrue(latch.await(200, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -926,6 +960,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(false);
+        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
+                .thenReturn(false);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_DISABLED);
         assertTrue(latch.await(200, TimeUnit.MILLISECONDS));
         assertFalse(
@@ -936,13 +973,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcPlatformChanged() throws InterruptedException {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsUtils.class)
-                        .startMocking();
         stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, false, true, false);
-        ane.rebuild();
         ane.onIwlanNetworkStatusChanged(
                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         ane.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
@@ -950,7 +981,10 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Enabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(true);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED);
+        mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         assertTrue(latch.await(200, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
@@ -964,6 +998,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         latch = new CountDownLatch(1);
+        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(false);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_DISABLED);
         assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
@@ -971,13 +1006,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcModeChanged_Home() throws Exception {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsUtils.class)
-                        .startMocking();
         stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
-        ane.rebuild();
         waitFor(300);
         generateAnspPolicyMap();
         mockCurrentQuality(-60, -90);

@@ -37,8 +37,6 @@ import android.telephony.ims.ImsMmTelManager;
 import android.telephony.ims.ProvisioningManager;
 import android.telephony.ims.feature.ImsFeature;
 
-import com.android.ims.ImsManager;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,7 +57,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
     private MockitoSession mMockitoSession;
     @Mock private QnsEventDispatcher mMockQnsEventDispatcher;
     @Mock private ProvisioningManager mMockProvisioningManager;
-    @Mock private ImsManager mMockIM;
+    @Mock private QnsImsManager mMockIM;
     @Mock private IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
 
     HandlerThread mHandlerThread =

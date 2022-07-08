@@ -118,7 +118,10 @@ public class QnsProvisioningListener {
 
         try {
             // checks ImsException for ims not supported or unavailable.
-            QnsUtils.getImsManager(mContext, mSlotIndex).getImsServiceState();
+            if (QnsUtils.getImsManager(mContext, mSlotIndex).getImsServiceState()
+                    != 2) { // STATE_READY
+                throw new Exception();
+            }
 
             // create provisioning manager.
             if (mProvisioningManager == null) {

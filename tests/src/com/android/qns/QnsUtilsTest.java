@@ -43,8 +43,6 @@ import android.telephony.data.ApnSetting;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.ims.ImsManager;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -78,7 +76,7 @@ public class QnsUtilsTest {
     @Mock TelephonyManager mTelephonyManager;
     @Mock SubscriptionInfo mSubscriptionInfo;
     @Mock CarrierConfigManager mCarrierConfigManager;
-    @Mock ImsManager mImsManager;
+    @Mock QnsImsManager mImsManager;
     @Mock QnsProvisioningListener mQnsProvisioningListener;
     PersistableBundle testBundle;
 
@@ -192,11 +190,11 @@ public class QnsUtilsTest {
         when(mImsManager.isCrossSimCallingEnabled()).thenReturn(true, false);
         MockitoSession mockitoSession =
                 mockitoSession()
-                        .mockStatic(ImsManager.class)
+                        .mockStatic(QnsImsManager.class)
                         .strictness(Strictness.LENIENT)
                         .startMocking();
         try {
-            when(ImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
+            when(QnsImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
             assertTrue(QnsUtils.isCrossSimCallingEnabled(mContext, 0));
             assertFalse(QnsUtils.isCrossSimCallingEnabled(mContext, 0));
 
@@ -212,11 +210,11 @@ public class QnsUtilsTest {
         when(mImsManager.isWfcProvisionedOnDevice()).thenReturn(true, true, true, false);
         MockitoSession mockitoSession =
                 mockitoSession()
-                        .mockStatic(ImsManager.class)
+                        .mockStatic(QnsImsManager.class)
                         .strictness(Strictness.LENIENT)
                         .startMocking();
         try {
-            when(ImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
+            when(QnsImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
             assertTrue(QnsUtils.isWfcEnabled(mContext, 0, false)); // all OK
             assertFalse(QnsUtils.isWfcEnabled(mContext, 0, false)); // wfc disabled by platform
             assertFalse(QnsUtils.isWfcEnabled(mContext, 0, false)); // wfc disabled by user
@@ -237,12 +235,12 @@ public class QnsUtilsTest {
                 .thenReturn(true, true, false);
         MockitoSession mockitoSession =
                 mockitoSession()
-                        .mockStatic(ImsManager.class)
+                        .mockStatic(QnsImsManager.class)
                         .mockStatic(QnsProvisioningListener.class)
                         .strictness(Strictness.LENIENT)
                         .startMocking();
         try {
-            when(ImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
+            when(QnsImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
             when(QnsProvisioningListener.getInstance(mContext, 0))
                     .thenReturn(mQnsProvisioningListener);
 
@@ -263,11 +261,11 @@ public class QnsUtilsTest {
         when(mImsManager.getWfcMode(false)).thenReturn(0, 1, 2);
         MockitoSession mockitoSession =
                 mockitoSession()
-                        .mockStatic(ImsManager.class)
+                        .mockStatic(QnsImsManager.class)
                         .strictness(Strictness.LENIENT)
                         .startMocking();
         try {
-            when(ImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
+            when(QnsImsManager.getInstance(mContext, 0)).thenReturn(mImsManager);
             assertEquals(0, QnsUtils.getWfcMode(mContext, 0, true));
             assertEquals(1, QnsUtils.getWfcMode(mContext, 0, true));
             assertEquals(2, QnsUtils.getWfcMode(mContext, 0, true));
