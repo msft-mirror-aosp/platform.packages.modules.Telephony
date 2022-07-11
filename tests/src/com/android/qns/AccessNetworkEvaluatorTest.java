@@ -1552,4 +1552,29 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         verify(mMockImsRegistrationState, times(1)).getTransportType();
         verify(mMockImsRegistrationState, times(1)).getEvent();
     }
+
+    @Test
+    public void testValidateWfcSettingsAndUpdate() {
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, false, false);
+        assertFalse(ane.isWfcEnabled());
+
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
+        assertTrue(ane.isWfcEnabled());
+
+        QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
+        info.setCellularAvailable(true);
+        info.setCoverage(true);
+        info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        info.setDataRegState(ServiceState.STATE_IN_SERVICE);
+        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
+                qnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        ane.onQnsTelephonyInfoChanged(infoIms);
+
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, false, false);
+        assertFalse(ane.isWfcEnabled());
+
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
+        assertTrue(ane.isWfcEnabled());
+    }
 }

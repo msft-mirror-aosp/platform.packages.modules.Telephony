@@ -887,8 +887,7 @@ public class AccessNetworkEvaluator {
 
     protected boolean isWfcEnabled() {
 
-        // TODO remove for debug logging...
-        QnsUtils.isWfcEnabled(mContext, mSlotIndex, mCoverage == QnsConstants.COVERAGE_ROAM);
+        validateWfcSettingsAndUpdate();
 
         if (mAllowIwlanForWfcActivation) {
             return true;
@@ -922,6 +921,32 @@ public class AccessNetworkEvaluator {
         }
 
         return false;
+    }
+
+    private void validateWfcSettingsAndUpdate() {
+        boolean roaming = (mCoverage == QnsConstants.COVERAGE_ROAM);
+        boolean wfcSetting = QnsUtils.isWfcEnabled(mContext, mSlotIndex, roaming);
+        if (roaming && mSettingWfcRoamingEnabled != wfcSetting) {
+            log("validateWfcSettingsAndUpdate, found wfc roaming setting mismatch");
+            if (wfcSetting) {
+                mWfcPlatformEnabled = true;
+                mSettingWfcRoamingEnabled = true;
+            } else {
+                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
+                mSettingWfcRoamingEnabled = false;
+            }
+            mSettingWfcRoamingMode = QnsUtils.getWfcMode(mContext, mSlotIndex, true);
+        } else if (!roaming && mSettingWfcEnabled != wfcSetting) {
+            log("validateWfcSettingsAndUpdate, found wfc setting mismatch");
+            if (wfcSetting) {
+                mWfcPlatformEnabled = true;
+                mSettingWfcEnabled = true;
+            } else {
+                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
+                mSettingWfcEnabled = false;
+            }
+            mSettingWfcMode = QnsUtils.getWfcMode(mContext, mSlotIndex, false);
+        }
     }
 
     private boolean isAccessNetworkAllowed(int accessNetwork, int apnType) {
