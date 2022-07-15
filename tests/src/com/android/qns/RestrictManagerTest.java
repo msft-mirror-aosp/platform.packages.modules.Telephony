@@ -107,7 +107,10 @@ public class RestrictManagerTest extends QnsTest {
         mMockDcst = mock(DataConnectionStatusTracker.class);
         mConfigManager = mock(QnsCarrierConfigManager.class);
         mMockSession =
-                mockitoSession().mockStatic(CellularNetworkStatusTracker.class).startMocking();
+                mockitoSession()
+                        .mockStatic(CellularNetworkStatusTracker.class)
+                        .mockStatic(QnsUtils.class)
+                        .startMocking();
         lenient()
                 .when(CellularNetworkStatusTracker.getInstance(sMockContext, 0))
                 .thenReturn(mCellularNetworkStatusTracker);
@@ -146,7 +149,10 @@ public class RestrictManagerTest extends QnsTest {
         if (mRestrictManager != null) {
             mRestrictManager.close();
         }
-        mMockSession.finishMocking();
+        if (mMockSession != null) {
+            mMockSession.finishMocking();
+            mMockSession = null;
+        }
     }
 
     @Test
@@ -532,22 +538,6 @@ public class RestrictManagerTest extends QnsTest {
     }
 
     @Test
-    public void testRestrictWithThrottlingForRetryTimerAsZero() {
-        long throttleTime = SystemClock.elapsedRealtime();
-        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
-                new DataConnectionStatusTracker.DataConnectionChangedInfo(
-                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
-                        DataConnectionStatusTracker.STATE_CONNECTED,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
-        mRestrictManager.onDataConnectionChanged(dcInfo);
-        mRestrictManager.notifyThrottling(
-                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-        assertFalse(
-                mRestrictManager.hasRestrictionType(
-                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
-    }
-
-    @Test
     public void testRestrictWithThrottling() {
         long throttleTime = SystemClock.elapsedRealtime() + 12000;
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
@@ -586,6 +576,151 @@ public class RestrictManagerTest extends QnsTest {
         mTestLooper.moveTimeForward(13000);
         mTestLooper.dispatchAll();
         assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+    }
+
+    @Test
+    public void testRestrictWithThrottlingForRetryTimerAsZero() {
+        long throttleTime = SystemClock.elapsedRealtime();
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
+    public void testDeferThrottlingDuringActiveState() {
+        long throttleTime = SystemClock.elapsedRealtime() + 10000;
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        when(mMockDcst.isActiveState()).thenReturn(true);
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_DISCONNECTED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID);
+        when(mMockDcst.isActiveState()).thenReturn(false);
+        long currentTime = SystemClock.elapsedRealtime() + 11000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(currentTime);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        when(mMockDcst.isActiveState()).thenReturn(true);
+        throttleTime = SystemClock.elapsedRealtime() + 60000;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(11000);
+        mTestLooper.dispatchAll();
+        mRestrictManager.notifyThrottling(false, 0, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mTestLooper.moveTimeForward(5000);
+        mTestLooper.dispatchAll();
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_DISCONNECTED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID);
+        when(mMockDcst.isActiveState()).thenReturn(false);
+        currentTime = SystemClock.elapsedRealtime() + 16000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(currentTime);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
+    public void testProcessDeferredThrottlingAtDisconnected() {
+        long throttleTime = SystemClock.elapsedRealtime() + 60000;
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        when(mMockDcst.isActiveState()).thenReturn(true);
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_DISCONNECTED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID);
+        when(mMockDcst.isActiveState()).thenReturn(false);
+        long currentTime = SystemClock.elapsedRealtime() + 10000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(currentTime);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(45000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
     }
 
     @Test

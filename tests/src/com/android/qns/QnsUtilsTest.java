@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.PersistableBundle;
+import android.os.SystemClock;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CarrierConfigManager;
 import android.telephony.ServiceState;
@@ -177,6 +178,13 @@ public class QnsUtilsTest {
         // default subId is always -1
         assertFalse(QnsUtils.isDefaultDataSubs(2));
         assertFalse(QnsUtils.isDefaultDataSubs(5));
+    }
+
+    @Test
+    public void testGetSystemElapsedRealTime() {
+        Long elapsedRealTime = SystemClock.elapsedRealtime();
+        assertTrue(QnsUtils.getSystemElapsedRealTime() >= elapsedRealTime);
+        assertFalse(QnsUtils.getSystemElapsedRealTime() - elapsedRealTime > 100);
     }
 
     @Test

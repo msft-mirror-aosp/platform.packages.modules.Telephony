@@ -27,6 +27,7 @@ import android.annotation.Nullable;
 import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.PersistableBundle;
+import android.os.SystemClock;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
@@ -155,6 +156,10 @@ public class QnsUtils {
             return ddsSlotId == slotId;
         }
         return false;
+    }
+
+    public static long getSystemElapsedRealTime() {
+        return SystemClock.elapsedRealtime();
     }
 
     private static SubscriptionInfo getSubscriptionInfo(Context context, int slotId)

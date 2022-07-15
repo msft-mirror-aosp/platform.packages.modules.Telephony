@@ -32,6 +32,7 @@ import android.telephony.Annotation;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.util.Log;
+import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.qns.DataConnectionStatusTracker.DataConnectionChangedInfo;
@@ -162,6 +163,7 @@ public class RestrictManager {
     private int mFallbackCounterOnDataConnectionFail;
     private int mLastDataConnectionTransportType;
     private boolean mIsTimerRunningOnDataConnectionFail = false;
+    private Pair<Integer, Long> mDeferredThrottlingEvent = null;
 
     /** IMS call type */
     @QnsConstants.QnsCallType private int mImsCallType;
@@ -717,6 +719,19 @@ public class RestrictManager {
         processReleaseEvent(AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RELEASE_EVENT_DISCONNECT);
         processReleaseEvent(AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RELEASE_EVENT_DISCONNECT);
         mCounterForIwlanRestrictionInCall = 0;
+        if (mDeferredThrottlingEvent != null) {
+            long delayMillis =
+                    mDeferredThrottlingEvent.second - QnsUtils.getSystemElapsedRealTime();
+            if (delayMillis > 0) {
+                if (DBG) Log.d(TAG, "onDisconnected, process deferred Throttling event");
+                addRestriction(
+                        mDeferredThrottlingEvent.first,
+                        RESTRICT_TYPE_THROTTLING,
+                        sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
+                        (int) delayMillis);
+            }
+            mDeferredThrottlingEvent = null;
+        }
     }
 
     private void processDataConnectionStarted(int currTransportType) {
@@ -1417,14 +1432,25 @@ public class RestrictManager {
         if (throttle) {
             long delayMillis = throttleTime - SystemClock.elapsedRealtime();
             if (delayMillis > 0) {
-                addRestriction(
-                        transportType,
-                        RESTRICT_TYPE_THROTTLING,
-                        sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
-                        (int) delayMillis);
+                if (mDataConnectionStatusTracker.isActiveState()) {
+                    Log.d(
+                            TAG,
+                            "Defer Throttling event during active state transportType:"
+                                    + transportType
+                                    + " ThrottleTime:"
+                                    + throttleTime);
+                    mDeferredThrottlingEvent = new Pair<>(transportType, throttleTime);
+                } else {
+                    addRestriction(
+                            transportType,
+                            RESTRICT_TYPE_THROTTLING,
+                            sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
+                            (int) delayMillis);
+                }
             }
         } else {
             releaseRestriction(transportType, RESTRICT_TYPE_THROTTLING);
+            if (mDeferredThrottlingEvent != null) mDeferredThrottlingEvent = null;
         }
     }
 
