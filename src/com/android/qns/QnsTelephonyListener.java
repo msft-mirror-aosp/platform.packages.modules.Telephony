@@ -319,7 +319,7 @@ public class QnsTelephonyListener {
                             NetworkRegistrationInfo.DOMAIN_PS,
                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
             if (lastIwlanNrs != null) {
-                r.notifyRegistrant(new AsyncResult(null, lastIwlanNrs.isInService(), null));
+                r.notifyRegistrant(new AsyncResult(null, lastIwlanNrs.isRegistered(), null));
             }
         }
     }
@@ -516,8 +516,8 @@ public class QnsTelephonyListener {
         boolean hasAirplaneModeOnChanged =
                 mLastServiceState.getState() != ServiceState.STATE_POWER_OFF
                         && serviceState.getState() == ServiceState.STATE_POWER_OFF;
-        if ((oldWwanNrs == null || !oldWwanNrs.isInService() || hasAirplaneModeOnChanged)
-                && (newWwanNrs != null && newWwanNrs.isInService())) {
+        if ((oldWwanNrs == null || !oldWwanNrs.isRegistered() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isRegistered())) {
             newInfo.setCellularAvailable(true);
         }
         if ((oldWwanNrs != null && oldWwanNrs.isRegistered())
