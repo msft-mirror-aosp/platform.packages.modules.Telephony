@@ -24,7 +24,6 @@ import android.content.Context;
 import android.os.AsyncResult;
 import android.os.Binder;
 import android.os.Handler;
-import android.os.HandlerExecutor;
 import android.os.HandlerThread;
 import android.os.Registrant;
 import android.os.RegistrantList;
@@ -115,7 +114,7 @@ public class QnsTelephonyListener {
 
         if (mSubscriptionManager != null) {
             mSubscriptionManager.addOnSubscriptionsChangedListener(
-                    new HandlerExecutor(mHandler), mSubscriptionsChangeListener);
+                    new QnsUtils.QnsExecutor(mHandler), mSubscriptionsChangeListener);
         }
     }
 

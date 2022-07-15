@@ -26,6 +26,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.net.NetworkCapabilities;
+import android.os.Handler;
 import android.os.PersistableBundle;
 import android.os.SystemClock;
 import android.telephony.AccessNetworkConstants;
@@ -54,6 +55,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
 
 /** This class contains QualifiedNetworksService specific utility functions */
@@ -696,6 +699,21 @@ public class QnsUtils {
                 return NetworkCapabilities.NET_CAPABILITY_CBS;
             default:
                 throw new IllegalArgumentException("Unsupported apn type: " + apnType);
+        }
+    }
+
+    protected static class QnsExecutor implements Executor {
+        private final Handler mHandler;
+
+        QnsExecutor(Handler handler) {
+            mHandler = handler;
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            if (!mHandler.post(command)) {
+                throw new RejectedExecutionException(mHandler + " is shutting down");
+            }
         }
     }
 }

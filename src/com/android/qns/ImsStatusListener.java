@@ -19,7 +19,6 @@ package com.android.qns;
 import android.content.Context;
 import android.os.AsyncResult;
 import android.os.Handler;
-import android.os.HandlerExecutor;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
@@ -177,7 +176,7 @@ public class ImsStatusListener {
         mHandlerThread = new HandlerThread(ImsStatusListener.class.getSimpleName() + slotIndex);
         mHandlerThread.start();
         mHandler = new ImsStatusListenerHandler(mHandlerThread.getLooper());
-        mExecutor = new HandlerExecutor(mHandler);
+        mExecutor = new QnsUtils.QnsExecutor(mHandler);
         mDataConnectionStatusTracker =
                 new DataConnectionStatusTracker(
                         context, mHandlerThread.getLooper(), slotIndex, ApnSetting.TYPE_IMS);

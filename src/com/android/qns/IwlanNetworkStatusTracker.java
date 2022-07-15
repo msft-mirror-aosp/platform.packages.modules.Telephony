@@ -28,7 +28,6 @@ import android.net.TelephonyNetworkSpecifier;
 import android.net.wifi.WifiManager;
 import android.os.AsyncResult;
 import android.os.Handler;
-import android.os.HandlerExecutor;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
@@ -178,7 +177,7 @@ public class IwlanNetworkStatusTracker {
             Log.d(TAG, "Register Wifi Country code");
             mWifiCountryCodeRegistered = true;
             mWifiManager.registerActiveCountryCodeChangedCallback(
-                    new HandlerExecutor(mNetCbHandler), mWifiCountryCodeCallback);
+                    new QnsUtils.QnsExecutor(mNetCbHandler), mWifiCountryCodeCallback);
         }
     }
 

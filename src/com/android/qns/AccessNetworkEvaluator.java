@@ -22,7 +22,6 @@ import static android.telephony.ServiceState.ROAMING_TYPE_INTERNATIONAL;
 import android.content.Context;
 import android.os.AsyncResult;
 import android.os.Handler;
-import android.os.HandlerExecutor;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
@@ -132,7 +131,7 @@ public class AccessNetworkEvaluator {
         mHandlerThread = new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mApnType);
         mHandlerThread.start();
         mHandler = new EvaluatorEventHandler(mHandlerThread.getLooper());
-        Executor executor = new HandlerExecutor(mHandler);
+        Executor executor = new QnsUtils.QnsExecutor(mHandler);
 
         mConfigManager = QnsCarrierConfigManager.getInstance(context, slotIndex);
         mAltEventListener = AlternativeEventListener.getInstance(context, slotIndex);
