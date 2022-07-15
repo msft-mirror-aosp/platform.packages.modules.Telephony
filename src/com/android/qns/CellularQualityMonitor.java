@@ -18,7 +18,6 @@ package com.android.qns;
 import static android.telephony.CellInfo.UNAVAILABLE;
 
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -585,10 +584,10 @@ public class CellularQualityMonitor extends QualityMonitor {
         @Override
         public void handleMessage(@NonNull Message msg) {
             Log.d(mTag, "handleMessage what = " + msg.what);
-            AsyncResult ar;
+            QnsAsyncResult ar;
             switch (msg.what) {
                 case EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED:
-                    ar = (AsyncResult) msg.obj;
+                    ar = (QnsAsyncResult) msg.obj;
                     if (ar.exception == null
                             && ar.result instanceof QnsTelephonyListener.QnsTelephonyInfo) {
                         QnsTelephonyListener.QnsTelephonyInfo info =
@@ -597,7 +596,7 @@ public class CellularQualityMonitor extends QualityMonitor {
                     }
                     break;
                 case EVENT_SUBSCRIPTION_ID_CHANGED:
-                    ar = (AsyncResult) msg.obj;
+                    ar = (QnsAsyncResult) msg.obj;
                     int newSubId = (int) ar.result;
                     clearOldRequests();
                     mSubId = newSubId;

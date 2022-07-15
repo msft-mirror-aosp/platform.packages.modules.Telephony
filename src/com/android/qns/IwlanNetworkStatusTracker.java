@@ -26,13 +26,10 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkSpecifier;
 import android.net.TelephonyNetworkSpecifier;
 import android.net.wifi.WifiManager;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
-import android.os.RegistrantList;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -59,7 +56,7 @@ public class IwlanNetworkStatusTracker {
     private static final String TAG = IwlanNetworkStatusTracker.class.getSimpleName();
     private static final int EVENT_BASE = 1000;
     private static final int EVENT_IWLAN_SERVICE_STATE_CHANGED = EVENT_BASE;
-    private final Map<Integer, RegistrantList> mIwlanNetworkListenersArray =
+    private final Map<Integer, QnsRegistrantList> mIwlanNetworkListenersArray =
             new ConcurrentHashMap<>();
     private static final String LAST_KNOWN_COUNTRY_CODE_KEY = "last_known_country_code";
     private static IwlanNetworkStatusTracker sIwlanNetworkStatusTracker = null;
@@ -123,7 +120,7 @@ public class IwlanNetworkStatusTracker {
                     onWifiDisabling();
                     break;
                 case EVENT_IWLAN_SERVICE_STATE_CHANGED:
-                    AsyncResult ar = (AsyncResult) message.obj;
+                    QnsAsyncResult ar = (QnsAsyncResult) message.obj;
                     boolean isRegistered = (boolean) ar.result;
                     onIwlanServiceStateChanged(mSlotIndex, isRegistered);
                     break;
@@ -254,7 +251,7 @@ public class IwlanNetworkStatusTracker {
         notifyIwlanNetworkStatus(slotId, false);
     }
 
-    private void notifyIwlanNetworkStatusToRegister(int slotId, Registrant r) {
+    private void notifyIwlanNetworkStatusToRegister(int slotId, QnsRegistrant r) {
         if (DBG) {
             Log.d(TAG, "notifyIwlanNetworkStatusToRegister");
         }
@@ -302,9 +299,9 @@ public class IwlanNetworkStatusTracker {
 
     public void registerIwlanNetworksChanged(int slotId, Handler h, int what) {
         if (h != null) {
-            Registrant r = new Registrant(h, what, null);
+            QnsRegistrant r = new QnsRegistrant(h, what, null);
             if (mIwlanNetworkListenersArray.get(slotId) == null) {
-                mIwlanNetworkListenersArray.put(slotId, new RegistrantList());
+                mIwlanNetworkListenersArray.put(slotId, new QnsRegistrantList());
             }
             mIwlanNetworkListenersArray.get(slotId).add(r);
             IwlanEventHandler iwlanEventHandler = mHandlerSparseArray.get(slotId);

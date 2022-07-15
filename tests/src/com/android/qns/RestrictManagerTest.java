@@ -47,7 +47,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -1842,8 +1841,8 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testHandlerEventOnDataConnectionChangedEvent() throws InterruptedException {
         // Handler message with WLAN Connected received
-        AsyncResult asyncResult =
-                new AsyncResult(
+        QnsAsyncResult asyncResult =
+                new QnsAsyncResult(
                         null,
                         new DataConnectionStatusTracker.DataConnectionChangedInfo(
                                 DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED,
@@ -1855,7 +1854,7 @@ public class RestrictManagerTest extends QnsTest {
 
         // Receive Handover started over Wwan
         asyncResult =
-                new AsyncResult(
+                new QnsAsyncResult(
                         null,
                         new DataConnectionStatusTracker.DataConnectionChangedInfo(
                                 EVENT_DATA_CONNECTION_HANDOVER_STARTED,

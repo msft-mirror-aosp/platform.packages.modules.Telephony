@@ -31,7 +31,6 @@ import android.content.IntentFilter;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -727,7 +726,7 @@ public class QnsEventDispatcher {
         @Override
         public void handleMessage(Message message) {
             Log.d(LOG_TAG, "handleMessage msg=" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
                 case EVENT_CREATE_PROVISIONING_LISTENER:
                     onCreateProvisioningListener();

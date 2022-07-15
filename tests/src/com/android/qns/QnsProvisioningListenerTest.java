@@ -27,7 +27,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -141,7 +140,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         QnsProvisioningListener.QnsProvisioningInfo info =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.result;
@@ -155,7 +154,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         info = (QnsProvisioningListener.QnsProvisioningInfo) result.result;
         assertNotNull(info);
@@ -213,7 +212,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         QnsProvisioningListener.QnsProvisioningInfo info =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.result;
@@ -264,7 +263,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         QnsProvisioningListener.QnsProvisioningInfo info1 =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.result;
@@ -277,7 +276,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         QnsProvisioningListener.QnsProvisioningInfo info2 =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.result;
@@ -290,7 +289,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         assertNotNull(msg);
         assertEquals(1, msg.what);
         assertNotNull(msg.obj);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result);
         QnsProvisioningListener.QnsProvisioningInfo info3 =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.result;
@@ -345,7 +344,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
                         11002,
-                        new AsyncResult(null, info, null)));
+                        new QnsAsyncResult(null, info, null)));
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
         verify(mMockProvisioningManager, times(1))

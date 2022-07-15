@@ -21,12 +21,9 @@ import static android.telephony.BarringInfo.BARRING_SERVICE_TYPE_MMTEL_VOICE;
 
 import android.annotation.NonNull;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Registrant;
-import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation;
 import android.telephony.BarringInfo;
@@ -66,12 +63,12 @@ public class QnsTelephonyListener {
     private final SubscriptionManager mSubscriptionManager;
     private final Handler mHandler;
     private final HandlerThread mHandlerThread;
-    public RegistrantList mCallStateListener = new RegistrantList();
-    public RegistrantList mSrvccStateListener = new RegistrantList();
-    public RegistrantList mSubscriptionIdListener = new RegistrantList();
-    public RegistrantList mIwlanServiceStateListener = new RegistrantList();
-    protected HashMap<Integer, RegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
-    protected HashMap<Integer, RegistrantList> mApnTypeRegistrantMap = new HashMap<>();
+    public QnsRegistrantList mCallStateListener = new QnsRegistrantList();
+    public QnsRegistrantList mSrvccStateListener = new QnsRegistrantList();
+    public QnsRegistrantList mSubscriptionIdListener = new QnsRegistrantList();
+    public QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
+    protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
+    protected HashMap<Integer, QnsRegistrantList> mApnTypeRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
     protected QnsTelephonyInfoIms mLastQnsTelephonyInfoIms = new QnsTelephonyInfoIms();
     protected ServiceState mLastServiceState = new ServiceState();
@@ -139,21 +136,22 @@ public class QnsTelephonyListener {
     }
 
     protected void notifyQnsTelephonyInfo(QnsTelephonyInfo info) {
-        AsyncResult ar;
+        QnsAsyncResult ar;
         for (Integer apnType : mQnsTelephonyInfoRegistrantMap.keySet()) {
             if (apnType == ApnSetting.TYPE_IMS || apnType == ApnSetting.TYPE_EMERGENCY) {
-                ar = new AsyncResult(null, mLastQnsTelephonyInfoIms, null);
+                ar = new QnsAsyncResult(null, mLastQnsTelephonyInfoIms, null);
             } else {
-                ar = new AsyncResult(null, info, null);
+                ar = new QnsAsyncResult(null, info, null);
             }
             mQnsTelephonyInfoRegistrantMap.get(apnType).notifyRegistrants(ar);
         }
     }
 
     protected void notifyQnsTelephonyInfoIms(QnsTelephonyInfoIms info) {
-        AsyncResult ar = new AsyncResult(null, info, null);
-        RegistrantList imsRegList = mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS);
-        RegistrantList sosRegList = mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_EMERGENCY);
+        QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
+        QnsRegistrantList imsRegList = mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS);
+        QnsRegistrantList sosRegList =
+                mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_EMERGENCY);
         if (imsRegList != null) {
             imsRegList.notifyRegistrants(ar);
         }
@@ -170,14 +168,14 @@ public class QnsTelephonyListener {
             PreciseDataConnectionState connectionState) {
         int supportedApnTypeBitMask = connectionState.getApnSetting().getApnTypeBitmask();
         List<Integer> apnTypes = QnsUtils.getApnTypes(supportedApnTypeBitMask);
-        AsyncResult ar = new AsyncResult(null, connectionState, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, connectionState, null);
         for (int apnType : apnTypes) {
             PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(apnType);
             if (lastState == null || !lastState.equals(connectionState)) {
                 mLastPreciseDataConnectionState.put(apnType, connectionState);
                 sArchivingPreciseDataConnectionState.put(
                         mSubId, connectionState.getTransportType(), apnType, connectionState);
-                RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
+                QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
                 if (apnTypeRegistrantList != null) {
                     apnTypeRegistrantList.notifyRegistrants(ar);
                 }
@@ -211,16 +209,16 @@ public class QnsTelephonyListener {
     public void registerQnsTelephonyInfoChanged(
             int apnType, Handler h, int what, Object userObj, boolean notifyImmediately) {
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
-            RegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
+            QnsRegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
             if (apnTypeRegistrantList == null) {
-                apnTypeRegistrantList = new RegistrantList();
+                apnTypeRegistrantList = new QnsRegistrantList();
                 mQnsTelephonyInfoRegistrantMap.put(apnType, apnTypeRegistrantList);
             }
             apnTypeRegistrantList.add(r);
 
             if (notifyImmediately) {
-                r.notifyRegistrant(new AsyncResult(null, getLastQnsTelephonyInfo(), null));
+                r.notifyRegistrant(new QnsAsyncResult(null, getLastQnsTelephonyInfo(), null));
             }
         }
     }
@@ -235,17 +233,17 @@ public class QnsTelephonyListener {
     public void registerPreciseDataConnectionStateChanged(
             int apnType, Handler h, int what, Object userObj, boolean notifyImmediately) {
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
-            RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
+            QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
             if (apnTypeRegistrantList == null) {
-                apnTypeRegistrantList = new RegistrantList();
+                apnTypeRegistrantList = new QnsRegistrantList();
                 mApnTypeRegistrantMap.put(apnType, apnTypeRegistrantList);
             }
             apnTypeRegistrantList.add(r);
 
             PreciseDataConnectionState pdcs = getLastPreciseDataConnectionState(apnType);
             if (notifyImmediately && pdcs != null) {
-                r.notifyRegistrant(new AsyncResult(null, pdcs, null));
+                r.notifyRegistrant(new QnsAsyncResult(null, pdcs, null));
             }
         }
     }
@@ -262,11 +260,11 @@ public class QnsTelephonyListener {
             Handler h, int what, Object userObj, boolean notifyImmediately) {
         log("registerCallStateListener");
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             mCallStateListener.add(r);
 
             if (notifyImmediately) {
-                r.notifyRegistrant(new AsyncResult(null, mCallState, null));
+                r.notifyRegistrant(new QnsAsyncResult(null, mCallState, null));
             }
         }
     }
@@ -281,7 +279,7 @@ public class QnsTelephonyListener {
     public void registerSrvccStateListener(Handler h, int what, Object userObj) {
         log("registerSrvccStateListener");
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             mSrvccStateListener.add(r);
         }
     }
@@ -296,7 +294,7 @@ public class QnsTelephonyListener {
     public void registerSubscriptionIdListener(Handler h, int what, Object userObj) {
         log("registerSubscriptionIdListener");
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             mSubscriptionIdListener.add(r);
         }
     }
@@ -311,7 +309,7 @@ public class QnsTelephonyListener {
     public void registerIwlanServiceStateListener(Handler h, int what, Object userObj) {
         log("registerIwlanServiceStateListener");
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             mIwlanServiceStateListener.add(r);
 
             NetworkRegistrationInfo lastIwlanNrs =
@@ -319,7 +317,7 @@ public class QnsTelephonyListener {
                             NetworkRegistrationInfo.DOMAIN_PS,
                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
             if (lastIwlanNrs != null) {
-                r.notifyRegistrant(new AsyncResult(null, lastIwlanNrs.isRegistered(), null));
+                r.notifyRegistrant(new QnsAsyncResult(null, lastIwlanNrs.isRegistered(), null));
             }
         }
     }
@@ -332,7 +330,7 @@ public class QnsTelephonyListener {
      */
     public void unregisterQnsTelephonyInfoChanged(int apnType, Handler h) {
         if (h != null) {
-            RegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
+            QnsRegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
             if (apnTypeRegistrantList != null) {
                 apnTypeRegistrantList.remove(h);
             }
@@ -347,7 +345,7 @@ public class QnsTelephonyListener {
      */
     public void unregisterPreciseDataConnectionStateChanged(int apnType, Handler h) {
         if (h != null) {
-            RegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
+            QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
             if (apnTypeRegistrantList != null) {
                 apnTypeRegistrantList.remove(h);
             }

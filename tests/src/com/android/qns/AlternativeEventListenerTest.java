@@ -20,7 +20,6 @@ import static org.junit.Assert.*;
 
 import android.content.Context;
 import android.net.LinkProperties;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
 import android.os.test.TestLooper;
@@ -109,7 +108,7 @@ public class AlternativeEventListenerTest extends QnsTest {
             mAltEventProvider.notifyEmergencyPreferredTransportType(expectedTransport);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
-            AsyncResult result = (AsyncResult) msg.obj;
+            QnsAsyncResult result = (QnsAsyncResult) msg.obj;
             assertNotNull(result.result);
             int actualTransport = (int) result.result;
             assertEquals(expectedTransport, actualTransport);
@@ -145,7 +144,7 @@ public class AlternativeEventListenerTest extends QnsTest {
             mAltEventProvider.notifyTryWfcConnectionState(expectedState);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
-            AsyncResult result = (AsyncResult) msg.obj;
+            QnsAsyncResult result = (QnsAsyncResult) msg.obj;
             assertNotNull(result.result);
             boolean actualState = (boolean) result.result;
             assertEquals(expectedState, actualState);
@@ -168,7 +167,7 @@ public class AlternativeEventListenerTest extends QnsTest {
         mAltEventProvider.notifyRtpLowQuality(expectedReason);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         int actualReason = (int) result.result;
         assertEquals(expectedReason, actualReason);
@@ -185,7 +184,7 @@ public class AlternativeEventListenerTest extends QnsTest {
         mAltEventProvider.notifyRtpLowQuality(expectedReason);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         actualReason = (int) result.result;
         assertEquals(expectedReason, actualReason);
@@ -249,7 +248,7 @@ public class AlternativeEventListenerTest extends QnsTest {
 
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_VOICE, (int) result.result);
         assertFalse(mListener.isIdleState()); // for IMS calls only
@@ -267,7 +266,7 @@ public class AlternativeEventListenerTest extends QnsTest {
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.result);
         assertTrue(mListener.isIdleState()); // for IMS calls only
@@ -277,7 +276,7 @@ public class AlternativeEventListenerTest extends QnsTest {
                 2, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, (int) result.result);
 
@@ -288,7 +287,7 @@ public class AlternativeEventListenerTest extends QnsTest {
                 PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.result);
     }
@@ -361,7 +360,7 @@ public class AlternativeEventListenerTest extends QnsTest {
 
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, (int) result.result);
 
@@ -394,7 +393,7 @@ public class AlternativeEventListenerTest extends QnsTest {
                 PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        result = (AsyncResult) msg.obj;
+        result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.result);
 
@@ -438,7 +437,7 @@ public class AlternativeEventListenerTest extends QnsTest {
         mListener.onSrvccStateChanged(TelephonyManager.SRVCC_STATE_HANDOVER_COMPLETED);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        AsyncResult result = (AsyncResult) msg.obj;
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.result);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.result);
 

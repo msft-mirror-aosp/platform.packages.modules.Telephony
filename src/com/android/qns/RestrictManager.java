@@ -21,11 +21,9 @@ import static com.android.qns.DataConnectionStatusTracker.STATE_HANDOVER;
 
 import android.annotation.IntDef;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
 import android.os.SystemClock;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation;
@@ -147,7 +145,7 @@ public class RestrictManager {
 
     int mCellularAccessNetwork;
 
-    @VisibleForTesting Registrant mRestrictInfoRegistrant;
+    @VisibleForTesting QnsRegistrant mRestrictInfoRegistrant;
     private DataConnectionStatusTracker mDataConnectionStatusTracker;
     private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
     private AlternativeEventListener mAltEventListener;
@@ -179,36 +177,36 @@ public class RestrictManager {
 
         @Override
         public void handleMessage(Message message) {
-            AsyncResult ar;
+            QnsAsyncResult ar;
             int transportType;
             Log.d(TAG, "handleMessage : " + message.what);
             switch (message.what) {
                 case EVENT_DATA_CONNECTION_CHANGED:
-                    ar = (AsyncResult) message.obj;
+                    ar = (QnsAsyncResult) message.obj;
                     onDataConnectionChanged((DataConnectionChangedInfo) ar.result);
                     break;
 
                 case EVENT_CALL_STATE_CHANGED:
-                    ar = (AsyncResult) message.obj;
+                    ar = (QnsAsyncResult) message.obj;
                     int callState = (int) ar.result;
                     onCallStateChanged(callState, mTransportType, mCellularAccessNetwork);
                     break;
 
                 case EVENT_SRVCC_STATE_CHANGED:
-                    ar = (AsyncResult) message.obj;
+                    ar = (QnsAsyncResult) message.obj;
                     int srvccState = (int) ar.result;
                     onSrvccStateChanged(srvccState);
                     break;
 
                 case EVENT_LOW_RTP_QUALITY_REPORTED:
-                    ar = (AsyncResult) message.obj;
+                    ar = (QnsAsyncResult) message.obj;
                     int reason = (int) ar.result;
                     Log.d(TAG, "EVENT_LOW_RTP_QUALITY_REPORTED reason: " + reason);
                     onLowRtpQualityEvent();
                     break;
 
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
-                    ar = (AsyncResult) message.obj;
+                    ar = (QnsAsyncResult) message.obj;
                     onImsRegistrationStateChanged(
                             (ImsStatusListener.ImsRegistrationChangedEv) ar.result);
                     break;
@@ -1190,7 +1188,7 @@ public class RestrictManager {
     }
 
     public void registerRestrictInfoChanged(Handler h, int what) {
-        mRestrictInfoRegistrant = new Registrant(h, what, null);
+        mRestrictInfoRegistrant = new QnsRegistrant(h, what, null);
     }
 
     public void unRegisterRestrictInfoChanged(Handler h) {

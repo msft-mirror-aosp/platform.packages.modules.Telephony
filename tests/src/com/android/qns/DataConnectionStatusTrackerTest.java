@@ -42,7 +42,6 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -99,10 +98,10 @@ public class DataConnectionStatusTrackerTest {
     Handler mHandler =
             new Handler(Looper.getMainLooper()) {
                 public void handleMessage(Message message) {
-                    AsyncResult ar;
+                    QnsAsyncResult ar;
                     switch (message.what) {
                         case EVENT_DATA_CONNECTION_STATE_CHANGED:
-                            ar = (AsyncResult) message.obj;
+                            ar = (QnsAsyncResult) message.obj;
                             dcStatus = (DataConnectionChangedInfo) ar.result;
                             setReady(true);
                             break;
@@ -736,7 +735,7 @@ public class DataConnectionStatusTrackerTest {
                         .setState(telephonyState)
                         .setNetworkType(currentRat)
                         .build();
-        AsyncResult ar = new AsyncResult(null, dataState, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, dataState, null);
         Message msg = mDataConnectionStatusTracker.mHandler.obtainMessage(11001, ar);
         mDataConnectionStatusTracker.mHandler.handleMessage(msg);
     }
@@ -751,7 +750,7 @@ public class DataConnectionStatusTrackerTest {
                         .setState(telephonyState)
                         .setNetworkType(currentRat)
                         .build();
-        AsyncResult ar = new AsyncResult(null, dataState, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, dataState, null);
         Message msg = mDataConnectionStatusTracker.mHandler.obtainMessage(11001, ar);
         mDataConnectionStatusTracker.mHandler.handleMessage(msg);
     }
@@ -776,7 +775,7 @@ public class DataConnectionStatusTrackerTest {
                         .setState(telephonyState)
                         .setNetworkType(currentRat)
                         .build();
-        AsyncResult ar = new AsyncResult(null, dataState, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, dataState, null);
         Message msg = mDataConnectionStatusTracker.mHandler.obtainMessage(11001, ar);
         mDataConnectionStatusTracker.mHandler.handleMessage(msg);
     }

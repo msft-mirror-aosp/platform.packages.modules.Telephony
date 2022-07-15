@@ -34,7 +34,6 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PersistableBundle;
-import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
@@ -779,8 +778,8 @@ public class QnsCarrierConfigManager {
     /** Rules for handover between IWLAN and cellular network. */
     private @NonNull List<HandoverRule> mHandoverRuleList = new ArrayList<>();
 
-    protected RegistrantList mQnsCarrierConfigLoadedRegistrants = new RegistrantList();
-    protected RegistrantList mQnsCarrierConfigChangedRegistrants = new RegistrantList();
+    protected QnsRegistrantList mQnsCarrierConfigLoadedRegistrants = new QnsRegistrantList();
+    protected QnsRegistrantList mQnsCarrierConfigChangedRegistrants = new QnsRegistrantList();
 
     protected QnsProvisioningListener.QnsProvisioningInfo mQnsProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();

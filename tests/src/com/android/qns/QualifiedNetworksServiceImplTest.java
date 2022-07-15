@@ -30,7 +30,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
@@ -238,7 +237,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         QualifiedNetworksInfo info =
                 new QualifiedNetworksInfo(ApnSetting.TYPE_IMS, new ArrayList<>());
         info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
-        AsyncResult ar = new AsyncResult(null, info, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
         provider.mHandler.handleMessage(
                 Message.obtain(provider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar));
         assertEquals(info.getApnType(), ApnSetting.TYPE_IMS);

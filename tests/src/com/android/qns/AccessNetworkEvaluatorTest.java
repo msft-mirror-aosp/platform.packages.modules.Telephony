@@ -29,7 +29,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -116,7 +115,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
             super.handleMessage(msg);
             switch (msg.what) {
                 case QUALIFIED_NETWORKS_CHANGED:
-                    AsyncResult ar = (AsyncResult) msg.obj;
+                    QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
                     mQualifiedNetworksInfo =
                             (QualifiedNetworksServiceImpl.QualifiedNetworksInfo) ar.result;
                     latch.countDown();
@@ -485,7 +484,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_QNS_TELEPHONY_INFO_CHANGED,
-                        new AsyncResult(null, info, null))
+                        new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
         // ane.onQnsTelephonyInfoChanged(infoIms);
@@ -503,7 +502,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
-                        new AsyncResult(
+                        new QnsAsyncResult(
                                 null,
                                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false),
                                 null))
@@ -513,7 +512,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
-                        new AsyncResult(
+                        new QnsAsyncResult(
                                 null,
                                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(false, false),
                                 null))
@@ -534,7 +533,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
-                        new AsyncResult(null, true, null))
+                        new QnsAsyncResult(null, true, null))
                 .sendToTarget();
         waitFor(100);
         assertTrue(ane.isWfcEnabled());
@@ -542,7 +541,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
-                        new AsyncResult(null, false, null))
+                        new QnsAsyncResult(null, false, null))
                 .sendToTarget();
         waitFor(100);
         assertFalse(ane.isWfcEnabled());
@@ -1008,7 +1007,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new AsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
+                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
                 .sendToTarget();
         assertFalse(latch.await(100, TimeUnit.MILLISECONDS)); // no report since ANE is for IMS apn.
         when(dataConnectionStatusTracker.isInactiveState()).thenReturn(true);
@@ -1041,7 +1040,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new AsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
+                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
                 .sendToTarget();
         assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -1054,7 +1053,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new AsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
+                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
                 .sendToTarget();
         assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
@@ -1075,7 +1074,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new AsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
+                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
                 .sendToTarget();
         assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -1091,12 +1090,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_SET_CALL_TYPE,
-                        new AsyncResult(null, QnsConstants.CALL_TYPE_IDLE, null))
+                        new QnsAsyncResult(null, QnsConstants.CALL_TYPE_IDLE, null))
                 .sendToTarget();
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
-                        new AsyncResult(
+                        new QnsAsyncResult(
                                 null,
                                 iwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false),
                                 null))
@@ -1219,7 +1218,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_PROVISIONING_INFO_CHANGED,
-                        new AsyncResult(null, info, null))
+                        new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
         verify(configManager, times(3)).setQnsProvisioningInfo(info);
@@ -1241,7 +1240,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_PROVISIONING_INFO_CHANGED,
-                        new AsyncResult(null, info, null))
+                        new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
         verify(configManager, times(2)).setQnsProvisioningInfo(info);
@@ -1262,7 +1261,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_PROVISIONING_INFO_CHANGED,
-                        new AsyncResult(null, info, null))
+                        new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
         verify(configManager, times(2)).setQnsProvisioningInfo(info);

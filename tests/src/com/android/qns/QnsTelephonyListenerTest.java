@@ -27,7 +27,6 @@ import static org.mockito.Mockito.*;
 
 import android.content.Context;
 import android.net.LinkProperties;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -116,14 +115,14 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfo output =
-                (QnsTelephonyListener.QnsTelephonyInfo) ((AsyncResult) msg.obj).result;
+                (QnsTelephonyListener.QnsTelephonyInfo) ((QnsAsyncResult) msg.obj).result;
         assertEquals(qtInfo, output);
 
         mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
         mQtListener.notifyQnsTelephonyInfo(qtInfo);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
-        output = (QnsTelephonyListener.QnsTelephonyInfo) ((AsyncResult) msg.obj).result;
+        output = (QnsTelephonyListener.QnsTelephonyInfo) ((QnsAsyncResult) msg.obj).result;
         assertTrue(output instanceof QnsTelephonyListener.QnsTelephonyInfoIms);
     }
 
@@ -146,7 +145,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfoIms output =
-                (QnsTelephonyListener.QnsTelephonyInfoIms) ((AsyncResult) msg.obj).result;
+                (QnsTelephonyListener.QnsTelephonyInfoIms) ((QnsAsyncResult) msg.obj).result;
         assertEquals(qtInfoIms, output); // notify for IMS apn
     }
 
@@ -691,7 +690,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         PreciseDataConnectionState output =
-                (PreciseDataConnectionState) ((AsyncResult) msg.obj).result;
+                (PreciseDataConnectionState) ((QnsAsyncResult) msg.obj).result;
         assertEquals(connectionState, output);
     }
 
@@ -727,7 +726,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfoIms qtInfoIms =
-                (QnsTelephonyListener.QnsTelephonyInfoIms) ((AsyncResult) msg.obj).result;
+                (QnsTelephonyListener.QnsTelephonyInfoIms) ((QnsAsyncResult) msg.obj).result;
         assertTrue(qtInfoIms.getVoiceBarring());
         assertTrue(qtInfoIms.getEmergencyBarring());
     }
@@ -742,7 +741,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfoIms qtInfoIms =
-                (QnsTelephonyListener.QnsTelephonyInfoIms) ((AsyncResult) msg.obj).result;
+                (QnsTelephonyListener.QnsTelephonyInfoIms) ((QnsAsyncResult) msg.obj).result;
         assertTrue(qtInfoIms.getVoiceBarring());
         assertFalse(qtInfoIms.getEmergencyBarring());
     }
@@ -757,7 +756,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfoIms qtInfoIms =
-                (QnsTelephonyListener.QnsTelephonyInfoIms) ((AsyncResult) msg.obj).result;
+                (QnsTelephonyListener.QnsTelephonyInfoIms) ((QnsAsyncResult) msg.obj).result;
         assertFalse(qtInfoIms.getVoiceBarring());
         assertTrue(qtInfoIms.getEmergencyBarring());
     }
@@ -816,7 +815,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
             mQtListener.mTelephonyListener.onCallStateChanged(state);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
-            assertEquals(state, (int) ((AsyncResult) msg.obj).result);
+            assertEquals(state, (int) ((QnsAsyncResult) msg.obj).result);
         }
     }
 
@@ -835,7 +834,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
             mQtListener.mTelephonyListener.onSrvccStateChanged(state);
             Message msg = mTestLooper.nextMessage();
             assertNotNull(msg);
-            assertEquals(state, (int) ((AsyncResult) msg.obj).result);
+            assertEquals(state, (int) ((QnsAsyncResult) msg.obj).result);
         }
     }
 

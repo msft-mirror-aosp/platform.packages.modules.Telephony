@@ -19,7 +19,6 @@ package com.android.qns;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -105,7 +104,7 @@ public class ImsStatusListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertNotNull(msg.obj);
-        AsyncResult ar = (AsyncResult) msg.obj;
+        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
         assertNotNull(ar);
         ImsStatusListener.ImsRegistrationChangedEv bean =
                 (ImsStatusListener.ImsRegistrationChangedEv) ar.result;
@@ -128,7 +127,7 @@ public class ImsStatusListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertNotNull(msg.obj);
-        AsyncResult ar = (AsyncResult) msg.obj;
+        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
         assertNotNull(ar);
         ImsStatusListener.ImsRegistrationChangedEv bean =
                 (ImsStatusListener.ImsRegistrationChangedEv) ar.result;
@@ -152,7 +151,7 @@ public class ImsStatusListenerTest extends QnsTest {
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertNotNull(msg.obj);
-        AsyncResult ar = (AsyncResult) msg.obj;
+        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
         assertNotNull(ar);
         ImsStatusListener.ImsRegistrationChangedEv bean =
                 (ImsStatusListener.ImsRegistrationChangedEv) ar.result;
@@ -167,8 +166,8 @@ public class ImsStatusListenerTest extends QnsTest {
 
     @Test
     public void testRegisterImsRegistrationCallback() throws ImsException, InterruptedException {
-        AsyncResult asyncResult =
-                new AsyncResult(
+        QnsAsyncResult asyncResult =
+                new QnsAsyncResult(
                         null,
                         new DataConnectionStatusTracker.DataConnectionChangedInfo(
                                 DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED,
@@ -189,8 +188,8 @@ public class ImsStatusListenerTest extends QnsTest {
     @Test
     public void testUnregisterImsRegistrationCallback() throws ImsException, InterruptedException {
         testRegisterImsRegistrationCallback();
-        AsyncResult asyncResult =
-                new AsyncResult(
+        QnsAsyncResult asyncResult =
+                new QnsAsyncResult(
                         null,
                         new DataConnectionStatusTracker.DataConnectionChangedInfo(
                                 DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED,

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.os.AsyncResult;
 import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
@@ -704,7 +703,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
         Message.obtain(
                         mCellularQualityMonitor.mHandler,
                         EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
-                        new AsyncResult(null, mQnsTelephonyInfo, null))
+                        new QnsAsyncResult(null, mQnsTelephonyInfo, null))
                 .sendToTarget();
         verify(mockTelephonyManager)
                 .clearSignalStrengthUpdateRequest(isA(SignalStrengthUpdateRequest.class));
@@ -713,7 +712,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
         Message.obtain(
                         mCellularQualityMonitor.mHandler,
                         EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
-                        new AsyncResult(null, mQnsTelephonyInfo, null))
+                        new QnsAsyncResult(null, mQnsTelephonyInfo, null))
                 .sendToTarget();
         verify(mockTelephonyManager, never())
                 .clearSignalStrengthUpdateRequest(isA(SignalStrengthUpdateRequest.class));

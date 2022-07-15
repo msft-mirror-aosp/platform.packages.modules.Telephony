@@ -19,12 +19,9 @@ package com.android.qns;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
-import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
@@ -77,7 +74,7 @@ public class DataConnectionStatusTracker {
             })
     public @interface DataConnectionChangedEvent {}
 
-    private final RegistrantList mDataConnectionStatusRegistrants;
+    private final QnsRegistrantList mDataConnectionStatusRegistrants;
     private int mState = STATE_INACTIVE;
     private int mDataConnectionFailCause;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
@@ -99,7 +96,7 @@ public class DataConnectionStatusTracker {
         mApnType = apnType;
 
         mHandler = new DataConnectionStatusTrackerHandler(looper);
-        mDataConnectionStatusRegistrants = new RegistrantList();
+        mDataConnectionStatusRegistrants = new QnsRegistrantList();
         mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
         mQnsTelephonyListener.registerPreciseDataConnectionStateChanged(
                 mApnType, mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED, null, true);
@@ -147,7 +144,7 @@ public class DataConnectionStatusTracker {
             mDataConnectionStatusRegistrants.addUnique(h, what, null);
         }
         if (mLastUpdatedDcChangedInfo != null) {
-            Registrant r = new Registrant(h, what, null);
+            QnsRegistrant r = new QnsRegistrant(h, what, null);
             r.notifyResult(mLastUpdatedDcChangedInfo);
         }
     }
@@ -360,7 +357,7 @@ public class DataConnectionStatusTracker {
         @Override
         public void handleMessage(Message message) {
             log("handleMessage msg=" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
                 case EVENT_DATA_CONNECTION_STATE_CHANGED:
                     onDataConnectionStateChanged((PreciseDataConnectionState) ar.result);

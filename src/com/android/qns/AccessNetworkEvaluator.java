@@ -20,12 +20,10 @@ import static android.telephony.ServiceState.ROAMING_TYPE_DOMESTIC;
 import static android.telephony.ServiceState.ROAMING_TYPE_INTERNATIONAL;
 
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.TelephonyManager;
@@ -90,7 +88,7 @@ public class AccessNetworkEvaluator {
     protected boolean mIwlanAvailable = false;
     private boolean mIsCrossWfc = false;
 
-    protected RegistrantList mQualifiedNetworksChangedRegistrants = new RegistrantList();
+    protected QnsRegistrantList mQualifiedNetworksChangedRegistrants = new QnsRegistrantList();
     // pre-conditions
     private int mCallType;
     private int mCoverage;
@@ -302,7 +300,7 @@ public class AccessNetworkEvaluator {
     protected void notifyForQualifiedNetworksChanged(List<Integer> accessNetworkTypes) {
         mIsNotifiedLastQualifiedAccessNetworkTypes = true;
         QualifiedNetworksInfo info = new QualifiedNetworksInfo(mApnType, accessNetworkTypes);
-        AsyncResult ar = new AsyncResult(null, info, null);
+        QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
         mQualifiedNetworksChangedRegistrants.notifyRegistrants(ar);
     }
 
@@ -1745,7 +1743,7 @@ public class AccessNetworkEvaluator {
         @Override
         public void handleMessage(Message message) {
             log("handleMessage msg=" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
                 case EVENT_IWLAN_NETWORK_STATUS_CHANGED:
                     onIwlanNetworkStatusChanged((IwlanAvailabilityInfo) ar.result);

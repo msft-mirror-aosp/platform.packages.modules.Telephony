@@ -27,7 +27,6 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.TelephonyNetworkSpecifier;
 import android.net.wifi.WifiManager;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -89,7 +88,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
-            AsyncResult ar = (AsyncResult) msg.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
             mIwlanAvailabilityInfo = (IwlanNetworkStatusTracker.IwlanAvailabilityInfo) ar.result;
             if (mLatch != null) {
                 mLatch.countDown();

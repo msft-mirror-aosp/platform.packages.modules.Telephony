@@ -17,13 +17,10 @@
 package com.android.qns;
 
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
-import android.os.RegistrantList;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.data.ApnSetting;
 import android.telephony.ims.ImsException;
@@ -49,7 +46,7 @@ public class ImsStatusListener {
     private HandlerThread mHandlerThread;
     @VisibleForTesting protected Handler mHandler;
     private static Map<Integer, ImsStatusListener> sImsStatusListeners = new ConcurrentHashMap<>();
-    private RegistrantList mImsRegistrationStatusListeners = new RegistrantList();
+    private QnsRegistrantList mImsRegistrationStatusListeners = new QnsRegistrantList();
     private DataConnectionStatusTracker mDataConnectionStatusTracker;
     private boolean mCallbackRegistered;
     private int mSubId = QnsConstants.INVALID_SUB_ID;
@@ -152,7 +149,7 @@ public class ImsStatusListener {
         @Override
         public void handleMessage(Message message) {
             Log.d(TAG, "handleMessage msg=" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
                 case EVENT_DATA_CONNECTION_STATE_CHANGED:
                     onDataConnectionStateChanged(
@@ -258,7 +255,7 @@ public class ImsStatusListener {
     }
 
     void registerImsRegistrationStatusChanged(Handler h, int what) {
-        Registrant r = new Registrant(h, what, null);
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
         mImsRegistrationStatusListeners.add(r);
     }
 

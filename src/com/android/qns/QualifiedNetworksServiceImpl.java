@@ -20,7 +20,6 @@ import static android.telephony.data.ThrottleStatus.THROTTLE_TYPE_ELAPSED_TIME;
 
 import android.annotation.NonNull;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -161,7 +160,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     new Handler(mHandlerThread.getLooper()) {
                         @Override
                         public void handleMessage(Message message) {
-                            AsyncResult ar = (AsyncResult) message.obj;
+                            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
                             switch (message.what) {
                                 case QUALIFIED_NETWORKS_CHANGED:
                                     onQualifiedNetworksChanged((QualifiedNetworksInfo) ar.result);
@@ -180,7 +179,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     new Handler(mConfigHandlerThread.getLooper()) {
                         @Override
                         public void handleMessage(Message message) {
-                            AsyncResult ar = (AsyncResult) message.obj;
+                            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
                             switch (message.what) {
                                 case QNS_CONFIGURATION_LOADED:
                                     onConfigurationLoaded();

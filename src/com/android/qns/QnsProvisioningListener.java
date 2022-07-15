@@ -18,13 +18,10 @@ package com.android.qns;
 
 import android.annotation.NonNull;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
-import android.os.RegistrantList;
 import android.telephony.SubscriptionManager;
 import android.telephony.ims.ProvisioningManager;
 import android.text.TextUtils;
@@ -56,7 +53,7 @@ public class QnsProvisioningListener {
     @VisibleForTesting QnsProvisioningHandler mQnsProvisioningHandler;
 
     private final QnsProvisioningCallback mQnsProvisioningCallback;
-    private final RegistrantList mRegistrantList;
+    private final QnsRegistrantList mRegistrantList;
     protected IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     private ProvisioningManager mProvisioningManager;
     private boolean mIsProvisioningCallbackRegistered;
@@ -69,7 +66,7 @@ public class QnsProvisioningListener {
         mProvisioningInfo = new QnsProvisioningInfo();
         mQnsProvisioningCallback = new QnsProvisioningCallback();
         mIsProvisioningCallbackRegistered = false;
-        mRegistrantList = new RegistrantList();
+        mRegistrantList = new QnsRegistrantList();
 
         HandlerThread handlerThread = new HandlerThread(LOG_TAG);
         handlerThread.start();
@@ -181,11 +178,11 @@ public class QnsProvisioningListener {
     public void registerProvisioningItemInfoChanged(
             Handler h, int what, Object userObj, boolean notifyImmediately) {
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             mRegistrantList.add(r);
             if (notifyImmediately) {
                 r.notifyRegistrant(
-                        new AsyncResult(null, new QnsProvisioningInfo(mProvisioningInfo), null));
+                        new QnsAsyncResult(null, new QnsProvisioningInfo(mProvisioningInfo), null));
             }
         }
     }
@@ -213,7 +210,7 @@ public class QnsProvisioningListener {
 
     private void notifyProvisioningItemInfoChanged(@NonNull QnsProvisioningInfo info) {
         log("notify ProvisioningItemInfo:" + info);
-        mRegistrantList.notifyRegistrants(new AsyncResult(null, info, null));
+        mRegistrantList.notifyRegistrants(new QnsAsyncResult(null, info, null));
     }
 
     private void loadDefaultItems() {
@@ -444,7 +441,7 @@ public class QnsProvisioningListener {
         @Override
         public void handleMessage(Message message) {
             log("message what:" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
                 case QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED:
                     log("carrier config loaded.");

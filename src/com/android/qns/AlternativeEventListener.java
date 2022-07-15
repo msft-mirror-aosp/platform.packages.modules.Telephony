@@ -26,11 +26,9 @@ import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_IDLE;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
-import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Registrant;
 import android.telephony.Annotation;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
@@ -47,12 +45,12 @@ public class AlternativeEventListener {
     private final String LOG_TAG;
     private Context mContext;
     private int mSlotIndex;
-    private Registrant mCallTypeChangedEventListener;
-    private Registrant mEmergencyCallTypeChangedEventListener;
-    private Registrant mEmergencyPreferredTransportTypeChanged;
-    private Registrant mTryWfcConnectionState;
-    private Registrant mLowRtpQuallityListener;
-    private Registrant mEmcLowRtpQuallityListener;
+    private QnsRegistrant mCallTypeChangedEventListener;
+    private QnsRegistrant mEmergencyCallTypeChangedEventListener;
+    private QnsRegistrant mEmergencyPreferredTransportTypeChanged;
+    private QnsRegistrant mTryWfcConnectionState;
+    private QnsRegistrant mLowRtpQuallityListener;
+    private QnsRegistrant mEmcLowRtpQuallityListener;
     private AlternativeEventCb mEventCb;
     private AlternativeEventProvider mEventProvider;
     private Handler mHandler;
@@ -176,7 +174,7 @@ public class AlternativeEventListener {
         @Override
         public void handleMessage(Message message) {
             Log.d(LOG_TAG, "handleMessage msg=" + message.what);
-            AsyncResult ar = (AsyncResult) message.obj;
+            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             int state = (int) ar.result;
             switch (message.what) {
                 case EVENT_SRVCC_STATE_CHANGED:
@@ -227,7 +225,7 @@ public class AlternativeEventListener {
      */
     public void registerEmergencyPreferredTransportTypeChanged(
             @NonNull Handler h, int what, Object userObj) {
-        mEmergencyPreferredTransportTypeChanged = new Registrant(h, what, userObj);
+        mEmergencyPreferredTransportTypeChanged = new QnsRegistrant(h, what, userObj);
     }
 
     /** Unregister emergency preferred transport type changed event. */
@@ -244,7 +242,7 @@ public class AlternativeEventListener {
      */
     public void registerTryWfcConnectionStateListener(
             @NonNull Handler h, int what, Object userObj) {
-        mTryWfcConnectionState = new Registrant(h, what, userObj);
+        mTryWfcConnectionState = new QnsRegistrant(h, what, userObj);
     }
 
     /**
@@ -262,7 +260,7 @@ public class AlternativeEventListener {
             Object userObj,
             QnsCarrierConfigManager.RtpMetricsConfig config) {
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             if (apnType == ApnSetting.TYPE_IMS) {
                 mLowRtpQuallityListener = r;
             } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
@@ -304,7 +302,7 @@ public class AlternativeEventListener {
             return;
         }
         if (h != null) {
-            Registrant r = new Registrant(h, what, userObj);
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             if (apnType == ApnSetting.TYPE_IMS) {
                 mCallTypeChangedEventListener = r;
                 QnsTelephonyListener.getInstance(mContext, mSlotIndex)
