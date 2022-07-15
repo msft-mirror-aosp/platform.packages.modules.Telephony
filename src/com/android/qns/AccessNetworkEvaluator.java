@@ -1292,8 +1292,10 @@ public class AccessNetworkEvaluator {
                 mDataConnectionStatusTracker.getLastApnSetting(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         if (apnSetting != null
-                && apnSetting.canHandleType(ApnSetting.TYPE_DEFAULT)
-                && !apnSetting.canSupportNetworkType(TelephonyManager.NETWORK_TYPE_IWLAN)) {
+                && (apnSetting.getApnTypeBitmask() & ApnSetting.TYPE_DEFAULT) != 0
+                && (apnSetting.getNetworkTypeBitmask()
+                                & (1 << (TelephonyManager.NETWORK_TYPE_IWLAN - 1)))
+                        == 0) {
             log("useDifferentApnOverIwlan true");
             return true;
         }
