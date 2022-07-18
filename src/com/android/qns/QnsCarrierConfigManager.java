@@ -582,12 +582,29 @@ public class QnsCarrierConfigManager {
             "qns.choose_wfc_preferred_transport_in_both_bad_condition_int_array";
 
     /**
+     * String indicating parameters for RTT(round trip time) check using ICMP PING on IWLAN.
+     *
+     * <p>We recommend to use a server on IWLAN path for RTT check. A server which is not reached
+     * via IWLAN connection may give inadequate result.
+     *
+     * <p>format:“<server_address>,<ping_count>,<intra_ping_interval>,<packet_size>,<rtt_criteria>,
+     * <rtt_check_Interval>,<hyst_fallback_timer>” For Ex:
+     * "epdg.epc.mnc001.mcc001.pub.3gppnetwork.org,5,100,32,100,1800000,600000"
+     *
+     * <p>The default value for this key is null indicating not enabled by default for round trip
+     * time check.
+     */
+    public static final String KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING =
+            "qns.wlan_rtt_backhaul_check_on_icmp_ping_string";
+
+    /**
      * List of Array items indicating APN Types with fallback support based on retry count or retry
      * timer or either of them with fallback guard timer to be set
      *
-     *<p><string-array name="qns.fallback_on_initial_connection_failure_string_array" num="2">
-     *    <item value="<apn_type>:<retry_count>:<retry_timer>:<fallback_guard_timer>"/>
-     *    <item value="ims:3:60000:10000"/>
+     * <p><string-array name="qns.fallback_on_initial_connection_failure_string_array" num="2" <item
+     * value="<apn_type>:<retry_count>:<retry_timer>:<fallback_guard_timer> :<max_fallback_count>"/>
+     * Note: All Timer Values to be in millis Example: <item value="ims:3:60000:10000:2"/> <item
+     * value="mms:1:10000:60000:2"/>
      *
      * <p>The default value for this key is null indicating not enabled by default for fallback in
      * case of initial connection failure
@@ -763,6 +780,7 @@ public class QnsCarrierConfigManager {
     private int[] mIsMmtelCapabilityRequired;
     private int[] mIsWfcPreferredTransportRequired;
 
+    private String mWlanRttBackhaulCheckConfigsOnPing;
     private String[] mImsAllowedRats;
     private String[] mRoveInGuardTimerConditionThresholdGaps;
     private String[] mApnTypesInternationalRoamingCheck;
@@ -1400,6 +1418,11 @@ public class QnsCarrierConfigManager {
                         bundleAsset,
                         KEY_QNS_HO_RESTRICT_TIME_WITH_LOW_RTP_QUALITY_MILLIS_INT_ARRAY);
         mRTPMetricsData = getConfig(bundleCarrier, bundleAsset, KEY_QNS_RTP_METRICS_INT_ARRAY);
+        mWlanRttBackhaulCheckConfigsOnPing =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING);
 
         mFallbackOnInitialConnectionFailure =
                 getConfig(
@@ -2552,12 +2575,67 @@ public class QnsCarrierConfigManager {
     }
 
     /**
+     * This method returns the rtt check server address config as per operator requirement
+     *
+     * @return : Based on carrier config settings of operator . By default to be made empty to
+     *     disable the feature.
+     */
+    public String getWlanRttServerAddressConfig() {
+        String[] ping_address = getWlanRttPingConfigs();
+
+        if (ping_address != null && ping_address[0] != null && !ping_address[0].isEmpty()) {
+            return ping_address[0];
+        } else return null;
+    }
+
+    /**
+     * This method returns No of Pings, Intra Ping Interval, Size of the packet, RTT criteria RTT
+     * retry timer
+     *
+     * @return : Based on carrier config settings as per operator requirement
+     */
+    public int[] getWlanRttOtherConfigs() {
+        int[] pingConfigs = new int[5];
+        String[] rtt_ping_config = getWlanRttPingConfigs();
+
+        if (rtt_ping_config != null && !rtt_ping_config[0].isEmpty()) {
+            for (int i = 1; i < 6; i++) {
+                if (rtt_ping_config[i] != null) {
+                    pingConfigs[i - 1] = Integer.parseInt(rtt_ping_config[i]);
+                }
+            }
+        }
+        return pingConfigs;
+    }
+
+    /**
+     * This method returns fallback Hysteresis timer on RTT Failure.
+     *
+     * @return : Based on carrier config settings as per operator requirement
+     */
+    public int getWlanRttFallbackHystTimer() {
+        String[] rtt_hyst_fallback_timer = getWlanRttPingConfigs();
+
+        if (rtt_hyst_fallback_timer != null
+                && !rtt_hyst_fallback_timer[0].isEmpty()
+                && rtt_hyst_fallback_timer[6] != null) {
+            return Integer.parseInt(rtt_hyst_fallback_timer[6]);
+        } else return 0;
+    }
+
+    private String[] getWlanRttPingConfigs() {
+        if (mWlanRttBackhaulCheckConfigsOnPing == null) return null;
+
+        return mWlanRttBackhaulCheckConfigsOnPing.split(",");
+    }
+
+    /**
      * If fallback for Initial connection failure for the apn type is met is supported , this method
      * provides information about the failure retry count or retry timer or both if supported until
      * fallback to other transport.
      *
      * @param apnType : (ims,sos,mms,xcap,cbs)
-     * @return : <APNSupportforFallback>:<retry_count>:<retry_timer>
+     * @return : <APN_SupportforFallback>:<retry_count>:<retry_timer>:<max_fallback_count>
      */
     public int[] getInitialDataConnectionFallbackConfig(int apnType) {
 
@@ -2589,7 +2667,6 @@ public class QnsCarrierConfigManager {
                     && fallback_config[4] != null
                     && !fallback_config[4].isEmpty()) {
                 fallbackConfigOnDataFail[3] = Integer.parseInt(fallback_config[4]);
-
             }
         }
         return fallbackConfigOnDataFail;

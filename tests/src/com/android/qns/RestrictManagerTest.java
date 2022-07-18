@@ -29,6 +29,7 @@ import static com.android.qns.RestrictManager.RELEASE_EVENT_CALL_END;
 import static com.android.qns.RestrictManager.RELEASE_EVENT_DISCONNECT;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL;
+import static com.android.qns.RestrictManager.RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_GUARDING;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_NON_PREFERRED_TRANSPORT;
 import static com.android.qns.RestrictManager.RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL;
@@ -64,6 +65,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
@@ -74,6 +76,7 @@ public class RestrictManagerTest extends QnsTest {
     @Mock private DataConnectionStatusTracker mMockDcst;
     @Mock private QnsCarrierConfigManager mConfigManager;
     @Mock private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
+    @Mock private WifiBackhaulMonitor mWifiBackhaulMonitor;
     private MockitoSession mMockSession;
     private AlternativeEventListener mAltListener;
     private QnsTelephonyListener mTelephonyListener;
@@ -109,10 +112,14 @@ public class RestrictManagerTest extends QnsTest {
                 mockitoSession()
                         .mockStatic(CellularNetworkStatusTracker.class)
                         .mockStatic(QnsUtils.class)
+                        .mockStatic(WifiBackhaulMonitor.class)
                         .startMocking();
         lenient()
                 .when(CellularNetworkStatusTracker.getInstance(sMockContext, 0))
                 .thenReturn(mCellularNetworkStatusTracker);
+        lenient()
+                .when(WifiBackhaulMonitor.getInstance(sMockContext, 0))
+                .thenReturn(mWifiBackhaulMonitor);
         when(mConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 .thenReturn(0);
@@ -2020,5 +2027,214 @@ public class RestrictManagerTest extends QnsTest {
                         mRestrictManager.getOtherTransport(transportType));
         mRestrictManager.onDataConnectionChanged(dcInfo);
         assertTrue(mRestrictManager.hasRestrictionType(transportType, RESTRICT_TYPE_GUARDING));
+    }
+
+    @Test
+    public void testRttFallbackStartOnRttFail() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testRttFallbackReleaseOnWwanHystTimerExpiry() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mTestLooper.moveTimeForward(8000);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mTestLooper.moveTimeForward(2000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testRttFallbackReleaseOnNonImsRatCondition() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mTestLooper.moveTimeForward(8000);
+        mTestLooper.dispatchAll();
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.UTRAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testRttFallbackReleaseOnOtherBreakingCondition() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mTestLooper.moveTimeForward(8000);
+        mTestLooper.dispatchAll();
+        mRestrictManager.processReleaseEvent(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RELEASE_EVENT_DISCONNECT);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testReleaseRttFallbackRestrictionOnWfcOff() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 6, null));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testReleaseRttFallbackRestrictionOnAirplaneModeOn() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 8, null));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testReleaseRttFallbackRestrictionOnAirplaneOnWifiOff() {
+        setupBackhaulRttCheckSupportConfigs();
+        when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.onWlanRttFail();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+        mRestrictManager.mHandler.handleMessage(Message.obtain(mRestrictManager.mHandler, 3, null));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL));
+    }
+
+    @Test
+    public void testRegisterRttStatusCheckEvent() {
+        when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
+        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                null);
+        mTestLooper.dispatchAll();
+        Mockito.verify(mWifiBackhaulMonitor)
+                .registerForRttStatusChange(mRestrictManager.mHandler, 3011);
+    }
+
+    @Test
+    public void testUnRegisterRttStatusCheckEvent() {
+        when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
+        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
+        when(mConfigManager.isAccessNetworkAllowed(
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                .thenReturn(true);
+        mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_CONNECTED,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                null);
+        mTestLooper.dispatchAll();
+        when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(false);
+        ImsReasonInfo reason = new ImsReasonInfo();
+        reason.mCode = ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE;
+        mImsStatusListener.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                reason);
+        mTestLooper.dispatchAll();
+        Mockito.verify(mWifiBackhaulMonitor)
+                .unRegisterForRttStatusChange(mRestrictManager.mHandler);
+    }
+
+    private void setupBackhaulRttCheckSupportConfigs() {
+        when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
+        when(mConfigManager.getWlanRttFallbackHystTimer()).thenReturn(10000);
     }
 }

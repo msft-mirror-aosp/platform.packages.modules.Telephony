@@ -606,6 +606,8 @@ public class QnsUtils {
             case QnsCarrierAnspSupportConfig.KEY_OVERRIDE_WIFI_PREF_VIDEO_WIFI_RSSI_INT_ARRAY:
             case CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY:
                 return (T) new int[] {};
+            case QnsCarrierConfigManager.KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING:
+                return (T) "";
             case QnsCarrierConfigManager
                     .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY:
             case QnsCarrierConfigManager

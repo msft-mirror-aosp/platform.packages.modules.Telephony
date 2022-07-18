@@ -328,6 +328,7 @@ public class QnsUtilsTest {
         int[] defaultNonImsWlanHystTimerIntArray = new int[] {50000, 50000};
         int[] defaultWaitingTimetIntArray = new int[] {45000, 45000};
         int[] defaultIwlanMaxHoCountAndFallback = new int[] {3, 1};
+        String defaultString = "www.test.com,3,200,32,50,20000,10000";
         String[] defaultStringArray = new String[] {"LTE", "UMTS"};
         String[] defaultGapOffsetStringArray =
                 new String[] {"eutran:rsrp:-5", "ngran:ssrsp:-2", "utran:rscp:-3"};
@@ -495,7 +496,7 @@ public class QnsUtilsTest {
                         testBundle,
                         null,
                         QnsCarrierConfigManager
-                            .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
+                              .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
         assertArrayEquals(
                 defaultWwanHystTimerIntArray,
                 QnsUtils.getConfig(
@@ -544,13 +545,20 @@ public class QnsUtilsTest {
                         testBundle,
                         null,
                         QnsCarrierConfigManager
-                            .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
+                              .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
         assertArrayEquals(
                 defaultNoVopsArray,
                 QnsUtils.getConfig(
                         testBundle,
                         null,
                         CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY));
+        assertEquals(
+                defaultString,
+                QnsUtils.getConfig(
+                        testBundle,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING));
         assertArrayEquals(
                 defaultStringArray,
                 QnsUtils.getConfig(
@@ -697,6 +705,9 @@ public class QnsUtilsTest {
         testBundle.putIntArray(
                 CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY,
                 new int[] {1, 0});
+        testBundle.putString(
+                QnsCarrierConfigManager.KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING,
+                "www.test.com,3,200,32,50,20000,10000");
         testBundle.putStringArray(
                 QnsCarrierConfigManager.KEY_IMS_CELLULAR_ALLOWED_RAT_STRING_ARRAY,
                 new String[] {"LTE", "UMTS"});
@@ -888,7 +899,7 @@ public class QnsUtilsTest {
                         null,
                         null,
                         QnsCarrierConfigManager
-                            .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
+                              .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY));
         assertArrayEquals(
                 new int[] {
                     QnsConstants.KEY_DEFAULT_HYST_TIMER,
@@ -953,13 +964,20 @@ public class QnsUtilsTest {
                         null,
                         null,
                         QnsCarrierConfigManager
-                            .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
+                              .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY));
         assertArrayEquals(
                 new int[] {},
                 QnsUtils.getConfig(
                         null,
                         null,
                         CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY));
+        assertEquals(
+                "",
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING));
         assertArrayEquals(
                 new String[] {"LTE", "NR"},
                 QnsUtils.getConfig(

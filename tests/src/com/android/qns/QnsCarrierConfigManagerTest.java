@@ -2171,6 +2171,56 @@ public class QnsCarrierConfigManagerTest {
         assertEquals(-50, configArray.mGood);
     }
 
+    @Test
+    public void testWlanRttConfigsWithDefaultValue() {
+        mConfigManager.loadQnsAneSupportConfigurations(null, null);
+        assertNull(mConfigManager.getWlanRttServerAddressConfig());
+        int[] pingConfigs = mConfigManager.getWlanRttOtherConfigs();
+        assertEquals(0, pingConfigs[0]);
+        assertEquals(0, pingConfigs[1]);
+        assertEquals(0, pingConfigs[2]);
+        assertEquals(0, pingConfigs[3]);
+        assertEquals(0, pingConfigs[4]);
+        assertEquals(0, mConfigManager.getWlanRttFallbackHystTimer());
+    }
+
+    @Test
+    public void testWlanRttConfigsWithDomainAddressPersistBundleValue() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putString(
+                QnsCarrierConfigManager.KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING,
+                "www.google.com,5,200,32,100,600000,1800000");
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        assertEquals("www.google.com", mConfigManager.getWlanRttServerAddressConfig());
+
+        int[] pingConfigs = mConfigManager.getWlanRttOtherConfigs();
+        assertEquals(5, pingConfigs[0]);
+        assertEquals(200, pingConfigs[1]);
+        assertEquals(32, pingConfigs[2]);
+        assertEquals(100, pingConfigs[3]);
+        assertEquals(600000, pingConfigs[4]);
+        assertEquals(1800000, mConfigManager.getWlanRttFallbackHystTimer());
+    }
+
+    @Test
+    public void testWlanRttConfigsWithStaticAddressPersistBundleValue() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putString(
+                QnsCarrierConfigManager.KEY_QNS_WLAN_RTT_BACKHAUL_CHECK_ON_ICMP_PING_STRING,
+                "8.8.8.8,3,200,32,50,20000,10000");
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+
+        assertEquals("8.8.8.8", mConfigManager.getWlanRttServerAddressConfig());
+
+        int[] pingConfigs = mConfigManager.getWlanRttOtherConfigs();
+        assertEquals(3, pingConfigs[0]);
+        assertEquals(200, pingConfigs[1]);
+        assertEquals(32, pingConfigs[2]);
+        assertEquals(50, pingConfigs[3]);
+        assertEquals(20000, pingConfigs[4]);
+        assertEquals(10000, mConfigManager.getWlanRttFallbackHystTimer());
+    }
+
     private void setObject(Object obj, String field, ConcurrentHashMap<Integer, Integer> value)
             throws NoSuchFieldException, IllegalAccessException {
         Field f = QnsProvisioningListener.QnsProvisioningInfo.class.getDeclaredField(field);

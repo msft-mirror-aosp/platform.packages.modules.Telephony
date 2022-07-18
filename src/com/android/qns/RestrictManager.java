@@ -58,6 +58,7 @@ public class RestrictManager {
     static final int RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL = 7;
     static final int RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL = 8;
     static final int RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL = 9;
+    static final int RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL = 10;
 
     @IntDef(
             value = {
@@ -70,6 +71,7 @@ public class RestrictManager {
                 RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL,
                 RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
                 RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
+                RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL,
             })
     public @interface RestrictType {}
 
@@ -85,6 +87,7 @@ public class RestrictManager {
                 RELEASE_EVENT_WIFI_AP_CHANGED,
                 RELEASE_EVENT_WFC_PREFER_MODE_CHANGED,
                 RELEASE_EVENT_CALL_END,
+                RELEASE_EVENT_IMS_NOT_SUPPORT_RAT,
             })
     public @interface ReleaseEvent {}
 
@@ -96,6 +99,7 @@ public class RestrictManager {
     private static final int EVENT_RELEASE_RESTRICTION = 3008;
     private static final int EVENT_REGISTER_LOW_RTP_QUALITY = 3009;
     protected static final int EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED = 3010;
+    private static final int EVENT_WIFI_RTT_BACKHAUL_CHECK_STATUS = 3011;
 
     @VisibleForTesting static final int GUARDING_TIMER_HANDOVER_INIT = 30000;
 
@@ -124,6 +128,13 @@ public class RestrictManager {
                                 RELEASE_EVENT_WFC_PREFER_MODE_CHANGED,
                                 RELEASE_EVENT_IMS_NOT_SUPPORT_RAT
                             });
+                    put(
+                            RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL,
+                            new int[] {
+                                RELEASE_EVENT_DISCONNECT,
+                                RELEASE_EVENT_WIFI_AP_CHANGED,
+                                RELEASE_EVENT_IMS_NOT_SUPPORT_RAT
+                            });
                 }
             };
     private static final int[] ignorableRestrictionsOnSingleRat =
@@ -132,7 +143,8 @@ public class RestrictManager {
                 RESTRICT_TYPE_RTP_LOW_QUALITY,
                 RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL,
                 RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
-                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL
+                RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
+                RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL
             };
 
     private QnsCarrierConfigManager mQnsCarrierConfigManager;
@@ -150,6 +162,7 @@ public class RestrictManager {
     private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
     private AlternativeEventListener mAltEventListener;
     private ImsStatusListener mImsStatusListener;
+    private WifiBackhaulMonitor mWifiBackhaulMonitor;
     private int mApnType;
     private int mSlotId;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
@@ -159,6 +172,7 @@ public class RestrictManager {
     private int mCounterForIwlanRestrictionInCall;
     private int mRetryCounterOnDataConnectionFail;
     private int mFallbackCounterOnDataConnectionFail;
+    private boolean mIsRttStatusCheckRegistered = false;
     private int mLastDataConnectionTransportType;
     private boolean mIsTimerRunningOnDataConnectionFail = false;
     private Pair<Integer, Long> mDeferredThrottlingEvent = null;
@@ -248,6 +262,15 @@ public class RestrictManager {
                     }
                     break;
 
+                case EVENT_WIFI_RTT_BACKHAUL_CHECK_STATUS:
+                    ar = (QnsAsyncResult) message.obj;
+                    boolean rttCheckStatus = (boolean) ar.result;
+                    if (!rttCheckStatus) { // rtt Backhaul check failed
+                        Log.d(TAG, "Rtt check status received:Fail");
+                        onWlanRttFail();
+                    }
+                    break;
+
                 case QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY:
                     onWfcModeChanged(QnsConstants.WIFI_ONLY, QnsConstants.COVERAGE_HOME);
                     break;
@@ -277,6 +300,16 @@ public class RestrictManager {
                     if (mFallbackCounterOnDataConnectionFail > 0) {
                         Log.d(TAG, "Reset Fallback Counter on APM On/WFC off/Wifi Off");
                         mFallbackCounterOnDataConnectionFail = 0;
+                    }
+
+                    if (mApnType == ApnSetting.TYPE_IMS
+                            && hasRestrictionType(
+                                    AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                                    RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL)) {
+
+                        releaseRestriction(
+                                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                                RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL);
                     }
                     break;
                 default:
@@ -444,6 +477,7 @@ public class RestrictManager {
             mImsStatusListener = ImsStatusListener.getInstance(context, slotId);
             mImsStatusListener.registerImsRegistrationStatusChanged(
                     mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
+            mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(context, slotId);
         }
 
         mWfcPreference = QnsUtils.getWfcMode(context, slotId, false);
@@ -472,6 +506,11 @@ public class RestrictManager {
 
     public void close() {
         mDataConnectionStatusTracker.unRegisterDataConnectionStatusChanged(mHandler);
+        if (mIsRttStatusCheckRegistered && mApnType == ApnSetting.TYPE_IMS) {
+            mIsRttStatusCheckRegistered = false;
+            mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
+        }
+
         if (mApnType == ApnSetting.TYPE_IMS) {
             mTelephonyListener.unregisterCallStateChanged(mHandler);
             mTelephonyListener.unregisterSrvccStateChanged(mHandler);
@@ -895,6 +934,9 @@ public class RestrictManager {
                 mCellularCoverage == QnsConstants.COVERAGE_HOME
                         ? mWfcPreference
                         : mWfcRoamingPreference;
+
+        registerRttStatusCheckEvent();
+
         switch (event.getEvent()) {
             case QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED:
                 onImsUnregistered(event, mTransportType, prefMode);
@@ -918,6 +960,24 @@ public class RestrictManager {
                 break;
             default:
                 break;
+        }
+    }
+
+    private void registerRttStatusCheckEvent() {
+        if (mApnType == ApnSetting.TYPE_IMS) {
+
+            if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
+                if (!mIsRttStatusCheckRegistered) {
+                    mIsRttStatusCheckRegistered = true;
+                    mWifiBackhaulMonitor.registerForRttStatusChange(
+                            mHandler, EVENT_WIFI_RTT_BACKHAUL_CHECK_STATUS);
+                }
+            } else {
+                if (mIsRttStatusCheckRegistered) {
+                    mIsRttStatusCheckRegistered = false;
+                    mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
+                }
+            }
         }
     }
 
@@ -950,15 +1010,37 @@ public class RestrictManager {
         }
     }
 
-    private void fallbackToWwanForImsRegistration(int fallbackTimeMillis) {
-        Log.d(TAG, "release ignorable restrictions on WWAN to fallback.");
-        for (int restrictType : ignorableRestrictionsOnSingleRat) {
-            releaseRestriction(AccessNetworkConstants.TRANSPORT_TYPE_WWAN, restrictType, true);
+    protected void onWlanRttFail() {
+        Log.d(TAG, "start RTT Fallback:");
+        int fallbackTimeMillis = mQnsCarrierConfigManager.getWlanRttFallbackHystTimer();
+        if (fallbackTimeMillis > 0
+                && mQnsCarrierConfigManager.isAccessNetworkAllowed(
+                        mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
+
+            fallbackToWwanForImsRegistration(
+                    AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                    RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL,
+                    fallbackTimeMillis);
         }
-        addRestriction(
+    }
+
+    private void fallbackToWwanForImsRegistration(int fallbackTimeMillis) {
+        fallbackToWwanForImsRegistration(
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL,
-                sReleaseEventMap.get(RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL),
+                fallbackTimeMillis);
+    }
+
+    private void fallbackToWwanForImsRegistration(
+            int transportType, int restrictType, int fallbackTimeMillis) {
+        Log.d(TAG, "release ignorable restrictions on WWAN to fallback.");
+        for (int restriction : ignorableRestrictionsOnSingleRat) {
+            releaseRestriction(getOtherTransport(transportType), restriction, false);
+        }
+        addRestriction(
+                transportType,
+                restrictType,
+                sReleaseEventMap.get(restrictType),
                 fallbackTimeMillis);
     }
 
@@ -1472,6 +1554,8 @@ public class RestrictManager {
                 return "RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL";
             case RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL:
                 return "RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL";
+            case RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL:
+                return "RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL";
         }
         return "";
     }
