@@ -459,9 +459,6 @@ public class QnsUtils {
             return null;
         }
 
-        PersistableBundle defaultConfigBundle =
-                readConfigFromAssets(context, CARRIER_ID_PREFIX + qnsCarrierID + "_");
-
         return readConfigFromAssets(context, CARRIER_ID_PREFIX + qnsCarrierID + "_");
     }
 
