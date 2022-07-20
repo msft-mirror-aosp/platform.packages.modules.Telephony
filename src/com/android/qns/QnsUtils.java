@@ -39,13 +39,11 @@ import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.Xml;
 
-import org.xmlpull.v1.XmlPullParser;
-import org.xmlpull.v1.XmlPullParserException;
-
-import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -56,6 +54,7 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** This class contains QualifiedNetworksService specific utility functions */
 public class QnsUtils {
@@ -630,52 +629,63 @@ public class QnsUtils {
         return tm.getSimCarrierId();
     }
 
-    private static PersistableBundle readConfigFromAssets(Context context, String carrierIDConfig) {
-        PersistableBundle bundleFromAssets = new PersistableBundle();
-
+    private static String getAssetFileName(Context context, String carrierIDConfig) {
+        String[] configFileNameList;
         try {
-            String[] configName = context.getAssets().list("");
-            if (configName == null) {
-                return bundleFromAssets;
-            }
-
-            for (String fileName : configName) {
+            configFileNameList = context.getAssets().list("");
+            for (String fileName : configFileNameList) {
                 if (fileName.startsWith(carrierIDConfig)) {
                     log("matched file: " + fileName);
-                    XmlPullParser parser = Xml.newPullParser();
-                    parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
-
-                    InputStream input = context.getAssets().open(fileName);
-                    parser.setInput(input, "utf-8");
-                    bundleFromAssets = readQnsConfigFromXml(parser);
-                    input.close();
-                    break;
+                    return fileName;
                 }
             }
         } catch (Exception e) {
-            loge("Error: " + e);
+            loge("getFileName, can't find " + carrierIDConfig + " asset");
         }
-        return bundleFromAssets;
+        return null;
     }
 
-    private static PersistableBundle readQnsConfigFromXml(XmlPullParser parser)
-            throws IOException, XmlPullParserException {
-        PersistableBundle bundleFromXml = new PersistableBundle();
+    private static PersistableBundle readConfigFromAssets(Context context, String carrierIDConfig) {
+        PersistableBundle bundleFromAssets = new PersistableBundle();
 
-        if (parser == null) {
-            log("parser is null");
-            return bundleFromXml;
-        }
+        String fileName = getAssetFileName(context, carrierIDConfig);
+        InputStream inputStream = null;
+        InputStreamReader inputStreamReader = null;
+        try {
+            inputStream = context.getAssets().open(fileName);
+            inputStreamReader = new InputStreamReader(inputStream);
+            Stream<String> streamOfString = new BufferedReader(inputStreamReader).lines();
+            String streamToString = streamOfString.collect(Collectors.joining());
 
-        int event;
-        while (((event = parser.next()) != XmlPullParser.END_DOCUMENT)) {
-            if (event == XmlPullParser.START_TAG && "carrier_config".equals(parser.getName())) {
-                PersistableBundle configFragment = PersistableBundle.restoreFromXml(parser);
-                log("bundle created : " + configFragment);
-                bundleFromXml.putAll(configFragment);
+            String configTag = "carrier_config";
+            int begin = streamToString.indexOf(configTag);
+            int end = streamToString.lastIndexOf(configTag) + configTag.length();
+            String bundleString = "<" + streamToString.substring(begin, end) + ">";
+
+            InputStream targetStream = new ByteArrayInputStream(bundleString.getBytes());
+            bundleFromAssets = PersistableBundle.readFromStream(targetStream);
+
+            log("bundleFromAssets created : " + bundleFromAssets);
+
+        } catch (Exception e) {
+            loge("readConfigFromAssets, e: " + e);
+        } finally {
+            if (inputStreamReader != null) {
+                try {
+                    inputStreamReader.close();
+                } catch (Exception e) {
+                    loge("inputStreamReader.close e:" + e);
+                }
+            }
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (Exception e) {
+                    loge("inputStream.close e:" + e);
+                }
             }
         }
-        return bundleFromXml;
+        return bundleFromAssets;
     }
 
     protected static void loge(String log) {
