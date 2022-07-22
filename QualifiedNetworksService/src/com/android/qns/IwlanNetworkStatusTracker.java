@@ -74,7 +74,9 @@ class IwlanNetworkStatusTracker {
     private boolean mWifiToggleOn = false;
     private boolean mWifiCountryCodeRegistered = false;
     private Map<Integer, Boolean> mIwlanRegistered = new ConcurrentHashMap<>();
-    private int mConnectedDds = INVALID_SUB_ID;
+
+    // The current active data subscription. May not be the default data subscription.
+    private int mConnectedDataSub = INVALID_SUB_ID;
     private SparseArray<IwlanEventHandler> mHandlerSparseArray = new SparseArray<>();
     private SparseArray<IwlanAvailabilityInfo> mLastIwlanAvailabilityInfo = new SparseArray<>();
     private String mWifiCountryCode = null;
@@ -200,7 +202,7 @@ class IwlanNetworkStatusTracker {
     void onCrossSimEnabledEvent(boolean enabled, int slotId) {
         Log.d(sLogTag, "onCrossSimEnabledEvent enabled:" + enabled + " slotIndex:" + slotId);
         if (enabled) {
-            int dds = INVALID_SUB_ID;
+            int activeDataSub = INVALID_SUB_ID;
             NetworkSpecifier specifier;
             final Network activeNetwork = mConnectivityManager.getActiveNetwork();
             if (activeNetwork != null) {
@@ -210,13 +212,13 @@ class IwlanNetworkStatusTracker {
                     specifier = nc.getNetworkSpecifier();
                     TransportInfo transportInfo = nc.getTransportInfo();
                     if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
-                        dds = ((VcnTransportInfo) transportInfo).getSubId();
+                        activeDataSub = ((VcnTransportInfo) transportInfo).getSubId();
                     } else if (specifier != null
                             && specifier instanceof TelephonyNetworkSpecifier) {
-                        dds = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
+                        activeDataSub = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
-                    if (dds != INVALID_SUB_ID && dds != mConnectedDds) {
-                        mConnectedDds = dds;
+                    if (activeDataSub != INVALID_SUB_ID && activeDataSub != mConnectedDataSub) {
+                        mConnectedDataSub = activeDataSub;
                     }
                 }
             }
@@ -360,8 +362,8 @@ class IwlanNetworkStatusTracker {
                                 + ") "
                                 + "mWifiAvailable:"
                                 + mWifiAvailable
-                                + " mConnectedDds:"
-                                + mConnectedDds
+                                + " mConnectedDataSub:"
+                                + mConnectedDataSub
                                 + " isRegistered:"
                                 + isRegistered
                                 + " subId:"
@@ -397,9 +399,8 @@ class IwlanNetworkStatusTracker {
 
     private boolean isCrossSimCallingCondition(int slotId) {
         return QnsUtils.isCrossSimCallingEnabled(mContext, slotId)
-                && !QnsUtils.isDefaultDataSubs(slotId)
-                && QnsUtils.getSubId(mContext, slotId) != mConnectedDds
-                && mConnectedDds != INVALID_SUB_ID;
+                && QnsUtils.getSubId(mContext, slotId) != mConnectedDataSub
+                && mConnectedDataSub != INVALID_SUB_ID;
     }
 
     private void notifyIwlanNetworkStatus() {
@@ -492,16 +493,16 @@ class IwlanNetworkStatusTracker {
                     if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
                         mWifiToggleOn = true;
                         mWifiAvailable = true;
-                        mConnectedDds = INVALID_SUB_ID;
+                        mConnectedDataSub = INVALID_SUB_ID;
                         notifyIwlanNetworkStatus();
                     } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                         NetworkSpecifier specifier = nc.getNetworkSpecifier();
                         TransportInfo transportInfo = nc.getTransportInfo();
                         if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
-                            mConnectedDds = ((VcnTransportInfo) transportInfo).getSubId();
+                            mConnectedDataSub = ((VcnTransportInfo) transportInfo).getSubId();
                         } else if (specifier != null
                                 && specifier instanceof TelephonyNetworkSpecifier) {
-                            mConnectedDds =
+                            mConnectedDataSub =
                                     ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                         }
                         mWifiAvailable = false;
@@ -533,8 +534,8 @@ class IwlanNetworkStatusTracker {
             if (mWifiAvailable) {
                 mWifiAvailable = false;
             }
-            if (mConnectedDds != INVALID_SUB_ID) {
-                mConnectedDds = INVALID_SUB_ID;
+            if (mConnectedDataSub != INVALID_SUB_ID) {
+                mConnectedDataSub = INVALID_SUB_ID;
             }
             sLinkProtocolType = LinkProtocolType.UNKNOWN;
             notifyIwlanNetworkStatus();
@@ -574,24 +575,24 @@ class IwlanNetworkStatusTracker {
                 if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
                     if (!mWifiAvailable && mWifiToggleOn) {
                         mWifiAvailable = true;
-                        mConnectedDds = INVALID_SUB_ID;
+                        mConnectedDataSub = INVALID_SUB_ID;
                         notifyIwlanNetworkStatus();
                     } else {
                         Log.d(sLogTag, "OnCapability : Wifi Available already true");
                     }
                 } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                    int dds = INVALID_SUB_ID;
+                    int activeDataSub = INVALID_SUB_ID;
                     mWifiAvailable = false;
                     NetworkSpecifier specifier = nc.getNetworkSpecifier();
                     TransportInfo transportInfo = nc.getTransportInfo();
                     if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
-                        dds = ((VcnTransportInfo) transportInfo).getSubId();
+                        activeDataSub = ((VcnTransportInfo) transportInfo).getSubId();
                     } else if (specifier != null
                             && specifier instanceof TelephonyNetworkSpecifier) {
-                        dds = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
+                        activeDataSub = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
-                    if (dds != INVALID_SUB_ID && dds != mConnectedDds) {
-                        mConnectedDds = dds;
+                    if (activeDataSub != INVALID_SUB_ID && activeDataSub != mConnectedDataSub) {
+                        mConnectedDataSub = activeDataSub;
                         notifyIwlanNetworkStatus();
                     }
                 }
@@ -668,8 +669,8 @@ class IwlanNetworkStatusTracker {
                         + mWifiAvailable
                         + ", mWifiToggleOn="
                         + mWifiToggleOn
-                        + ", mConnectedDds="
-                        + mConnectedDds
+                        + ", mConnectedDataSub="
+                        + mConnectedDataSub
                         + ", mIwlanRegistered="
                         + mIwlanRegistered);
         pw.println(prefix + "sLinkProtocolType=" + sLinkProtocolType);
