@@ -530,14 +530,16 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         .strictness(Strictness.LENIENT)
                         .mockStatic(QnsUtils.class)
                         .startMocking();
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
+        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, false, false, false);
+        ane.rebuild();
+        waitFor(100);
         ane.onTryWfcConnectionStateChanged(true);
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
                         new QnsAsyncResult(null, true, null))
                 .sendToTarget();
-        waitFor(100);
+        waitFor(50);
         assertTrue(ane.isWfcEnabled());
         assertEquals(QnsConstants.WIFI_PREF, ane.getPreferredMode());
         Message.obtain(
@@ -545,7 +547,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
                         new QnsAsyncResult(null, false, null))
                 .sendToTarget();
-        waitFor(100);
+        waitFor(50);
         assertFalse(ane.isWfcEnabled());
         assertEquals(QnsConstants.CELL_PREF, ane.getPreferredMode());
     }
