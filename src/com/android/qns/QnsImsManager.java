@@ -27,6 +27,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.PersistableBundle;
 import android.os.SystemProperties;
+import android.telephony.AccessNetworkConstants;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
@@ -34,8 +35,10 @@ import android.telephony.ims.ImsException;
 import android.telephony.ims.ImsManager;
 import android.telephony.ims.ImsMmTelManager;
 import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsRegistrationAttributes;
 import android.telephony.ims.ImsStateCallback;
 import android.telephony.ims.ProvisioningManager;
+import android.telephony.ims.RegistrationManager;
 import android.telephony.ims.compat.feature.ImsFeature;
 import android.util.Log;
 import android.util.SparseArray;
@@ -92,6 +95,9 @@ public class QnsImsManager {
     private ImsMmTelManager mImsMmTelManager;
     private QnsImsStateCallback mQnsImsStateCallback;
     private final QnsImsManagerHandler mQnsImsManagerHandler;
+    private QnsImsRegistrationCallback mQnsImsRegistrationCallback;
+    private final QnsRegistrantList mImsRegistrationStatusListeners;
+    private ImsRegistrationState mLastImsRegistrationState;
 
     /** QnsImsManager default constructor */
     public QnsImsManager(Context context, int slotId) {
@@ -103,6 +109,8 @@ public class QnsImsManager {
         HandlerThread handlerThread = new HandlerThread(mLogTag);
         handlerThread.start();
         mQnsImsManagerHandler = new QnsImsManagerHandler(handlerThread.getLooper());
+
+        mImsRegistrationStatusListeners = new QnsRegistrantList();
 
         initQnsImsManager();
     }
@@ -121,14 +129,17 @@ public class QnsImsManager {
             }
             ImsMmTelManager mmTelManager = imsManager.getImsMmTelManager(subId);
             QnsImsStateCallback stateCallback = new QnsImsStateCallback();
+            QnsImsRegistrationCallback registrationCallback = new QnsImsRegistrationCallback();
             mmTelManager.registerImsStateCallback(mExecutor, stateCallback);
+            mmTelManager.registerImsRegistrationCallback(mExecutor, registrationCallback);
             log("initQnsImsManager: initialized and registered capability callback");
             mImsManager = imsManager;
             mImsMmTelManager = mmTelManager;
             mQnsImsStateCallback = stateCallback;
+            mQnsImsRegistrationCallback = registrationCallback;
             mQnsImsManagerInitialized = true;
         } catch (IllegalArgumentException | ImsException | NullPointerException e) {
-            loge("initQnsImsManager: couldn't initialize or register capability callback, " + e);
+            loge("initQnsImsManager: couldn't initialize or register ims callbacks, " + e);
             clearQnsImsManager();
         }
     }
@@ -138,16 +149,19 @@ public class QnsImsManager {
         log("clearQnsImsManager");
         if (mImsMmTelManager != null) {
             mImsMmTelManager.unregisterImsStateCallback(mQnsImsStateCallback);
+            mImsMmTelManager.unregisterImsRegistrationCallback(mQnsImsRegistrationCallback);
         }
         mImsManager = null;
         mImsMmTelManager = null;
         mQnsImsStateCallback = null;
+        mQnsImsRegistrationCallback = null;
         mQnsImsManagerInitialized = false;
     }
 
     @VisibleForTesting
     protected synchronized void dispose() {
         clearQnsImsManager();
+        mImsRegistrationStatusListeners.removeAll();
         mQnsImsManagerHandler.dispose();
         sQnsImsManagerSparseArray.remove(mSlotId);
     }
@@ -174,7 +188,6 @@ public class QnsImsManager {
                     clearQnsImsManager();
                     break;
                 default:
-                    log("Unknown message received!");
                     break;
             }
         }
@@ -394,6 +407,128 @@ public class QnsImsManager {
             }
             release();
         }
+    }
+
+    private class QnsImsRegistrationCallback extends RegistrationManager.RegistrationCallback {
+
+        @Override
+        public void onRegistered(ImsRegistrationAttributes attribute) {
+            int transportType = attribute.getTransportType();
+            log("on IMS registered on :" + QnsConstants.transportTypeToString(transportType));
+            notifyImsRegistrationChangedEvent(
+                    QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, transportType, null);
+        }
+
+        @Override
+        public void onTechnologyChangeFailed(int transportType, ImsReasonInfo reason) {
+            log(
+                    "onTechnologyChangeFailed["
+                            + QnsConstants.transportTypeToString(transportType)
+                            + "] "
+                            + reason.toString());
+            notifyImsRegistrationChangedEvent(
+                    QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
+                    transportType,
+                    reason);
+        }
+
+        @Override
+        public void onUnregistered(ImsReasonInfo reason) {
+            log("onUnregistered " + reason.toString());
+            notifyImsRegistrationChangedEvent(
+                    QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
+                    AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
+                    reason);
+        }
+    }
+
+    /** State class for the IMS Registration. */
+    public static class ImsRegistrationState {
+        @QnsConstants.QnsImsRegiEvent private final int mEvent;
+        private final int mTransportType;
+        private final ImsReasonInfo mReasonInfo;
+
+        ImsRegistrationState(int event, int transportType, ImsReasonInfo reason) {
+            mEvent = event;
+            mTransportType = transportType;
+            mReasonInfo = reason;
+        }
+
+        int getEvent() {
+            return mEvent;
+        }
+
+        int getTransportType() {
+            return mTransportType;
+        }
+
+        ImsReasonInfo getReasonInfo() {
+            return mReasonInfo;
+        }
+
+        @Override
+        public String toString() {
+            String reason = getReasonInfo() == null ? "null" : mReasonInfo.toString();
+            String event = Integer.toString(mEvent);
+            switch (mEvent) {
+                case QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED:
+                    event = "IMS_REGISTERED";
+                    break;
+                case QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED:
+                    event = "IMS_UNREGISTERED";
+                    break;
+                case QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED:
+                    event = "IMS_ACCESS_NETWORK_CHANGE_FAILED";
+                    break;
+            }
+            return "ImsRegistrationState["
+                    + QnsConstants.transportTypeToString(mTransportType)
+                    + "] "
+                    + "Event:"
+                    + event
+                    + " reason:"
+                    + reason;
+        }
+    }
+
+    /**
+     * Get the status of whether the IMS is registered or not for given transport type
+     *
+     * @param transportType Transport Type
+     * @return true when ims is registered.
+     */
+    public boolean isImsRegistered(int transportType) {
+        return mLastImsRegistrationState != null
+                && mLastImsRegistrationState.getTransportType() == transportType
+                && mLastImsRegistrationState.getEvent()
+                        == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED;
+    }
+
+    /**
+     * Registers to monitor Ims registration status
+     *
+     * @param h Handler to get an event
+     * @param what message id.
+     */
+    public void registerImsRegistrationStatusChanged(Handler h, int what) {
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
+        mImsRegistrationStatusListeners.add(r);
+    }
+
+    /**
+     * Unregisters ims registration status for given handler.
+     *
+     * @param h Handler
+     */
+    public void unregisterImsRegistrationStatusChanged(Handler h) {
+        mImsRegistrationStatusListeners.remove(h);
+    }
+
+    @VisibleForTesting
+    protected void notifyImsRegistrationChangedEvent(
+            int event, int transportType, ImsReasonInfo reason) {
+        mLastImsRegistrationState = new ImsRegistrationState(event, transportType, reason);
+        mImsRegistrationStatusListeners.notifyResult(mLastImsRegistrationState);
     }
 
     private static boolean isImsSupportedOnDevice(Context context) {

@@ -37,9 +37,11 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.PersistableBundle;
 import android.os.SystemProperties;
+import android.telephony.AccessNetworkConstants;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsException;
 import android.telephony.ims.ImsManager;
 import android.telephony.ims.ImsMmTelManager;
@@ -57,6 +59,10 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 import org.mockito.quality.Strictness;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 @RunWith(JUnit4.class)
 public class QnsImsManagerTest {
 
@@ -71,6 +77,7 @@ public class QnsImsManagerTest {
     @Mock ProvisioningManager mProvisioningManager;
     @Mock QnsEventDispatcher mQnsEventDispatcher;
     @Mock PackageManager mPackageManager;
+    @Mock TelephonyManager mTelephonyManager;
     private MockitoSession mMockitoSession;
     private QnsImsManager mQnsImsMgr;
 
@@ -91,6 +98,8 @@ public class QnsImsManagerTest {
         when(mContext.getSystemService(CarrierConfigManager.class))
                 .thenReturn(mCarrierConfigManager);
         when(mContext.getSystemService(SubscriptionManager.class)).thenReturn(mSubscriptionManager);
+        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
+        when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
         doReturn(mSubscriptionInfo, mSubscriptionInfo, null)
                 .when(mSubscriptionManager)
                 .getActiveSubscriptionInfoForSimSlotIndex(anyInt());
@@ -342,5 +351,82 @@ public class QnsImsManagerTest {
             bException = true;
         }
         assertFalse(bException);
+    }
+
+    @Test
+    public void testQnsImsManagerInit() throws NoSuchFieldException, IllegalAccessException {
+        Field initializedField = QnsImsManager.class.getDeclaredField("mQnsImsManagerInitialized");
+        initializedField.setAccessible(true);
+        boolean qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertTrue(qnsImsManagerInitialized);
+
+        when(mImsManager.getImsMmTelManager(anyInt())).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(mContext, 1);
+        qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertFalse(qnsImsManagerInitialized);
+    }
+
+    @Test
+    public void testQnsImsManagerIsGbaValid()
+            throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method method = QnsImsManager.class.getDeclaredMethod("isGbaValid");
+        method.setAccessible(true);
+        assertTrue((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_IMS_GBA_REQUIRED_BOOL)))
+                .thenReturn(true);
+
+        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(null);
+        assertFalse((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
+        when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
+        when(mTelephonyManager.getIsimIst()).thenReturn(null);
+        assertTrue((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mTelephonyManager.getIsimIst()).thenReturn("22");
+        assertTrue((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mTelephonyManager.getIsimIst()).thenReturn("21");
+        assertFalse((Boolean) method.invoke(mQnsImsMgr));
+    }
+
+    @Test
+    public void testQnsImsManagerQnsImsRegistrationState() {
+        QnsImsManager.ImsRegistrationState stateReg =
+                new QnsImsManager.ImsRegistrationState(
+                        QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        null);
+        QnsImsManager.ImsRegistrationState stateUnreg =
+                new QnsImsManager.ImsRegistrationState(
+                        QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        null);
+        QnsImsManager.ImsRegistrationState stateAccessNetworkChangeFail =
+                new QnsImsManager.ImsRegistrationState(
+                        QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        null);
+        assertTrue(stateReg.toString().contains("IMS_REG"));
+        assertTrue(stateUnreg.toString().contains("IMS_UNREG"));
+        assertTrue(stateAccessNetworkChangeFail.toString().contains("IMS_ACCESS"));
+    }
+
+    @Test
+    public void testQnsImsManagerQnsIsImsRegistered() {
+        mQnsImsMgr.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                null);
+        assertTrue(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        mQnsImsMgr.notifyImsRegistrationChangedEvent(
+                QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                null);
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
     }
 }

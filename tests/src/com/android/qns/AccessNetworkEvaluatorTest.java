@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,8 +93,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Mock private AlternativeEventListener altEventListener;
     @Mock private QnsProvisioningListener mQnsProvisioningListener;
     @Mock private QnsTelephonyListener qnsTelephonyListener;
-    @Mock private ImsStatusListener qnsImsStatusListener;
+    @Mock private QnsImsManager mQnsImsManager;
     @Mock private WifiBackhaulMonitor mMockWifiBackhaulMonitor;
+    @Mock private QnsImsManager.ImsRegistrationState mMockImsRegistrationState;
     private AccessNetworkEvaluator ane;
     private Handler mHandler;
     private Handler mEvaluatorHandler;
@@ -149,7 +151,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
         mHandlerThread.start();
         mHandler = new AneHandler();
@@ -712,7 +714,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
 
         when(configManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false);
@@ -825,7 +827,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
 
         ApnSetting apnSettingForCellular =
@@ -872,7 +874,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
         QnsTelephonyListener.QnsTelephonyInfo info = qnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
@@ -1062,7 +1064,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
 
         waitFor(100);
@@ -1349,7 +1351,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue((Boolean) method.invoke(ane, transport));
 
         mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
-        when(qnsImsStatusListener.isImsRegistered(transport)).thenReturn(false, true);
+        when(mQnsImsManager.isImsRegistered(transport)).thenReturn(false, true);
 
         // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE - ims not registered over WLAN
         assertFalse((Boolean) method.invoke(ane, transport));
@@ -1389,7 +1391,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE
         mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
-        when(qnsImsStatusListener.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+        when(mQnsImsManager.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 .thenReturn(true, false);
         assertFalse((Boolean) method.invoke(ane, transport));
         assertTrue((Boolean) method.invoke(ane, transport));
@@ -1431,7 +1433,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
         AccessNetworkEvaluator aneIms =
                 new AccessNetworkEvaluator(
@@ -1448,7 +1450,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         qnsEventDispatcher,
                         altEventListener,
                         mQnsProvisioningListener,
-                        qnsImsStatusListener,
+                        mQnsImsManager,
                         mMockWifiBackhaulMonitor);
 
         List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
@@ -1516,5 +1518,38 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue(
                 matchedAnspSos.get(0).getPreCondition().getCallType()
                         == QnsConstants.CALL_TYPE_VOICE);
+    }
+
+    @Test
+    public void testEventImsRegistrationStateChanged() {
+        when(configManager.getRatPreference(ApnSetting.TYPE_IMS))
+                .thenReturn(QnsConstants.RAT_PREFERENCE_DEFAULT);
+
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_IMS_REGISTRATION_STATE_CHANGED,
+                        new QnsAsyncResult(null, mMockImsRegistrationState, null))
+                .sendToTarget();
+
+        waitFor(100);
+        verify(mMockImsRegistrationState, never()).getTransportType();
+        verify(mMockImsRegistrationState, never()).getEvent();
+
+        when(configManager.getRatPreference(ApnSetting.TYPE_IMS))
+                .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE);
+        when(mMockImsRegistrationState.getTransportType())
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        when(mMockImsRegistrationState.getEvent())
+                .thenReturn(QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED);
+
+        Message.obtain(
+                        mEvaluatorHandler,
+                        EVENT_IMS_REGISTRATION_STATE_CHANGED,
+                        new QnsAsyncResult(null, mMockImsRegistrationState, null))
+                .sendToTarget();
+
+        waitFor(100);
+        verify(mMockImsRegistrationState, times(1)).getTransportType();
+        verify(mMockImsRegistrationState, times(1)).getEvent();
     }
 }

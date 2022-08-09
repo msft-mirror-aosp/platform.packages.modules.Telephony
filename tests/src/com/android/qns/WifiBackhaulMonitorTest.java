@@ -43,7 +43,6 @@ import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 
 import com.android.dx.mockito.inline.extended.StaticMockitoSession;
-import com.android.qns.ImsStatusListener.ImsRegistrationChangedEv;
 
 import org.junit.After;
 import org.junit.Before;
@@ -65,7 +64,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = 2;
 
     @Mock private QnsCarrierConfigManager mMockConfigManager;
-    @Mock private ImsStatusListener mMockImsStatusListener;
+    @Mock private QnsImsManager mMockQnsImsManager;
     @Mock private Network mMockNetwork;
     @Mock private Process mProcessV4;
     @Mock private Process mProcessV6;
@@ -105,7 +104,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         mMockitoSession =
                 mockitoSession()
                         .mockStatic(QnsCarrierConfigManager.class)
-                        .mockStatic(ImsStatusListener.class)
+                        .mockStatic(QnsImsManager.class)
                         .mockStatic(Runtime.class)
                         .spyStatic(InetAddress.class)
                         .startMocking();
@@ -121,8 +120,8 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                 .when(QnsCarrierConfigManager.getInstance(sMockContext, mSlotIndex))
                 .thenReturn(mMockConfigManager);
         lenient()
-                .when(ImsStatusListener.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockImsStatusListener);
+                .when(QnsImsManager.getInstance(sMockContext, mSlotIndex))
+                .thenReturn(mMockQnsImsManager);
 
         lenient().when(Runtime.getRuntime()).thenReturn(mRuntime);
 
@@ -170,7 +169,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         mWbm.registerForRttStatusChange(mHandler, 1);
         mWbm.registerForRttStatusChange(handler, 2);
 
-        verify(mMockImsStatusListener, times(1))
+        verify(mMockQnsImsManager, times(1))
                 .registerImsRegistrationStatusChanged(isA(Handler.class), anyInt());
         verify(mockConnectivityManager, times(1))
                 .registerNetworkCallback(isA(NetworkRequest.class), isA(NetworkCallback.class));
@@ -178,7 +177,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         mWbm.unRegisterForRttStatusChange(mHandler);
         mWbm.unRegisterForRttStatusChange(handler);
 
-        verify(mMockImsStatusListener, times(1))
+        verify(mMockQnsImsManager, times(1))
                 .unregisterImsRegistrationStatusChanged(isA(Handler.class));
         verify(mockConnectivityManager, times(1))
                 .unregisterNetworkCallback(isA(NetworkCallback.class));
@@ -266,7 +265,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                         EVENT_IMS_REGISTRATION_STATE_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                new ImsRegistrationChangedEv(
+                                new QnsImsManager.ImsRegistrationState(
                                         QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                                         null),
@@ -298,7 +297,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                         EVENT_IMS_REGISTRATION_STATE_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                new ImsRegistrationChangedEv(
+                                new QnsImsManager.ImsRegistrationState(
                                         QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
                                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                                         null),
@@ -316,7 +315,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                         EVENT_IMS_REGISTRATION_STATE_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                new ImsRegistrationChangedEv(
+                                new QnsImsManager.ImsRegistrationState(
                                         QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                                         null),
@@ -382,7 +381,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
 
     private Handler captureHandler() {
         ArgumentCaptor<Handler> argumentCaptor = ArgumentCaptor.forClass(Handler.class);
-        verify(mMockImsStatusListener)
+        verify(mMockQnsImsManager)
                 .registerImsRegistrationStatusChanged(argumentCaptor.capture(), anyInt());
         return argumentCaptor.getValue();
     }

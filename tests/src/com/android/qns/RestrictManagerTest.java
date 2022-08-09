@@ -85,7 +85,7 @@ public class RestrictManagerTest extends QnsTest {
     private static final int DEFAULT_RESTRICT_NON_PREFERRED_TRANSPORT_TIME = 45000;
     private static final int DEFAULT_RESTRICT_WITH_LOW_RTP_QUALITY_TIME = 60000;
     private RestrictManager mRestrictManager;
-    private ImsStatusListener mImsStatusListener;
+    private QnsImsManager mQnsImsManager;
     private CountDownLatch mLatch;
 
     protected TestLooper mTestLooper;
@@ -97,7 +97,7 @@ public class RestrictManagerTest extends QnsTest {
                     super.onLooperPrepared();
                     mAltListener = AlternativeEventListener.getInstance(sMockContext, 0);
                     mTelephonyListener = QnsTelephonyListener.getInstance(sMockContext, 0);
-                    mImsStatusListener = ImsStatusListener.getInstance(sMockContext, 0);
+                    mQnsImsManager = QnsImsManager.getInstance(sMockContext, 0);
                     setReady(true);
                 }
             };
@@ -947,7 +947,7 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 null);
@@ -958,7 +958,7 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
                 reason);
@@ -1014,7 +1014,7 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE;
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 reason);
@@ -1067,7 +1067,7 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 null);
@@ -1078,7 +1078,7 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
                 reason);
@@ -1091,7 +1091,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 reason);
@@ -2193,7 +2193,7 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                 null);
@@ -2216,7 +2216,7 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                 null);
@@ -2224,7 +2224,7 @@ public class RestrictManagerTest extends QnsTest {
         when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(false);
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE;
-        mImsStatusListener.notifyImsRegistrationChangedEvent(
+        mQnsImsManager.notifyImsRegistrationChangedEvent(
                 QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                 reason);

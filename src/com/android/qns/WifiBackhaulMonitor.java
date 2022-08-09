@@ -49,7 +49,7 @@ public class WifiBackhaulMonitor {
     private final String mTag;
     private static final SparseArray<WifiBackhaulMonitor> sInstances = new SparseArray<>();
     private final ConnectivityManager mConnectivityManager;
-    private ImsStatusListener mImsStatusListener;
+    private QnsImsManager mQnsImsManager;
     private ConnectivityManager.NetworkCallback mNetworkCallback;
     private Context mContext;
     private int mSlotIndex;
@@ -84,8 +84,7 @@ public class WifiBackhaulMonitor {
                     break;
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
                     ar = (QnsAsyncResult) msg.obj;
-                    onImsRegistrationStateChanged(
-                            (ImsStatusListener.ImsRegistrationChangedEv) ar.result);
+                    onImsRegistrationStateChanged((QnsImsManager.ImsRegistrationState) ar.result);
                     break;
                 default:
                     log("Invalid event = " + msg.what);
@@ -121,7 +120,7 @@ public class WifiBackhaulMonitor {
         mSlotIndex = slotIndex;
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         mConfigManager = QnsCarrierConfigManager.getInstance(mContext, mSlotIndex);
-        mImsStatusListener = ImsStatusListener.getInstance(mContext, mSlotIndex);
+        mQnsImsManager = QnsImsManager.getInstance(mContext, mSlotIndex);
         mNetworkCallback = new WiFiStatusCallback();
         mRegistrantList = new QnsRegistrantList();
         mHandlerThread = new HandlerThread(mTag);
@@ -160,7 +159,7 @@ public class WifiBackhaulMonitor {
     public void registerForRttStatusChange(Handler h, int what) {
         mRegistrantList.addUnique(h, what, null);
         if (!mIsCallbackRegistered) {
-            mImsStatusListener.registerImsRegistrationStatusChanged(
+            mQnsImsManager.registerImsRegistrationStatusChanged(
                     mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
             mConnectivityManager.registerNetworkCallback(
                     new NetworkRequest.Builder()
@@ -220,7 +219,7 @@ public class WifiBackhaulMonitor {
         notifyRttResult();
     }
 
-    private void onImsRegistrationStateChanged(ImsStatusListener.ImsRegistrationChangedEv info) {
+    private void onImsRegistrationStateChanged(QnsImsManager.ImsRegistrationState info) {
         if (info.getTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
             if (info.getEvent() == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED) {
                 mIsIwlanConnected = true;
@@ -356,7 +355,7 @@ public class WifiBackhaulMonitor {
         mRegistrantList.removeAll();
         if (mIsCallbackRegistered) {
             mConnectivityManager.unregisterNetworkCallback(mNetworkCallback);
-            mImsStatusListener.unregisterImsRegistrationStatusChanged(mHandler);
+            mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
             mIsCallbackRegistered = false;
         }
         mIsRttRunning = false;

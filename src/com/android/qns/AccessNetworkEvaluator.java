@@ -82,7 +82,7 @@ public class AccessNetworkEvaluator {
     protected QnsEventDispatcher mQnsEventDispatcher;
     protected AlternativeEventListener mAltEventListener;
     protected QnsProvisioningListener mQnsProvisioningListener;
-    protected ImsStatusListener mImsStatusListener;
+    protected QnsImsManager mQnsImsManager;
     protected WifiBackhaulMonitor mWifiBackhaulMonitor;
 
     protected int mCellularAccessNetworkType = AccessNetworkType.UNKNOWN;
@@ -141,7 +141,7 @@ public class AccessNetworkEvaluator {
         mDataConnectionStatusTracker =
                 new DataConnectionStatusTracker(
                         mContext, mHandlerThread.getLooper(), mSlotIndex, mApnType);
-        mImsStatusListener = ImsStatusListener.getInstance(context, slotIndex);
+        mQnsImsManager = QnsImsManager.getInstance(context, slotIndex);
         mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(mContext, mSlotIndex);
 
         // Pre-Conditions
@@ -188,7 +188,7 @@ public class AccessNetworkEvaluator {
             QnsEventDispatcher qnsEventDispatcher,
             AlternativeEventListener altEventListener,
             QnsProvisioningListener qnsProvisioningListener,
-            ImsStatusListener qnsImsStateListener,
+            QnsImsManager qnsImsManager,
             WifiBackhaulMonitor wifiBackhaulMonitor) {
         LOG_TAG =
                 QnsConstants.QNS_TAG
@@ -212,7 +212,7 @@ public class AccessNetworkEvaluator {
         mQnsEventDispatcher = qnsEventDispatcher;
         mAltEventListener = altEventListener;
         mQnsProvisioningListener = qnsProvisioningListener;
-        mImsStatusListener = qnsImsStateListener;
+        mQnsImsManager = qnsImsManager;
         mWifiBackhaulMonitor = wifiBackhaulMonitor;
         mHandlerThread = new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mApnType);
         mHandlerThread.start();
@@ -347,7 +347,7 @@ public class AccessNetworkEvaluator {
                 mSlotIndex, mHandler, EVENT_IWLAN_NETWORK_STATUS_CHANGED);
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
                 mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED);
-        mImsStatusListener.registerImsRegistrationStatusChanged(
+        mQnsImsManager.registerImsRegistrationStatusChanged(
                 mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
         mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
                 mApnType, mHandler, EVENT_QNS_TELEPHONY_INFO_CHANGED);
@@ -392,7 +392,7 @@ public class AccessNetworkEvaluator {
         mWifiQualityMonitor.unregisterThresholdChange(mApnType, mSlotIndex);
         mCellularQualityMonitor.unregisterThresholdChange(mApnType, mSlotIndex);
         mDataConnectionStatusTracker.unRegisterDataConnectionStatusChanged(mHandler);
-        mImsStatusListener.unregisterImsRegistrationStatusChanged(mHandler);
+        mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(mApnType, mHandler);
         mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(mSlotIndex, mHandler);
         mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
@@ -837,16 +837,15 @@ public class AccessNetworkEvaluator {
         */
     }
 
-    private void onImsRegStateChanged(ImsStatusListener.ImsRegistrationChangedEv imsRegEvent) {
+    private void onImsRegStateChanged(QnsImsManager.ImsRegistrationState imsRegEvent) {
         if (mConfigManager.getRatPreference(mApnType)
                 != QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE) {
             return;
         }
         int transportType = imsRegEvent.getTransportType();
         int event = imsRegEvent.getEvent();
-        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
-                && (event == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED
-                        || event == QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED)) {
+        if (event == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED
+                || event == QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED) {
             log(
                     "onImsRegStateChanged, "
                             + QnsConstants.transportTypeToString(transportType)
@@ -1002,10 +1001,10 @@ public class AccessNetworkEvaluator {
                     break;
                 case QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE:
                     if ((transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN
-                                    && mImsStatusListener.isImsRegistered(
+                                    && mQnsImsManager.isImsRegistered(
                                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                             || (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
-                                    && !mImsStatusListener.isImsRegistered(
+                                    && !mQnsImsManager.isImsRegistered(
                                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN))) {
                         sb.append(" isAllowRatPrefWfcAvail:false");
                         log(sb.toString());
@@ -1825,7 +1824,7 @@ public class AccessNetworkEvaluator {
                             (QnsProvisioningListener.QnsProvisioningInfo) ar.result);
                     break;
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
-                    onImsRegStateChanged((ImsStatusListener.ImsRegistrationChangedEv) ar.result);
+                    onImsRegStateChanged((QnsImsManager.ImsRegistrationState) ar.result);
                     break;
                 case QnsEventDispatcher.QNS_EVENT_WFC_ENABLED:
                     onWfcEnabledChanged(true, false);

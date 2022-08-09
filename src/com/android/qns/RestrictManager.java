@@ -161,7 +161,7 @@ public class RestrictManager {
     private DataConnectionStatusTracker mDataConnectionStatusTracker;
     private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
     private AlternativeEventListener mAltEventListener;
-    private ImsStatusListener mImsStatusListener;
+    private QnsImsManager mQnsImsManager;
     private WifiBackhaulMonitor mWifiBackhaulMonitor;
     private int mApnType;
     private int mSlotId;
@@ -221,8 +221,7 @@ public class RestrictManager {
 
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
                     ar = (QnsAsyncResult) message.obj;
-                    onImsRegistrationStateChanged(
-                            (ImsStatusListener.ImsRegistrationChangedEv) ar.result);
+                    onImsRegistrationStateChanged((QnsImsManager.ImsRegistrationState) ar.result);
                     break;
 
                 case EVENT_RELEASE_RESTRICTION:
@@ -474,8 +473,8 @@ public class RestrictManager {
                     mHandler, EVENT_SRVCC_STATE_CHANGED, null);
         }
         if (mApnType == ApnSetting.TYPE_IMS) {
-            mImsStatusListener = ImsStatusListener.getInstance(context, slotId);
-            mImsStatusListener.registerImsRegistrationStatusChanged(
+            mQnsImsManager = QnsImsManager.getInstance(context, slotId);
+            mQnsImsManager.registerImsRegistrationStatusChanged(
                     mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
             mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(context, slotId);
         }
@@ -520,7 +519,7 @@ public class RestrictManager {
             mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
         }
         if (mApnType == ApnSetting.TYPE_IMS) {
-            mImsStatusListener.unregisterImsRegistrationStatusChanged(mHandler);
+            mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
         }
     }
 
@@ -921,7 +920,7 @@ public class RestrictManager {
     }
 
     @VisibleForTesting
-    void onImsRegistrationStateChanged(ImsStatusListener.ImsRegistrationChangedEv event) {
+    void onImsRegistrationStateChanged(QnsImsManager.ImsRegistrationState event) {
         Log.d(
                 TAG,
                 "onImsRegistrationStateChanged["
@@ -982,7 +981,7 @@ public class RestrictManager {
     }
 
     private void onImsUnregistered(
-            ImsStatusListener.ImsRegistrationChangedEv event, int transportType, int prefMode) {
+            QnsImsManager.ImsRegistrationState event, int transportType, int prefMode) {
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
             int fallbackTimeMillis =
                     mQnsCarrierConfigManager.getFallbackTimeImsUnreigstered(
@@ -996,7 +995,7 @@ public class RestrictManager {
     }
 
     private void onImsHoRegisterFailed(
-            ImsStatusListener.ImsRegistrationChangedEv event, int transportType, int prefMode) {
+            QnsImsManager.ImsRegistrationState event, int transportType, int prefMode) {
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                 && transportType == event.getTransportType()) {
             int fallbackTimeMillis =
