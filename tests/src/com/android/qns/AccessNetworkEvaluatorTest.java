@@ -1577,4 +1577,28 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
         assertTrue(ane.isWfcEnabled());
     }
+
+    @Test
+    public void testEvaluateAgainWhenRebuild()
+            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        latch = new CountDownLatch(3);
+
+        // #1 evaluate
+        ane.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+
+        Field iwlanAvailable = AccessNetworkEvaluator.class.getDeclaredField("mIwlanAvailable");
+        iwlanAvailable.setAccessible(true);
+        iwlanAvailable.set(ane, true);
+
+        waitFor(500);
+
+        // #2 report an empty
+        // #3 report once again when iwlan is available.
+        ane.rebuild();
+
+        assertTrue(latch.await(3, TimeUnit.SECONDS));
+        List<Integer> accessNetworks = new ArrayList<>();
+        accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
+        assertEquals(accessNetworks, mQualifiedNetworksInfo.getAccessNetworkTypes());
+    }
 }

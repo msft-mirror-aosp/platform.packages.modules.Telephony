@@ -241,6 +241,13 @@ public class AccessNetworkEvaluator {
         reportQualifiedNetwork(getInitialAccessNetworkTypes());
         initLastNotifiedQualifiedNetwork();
         unregisterThresholdToQualityMonitor();
+
+        if (isAllowed(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                && evaluateAvailability(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        isAllowed(AccessNetworkConstants.TRANSPORT_TYPE_WWAN))) {
+            mHandler.post(() -> evaluate());
+        }
     }
 
     public void close() {
