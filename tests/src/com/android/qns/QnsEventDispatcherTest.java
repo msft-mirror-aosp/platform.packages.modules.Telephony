@@ -449,6 +449,7 @@ public class QnsEventDispatcherTest {
 
     @Test
     public void testNotifyCurrentSettingWithDisabledStatus() {
+        setDisabledStatusForWfcSettingsCrossSimSettings();
         when(mMockHandler.obtainMessage(
                         eq(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_DISABLED)))
                 .thenReturn(mMockMessage);
@@ -538,6 +539,32 @@ public class QnsEventDispatcherTest {
         lenient()
                 .when(QnsUtils.isWfcEnabled(isA(Context.class), anyInt(), anyBoolean()))
                 .thenReturn(true);
+
+        // Initialise stubbed variables in QnsUtils:
+        final Intent validCarrierIdintent =
+                new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+    }
+
+    private void setDisabledStatusForWfcSettingsCrossSimSettings() {
+        lenient()
+                .when(QnsUtils.isCrossSimCallingEnabled(isA(Context.class), anyInt()))
+                .thenReturn(false);
+        lenient()
+                .when(QnsUtils.isWfcEnabledByPlatform(isA(Context.class), anyInt()))
+                .thenReturn(false);
+        lenient()
+                .when(QnsUtils.isWfcEnabled(isA(Context.class), anyInt(), anyBoolean()))
+                .thenReturn(false);
+
+        // Initialise stubbed variables in QnsUtils:
+        final Intent validCarrierIdintent =
+                new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
     }
 
     @Test

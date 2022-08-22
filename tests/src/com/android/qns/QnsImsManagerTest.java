@@ -93,13 +93,12 @@ public class QnsImsManagerTest {
                         .startMocking();
         MockitoAnnotations.initMocks(this);
         mContext = spy(ApplicationProvider.getApplicationContext());
-        when(mContext.getSystemService(ImsManager.class)).thenReturn(mImsManager);
-        when(mImsManager.getImsMmTelManager(anyInt())).thenReturn(mImsMmTelManager);
-        when(mContext.getSystemService(CarrierConfigManager.class))
-                .thenReturn(mCarrierConfigManager);
-        when(mContext.getSystemService(SubscriptionManager.class)).thenReturn(mSubscriptionManager);
-        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
-        when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
+        doReturn(mImsManager).when(mContext).getSystemService(ImsManager.class);
+        doReturn(mImsMmTelManager).when(mImsManager).getImsMmTelManager(anyInt());
+        doReturn(mCarrierConfigManager).when(mContext).getSystemService(CarrierConfigManager.class);
+        doReturn(mSubscriptionManager).when(mContext).getSystemService(SubscriptionManager.class);
+        doReturn(mTelephonyManager).when(mContext).getSystemService(TelephonyManager.class);
+        doReturn(mTelephonyManager).when(mTelephonyManager).createForSubscriptionId(anyInt());
         doReturn(mSubscriptionInfo, mSubscriptionInfo, null)
                 .when(mSubscriptionManager)
                 .getActiveSubscriptionInfoForSimSlotIndex(anyInt());
