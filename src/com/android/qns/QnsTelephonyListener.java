@@ -115,7 +115,15 @@ public class QnsTelephonyListener {
         }
     }
 
-    public static QnsTelephonyListener getInstance(@NonNull Context context, int slotIndex) {
+    /**
+     * Gets a QnsImsManager instance
+     *
+     * @param context application context for creating the manager object
+     * @param slotIndex subscription ID
+     * @return the QnsTelephonyListener instance corresponding to the subId
+     */
+    public static synchronized QnsTelephonyListener getInstance(
+            @NonNull Context context, int slotIndex) {
         QnsTelephonyListener qnsTelephonyListener = sQnsTelephonyListener.get(slotIndex);
         if (qnsTelephonyListener != null) {
             return qnsTelephonyListener;
