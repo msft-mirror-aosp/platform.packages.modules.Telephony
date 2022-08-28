@@ -797,12 +797,15 @@ public class RestrictManager {
     }
 
     private void processDataConnectionHandoverSuccess() {
-        /* Handover Guarding Timer operation */
+        // Handover Guarding Timer operation
         processHandoverGuardingOperation(mTransportType);
 
-        /* update LowRtpQualityListener */
+        // update LowRtpQualityListener
         if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                 || mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
+            // Return to the transport type restricted by low RTP. It may be singleRAT case, release
+            // the restriction.
+            releaseRestriction(mTransportType, RESTRICT_TYPE_RTP_LOW_QUALITY);
             Log.d(TAG, "Unregister & Register Low RTP quality for " + mTransportType);
             unregisterLowRtpQualityEvent();
 

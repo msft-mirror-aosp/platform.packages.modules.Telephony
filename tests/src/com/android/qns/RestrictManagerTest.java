@@ -544,6 +544,60 @@ public class RestrictManagerTest extends QnsTest {
     }
 
     @Test
+    public void testHandoverToTransportTypeRestrictedByLowRtpQualityEvent() {
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
+        when(mConfigManager.getHoRestrictedTimeOnLowRTPQuality(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
+                .thenReturn(30000);
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(0, 0, 0, 0);
+        when(mConfigManager.getRTPMetricsData()).thenReturn(config);
+        when(mConfigManager.getWlanHysteresisTimer(
+                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                .thenReturn(0);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+        mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_RTP_LOW_QUALITY));
+        assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+        mTestLooper.moveTimeForward(1000);
+        mTestLooper.dispatchAll();
+        mAltListener.notifyRtpLowQuality(QnsConstants.CALL_TYPE_VOICE, 1);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_RTP_LOW_QUALITY));
+        assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        mTestLooper.moveTimeForward(1000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_RTP_LOW_QUALITY));
+        assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+    }
+
+    @Test
     public void testRestrictWithThrottling() {
         long throttleTime = SystemClock.elapsedRealtime() + 12000;
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
