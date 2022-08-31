@@ -549,6 +549,9 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     private void setOnCellularServiceStateChangedWithLteVopsOn(
             VopsSupportInfo vopsSupportInfo, int domain, int coverage) {
         ServiceState ss = new ServiceState();
+        if (coverage == NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING) {
+            ss.setDataRoamingFromRegistration(true);
+        }
         NetworkRegistrationInfo nri =
                 new NetworkRegistrationInfo(
                         domain,

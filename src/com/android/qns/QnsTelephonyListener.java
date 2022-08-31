@@ -496,11 +496,10 @@ public class QnsTelephonyListener {
                     registrationStateToServiceState(newWwanNrs.getRegistrationState()));
 
             // Event for cellular data roaming registration state changed.
-            if (newWwanNrs.getRegistrationState()
-                    == NetworkRegistrationInfo.REGISTRATION_STATE_HOME) {
+            // Refer roaming state which is not overridden by configs.
+            if (!serviceState.getDataRoamingFromRegistration()) {
                 mCoverage = QnsConstants.COVERAGE_HOME;
-            } else if (newWwanNrs.getRegistrationState()
-                    == NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING) {
+            } else {
                 mCoverage = QnsConstants.COVERAGE_ROAM;
                 newInfo.setRoamingType(newWwanNrs.getRoamingType());
             }
