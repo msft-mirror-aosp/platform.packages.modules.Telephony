@@ -1307,9 +1307,6 @@ public class AccessNetworkEvaluator {
                         : AccessNetworkType.IWLAN;
         if (mConfigManager.isHandoverAllowedByPolicy(
                 mApnType, srcAccessNetwork, dstAccessNetwork, mCoverage)) {
-            if (mApnType == ApnSetting.TYPE_IMS && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
-                return false;
-            }
             return true;
         } else {
             if (mApnType == ApnSetting.TYPE_IMS && mCallType == QnsConstants.CALL_TYPE_IDLE) {
@@ -1779,7 +1776,7 @@ public class AccessNetworkEvaluator {
 
     private PreCondition getMatchingPreCondition() {
         int callType = mCallType;
-        if (mApnType == ApnSetting.TYPE_EMERGENCY
+        if ((mApnType == ApnSetting.TYPE_EMERGENCY || mApnType == ApnSetting.TYPE_IMS)
                 && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
             callType = QnsConstants.CALL_TYPE_VOICE;
         }

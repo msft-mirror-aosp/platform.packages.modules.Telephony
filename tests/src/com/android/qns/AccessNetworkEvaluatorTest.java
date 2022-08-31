@@ -417,7 +417,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         ane.updateLastNotifiedQualifiedNetwork(accessNetworks);
         ane.onSetCallType(QnsConstants.CALL_TYPE_EMERGENCY);
         assertTrue(ane.needHandoverPolicyCheck());
-        assertFalse(ane.moveTransportTypeAllowed());
+        assertTrue(ane.moveTransportTypeAllowed());
 
         when(configManager.isHandoverAllowedByPolicy(
                         ApnSetting.TYPE_IMS,
@@ -1514,7 +1514,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue(matchedAnspSos != null);
         assertTrue(matchedAnspIms != null);
         assertTrue(matchedAnspSos.size() > 0);
-        assertTrue(matchedAnspIms.size() == 0);
+        assertTrue(matchedAnspIms.size() > 0);
         assertTrue(
                 matchedAnspSos.get(0).getPreCondition().getCallType()
                         == QnsConstants.CALL_TYPE_VOICE);
