@@ -2291,4 +2291,105 @@ public class RestrictManagerTest extends QnsTest {
         when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
         when(mConfigManager.getWlanRttFallbackHystTimer()).thenReturn(10000);
     }
+
+    @Test
+    public void testRestrictMinimumHysteresisTimer() {
+        DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo;
+
+        // Test Set #1
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_ROAM)).thenReturn(false);
+        when(mConfigManager.getMinimumHandoverGuardingTimer()).thenReturn(2000);
+        when(mConfigManager.getWlanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        when(mConfigManager.getWwanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING, true);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING, true);
+
+        // Test Set #2
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_ROAM)).thenReturn(false);
+        when(mConfigManager.getMinimumHandoverGuardingTimer()).thenReturn(0);
+        when(mConfigManager.getWlanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        when(mConfigManager.getWwanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING, true);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING, true);
+
+        // Test Set #3
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
+        when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_ROAM)).thenReturn(false);
+        when(mConfigManager.getMinimumHandoverGuardingTimer()).thenReturn(5000);
+        when(mConfigManager.getWlanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        when(mConfigManager.getWwanHysteresisTimer(anyInt(), anyInt())).thenReturn(0);
+        mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_ROAM);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING, true);
+
+        dcInfo =
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        EVENT_DATA_CONNECTION_HANDOVER_SUCCESS,
+                        DataConnectionStatusTracker.STATE_CONNECTED,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        mRestrictManager.onDataConnectionChanged(dcInfo);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING, true);
+    }
 }

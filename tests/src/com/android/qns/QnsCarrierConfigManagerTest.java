@@ -812,6 +812,12 @@ public class QnsCarrierConfigManagerTest {
     }
 
     @Test
+    public void testGetMinimumHysteresisTimer() {
+        int timer = mConfigManager.getMinimumHandoverGuardingTimer();
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER, timer);
+    }
+
+    @Test
     public void testTransportNetworkToString() {
         String transportType_str = null;
 

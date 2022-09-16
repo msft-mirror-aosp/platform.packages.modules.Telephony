@@ -477,6 +477,16 @@ public class QnsCarrierConfigManager {
             "qns.non_ims_wlan_hysteresis_timer_ms_int_array";
 
     /**
+     * This item is the minimum handover guarding timer value when there is no guarding time for
+     * handover.
+     *
+     * <p>{@code QnsConstants#KEY_DEFAULT_MIN_HYST_TIMER} : default value of timer. {@code
+     * QnsConstants#KEY_MIN_HYST_TIMER_LIMIT} : maximum allowable value.
+     */
+    public static final String KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT =
+            "qns.minimum_handover_guarding_timer_ms_int";
+
+    /**
      * List of 4 items indicating the RTP media metrics criteria to be set ,to make HO decision
      * during Call. The three items part of integer array is jitter , Packet loss rate & RTP
      * interval.
@@ -768,6 +778,7 @@ public class QnsCarrierConfigManager {
     private int mMmsRatPreference;
     private int mCbsRatPreference;
     private int mNetworkEnableHysteresisTimer;
+    private int mMinimumHandoverGuardingTimer;
 
     private int[] mWwanHysteresisTimer;
     private int[] mWlanHysteresisTimer;
@@ -1402,6 +1413,8 @@ public class QnsCarrierConfigManager {
         mNonImsWlanHysteresisTimer =
                 getConfig(
                         bundleCarrier, bundleAsset, KEY_NON_IMS_WLAN_HYSTERESIS_TIMER_MS_INT_ARRAY);
+        mMinimumHandoverGuardingTimer =
+                getConfig(bundleCarrier, bundleAsset, KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT);
         mWaitingTimerForPreferredTransport =
                 getConfig(
                         bundleCarrier,
@@ -2065,6 +2078,23 @@ public class QnsCarrierConfigManager {
             default:
                 return QnsConstants.KEY_DEFAULT_VALUE;
         }
+    }
+
+    /**
+     * This method returns the timer millis for the minimum guarding timer.
+     *
+     * @return the minimum guarding timer in millis. applies when handover guarding is disabled or
+     *     there is no guarding time.
+     */
+    public int getMinimumHandoverGuardingTimer() {
+        int timer = mMinimumHandoverGuardingTimer;
+        if (timer < QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER) {
+            timer = QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER;
+        }
+        if (timer > QnsConstants.KEY_MIN_HANDOVER_GUARDING_TIMER_LIMIT) {
+            timer = QnsConstants.KEY_MIN_HANDOVER_GUARDING_TIMER_LIMIT;
+        }
+        return timer;
     }
 
     /**

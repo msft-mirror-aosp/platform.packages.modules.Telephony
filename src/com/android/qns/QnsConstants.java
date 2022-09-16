@@ -36,6 +36,8 @@ public class QnsConstants {
     public static final int KEY_DEFAULT_VALUE = 0;
 
     public static final int KEY_DEFAULT_HYST_TIMER = 30000;
+    public static final int KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER = 0;
+    public static final int KEY_MIN_HANDOVER_GUARDING_TIMER_LIMIT = 5000;
 
     public static final int KEY_DEFAULT_JITTER = 120;
     public static final int KEY_DEFAULT_PACKET_LOSS_RATE = 40;

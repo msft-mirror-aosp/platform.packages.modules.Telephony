@@ -822,6 +822,10 @@ public class RestrictManager {
     private void processHandoverGuardingOperation(int transportType) {
         int guardingTransport = getOtherTransport(transportType);
         int delayMillis = getGuardingTimeMillis(guardingTransport, mImsCallType);
+        int minimumGuardingTimer = mQnsCarrierConfigManager.getMinimumHandoverGuardingTimer();
+        if (delayMillis == 0 && minimumGuardingTimer > 0) {
+            delayMillis = minimumGuardingTimer;
+        }
 
         if (delayMillis > 0) {
             startGuarding(delayMillis, guardingTransport);
@@ -931,7 +935,8 @@ public class RestrictManager {
                         + "] transportType["
                         + QnsConstants.transportTypeToString(event.getTransportType())
                         + "] RegistrationState["
-                        + QnsConstants.imsRegistrationEventToString(event.getEvent()));
+                        + QnsConstants.imsRegistrationEventToString(event.getEvent())
+                        + "]");
         int prefMode =
                 mCellularCoverage == QnsConstants.COVERAGE_HOME
                         ? mWfcPreference
@@ -1097,6 +1102,9 @@ public class RestrictManager {
 
         if (restriction != null) {
             int prevCallTypeMillis = getGuardingTimeMillis(currGuardingTransport, prevCallType);
+            if (prevCallTypeMillis == 0) {
+                return; // We don't need to update minimum guarding timer.
+            }
             int newCallTypeMillis =
                     getGuardingTimeMillis(
                             currGuardingTransport, newCallType); // new Call type timer
