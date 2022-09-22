@@ -545,7 +545,7 @@ public class QnsUtils {
                             QnsConstants.KEY_DEFAULT_HYST_TIMER
                         };
             case QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT:
-                return (T) Integer.valueOf(QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER);
+                return (T) Integer.valueOf(QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER);
             case QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY:
                 return (T)
                         new int[] {

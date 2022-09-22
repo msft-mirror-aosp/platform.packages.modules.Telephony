@@ -479,8 +479,9 @@ public class QnsCarrierConfigManager {
      * This item is the minimum handover guarding timer value when there is no guarding time for
      * handover.
      *
-     * <p>{@code QnsConstants#KEY_DEFAULT_MIN_HYST_TIMER} : default value of timer. {@code
-     * QnsConstants#KEY_MIN_HYST_TIMER_LIMIT} : maximum allowable value.
+     * <p>{@code QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER} : default value of timer.
+     * {@code QnsConstants#CONFIg_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT} : maximum allowable
+     * value.
      */
     public static final String KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT =
             "qns.minimum_handover_guarding_timer_ms_int";
@@ -2087,11 +2088,11 @@ public class QnsCarrierConfigManager {
      */
     public int getMinimumHandoverGuardingTimer() {
         int timer = mMinimumHandoverGuardingTimer;
-        if (timer < QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER) {
-            timer = QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER;
+        if (timer < QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER) {
+            timer = QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER;
         }
-        if (timer > QnsConstants.KEY_MIN_HANDOVER_GUARDING_TIMER_LIMIT) {
-            timer = QnsConstants.KEY_MIN_HANDOVER_GUARDING_TIMER_LIMIT;
+        if (timer > QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT) {
+            timer = QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT;
         }
         return timer;
     }

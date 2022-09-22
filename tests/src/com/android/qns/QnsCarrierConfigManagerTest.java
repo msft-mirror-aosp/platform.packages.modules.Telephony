@@ -814,7 +814,22 @@ public class QnsCarrierConfigManagerTest {
     @Test
     public void testGetMinimumHysteresisTimer() {
         int timer = mConfigManager.getMinimumHandoverGuardingTimer();
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_MIN_HANDOVER_GUARDING_TIMER, timer);
+        Assert.assertEquals(QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER, timer);
+
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putInt(QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT, -1);
+        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        Assert.assertEquals(
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER,
+                mConfigManager.getMinimumHandoverGuardingTimer());
+
+        bundle.putInt(
+                QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT,
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT << 1);
+        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        Assert.assertEquals(
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT,
+                mConfigManager.getMinimumHandoverGuardingTimer());
     }
 
     @Test
