@@ -254,20 +254,13 @@ public class QnsEventDispatcher {
         mQnsEventDispatcherHandler = new QnsEventDispatcherHandler(handlerThread.getLooper());
         Message msg = mQnsEventDispatcherHandler.obtainMessage(EVENT_CREATE_PROVISIONING_LISTENER);
         mQnsEventDispatcherHandler.sendMessage(msg);
+
+        mQnsEventDispatcherHandler.post(() -> loadAndNotifyWfcSettings(mContext, mSlotIndex));
     }
 
-    public static QnsEventDispatcher getInstance(@NonNull Context context, int slotId) {
-        return sInstances.computeIfAbsent(slotId, k -> new QnsEventDispatcher(context, slotId));
-    }
-
-    private synchronized void onCarrierConfigChanged(Context context, int slotId, int carrierId) {
-        if (slotId != mSlotIndex) {
-            return;
-        }
-
-        Log.d(LOG_TAG, "onCarrierConfigChanged");
-
-        int subId = QnsUtils.getSubId(context, slotId);
+    private synchronized void loadAndNotifyWfcSettings(Context context, int slotIndex) {
+        int subId = QnsUtils.getSubId(context, slotIndex);
+        Log.d(LOG_TAG, "loadAndNotifyWfcSettings for sub:" + subId);
         if (subId != mSubId) {
             unregisterContentObserver();
             mSubId = subId;
@@ -279,6 +272,20 @@ public class QnsEventDispatcher {
         notifyCurrentSetting(mWfcModeUri, true);
         notifyCurrentSetting(mWfcRoamingEnabledUri, true);
         notifyCurrentSetting(mWfcRoamingModeUri, true);
+    }
+
+    /** Get Instance of QnsEventDispatcher */
+    public static QnsEventDispatcher getInstance(@NonNull Context context, int slotId) {
+        return sInstances.computeIfAbsent(slotId, k -> new QnsEventDispatcher(context, slotId));
+    }
+
+    private synchronized void onCarrierConfigChanged(Context context, int slotId, int carrierId) {
+        if (slotId != mSlotIndex) {
+            return;
+        }
+
+        Log.d(LOG_TAG, "onCarrierConfigChanged");
+        loadAndNotifyWfcSettings(context, slotId);
 
         int event;
         if (carrierId != TelephonyManager.UNKNOWN_CARRIER_ID) {
@@ -558,7 +565,7 @@ public class QnsEventDispatcher {
             Log.d(LOG_TAG, "mWfcEnabledUri:" + mWfcEnabledUri);
             Log.d(LOG_TAG, "mWfcModeUri:" + mWfcModeUri);
             Log.d(LOG_TAG, "mWfcRoamingEnabledUri:" + mWfcRoamingEnabledUri);
-            Log.d(LOG_TAG, "mWfcRoamingEnabledUri:" + mWfcRoamingEnabledUri);
+            Log.d(LOG_TAG, "mWfcRoamingModeUri:" + mWfcRoamingModeUri);
 
             if (uri.equals(mCrossSimCallingUri)) {
                 boolean isCrossSimCallingEnabled =
