@@ -32,9 +32,13 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
+import android.annotation.NonNull;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.os.PersistableBundle;
 import android.os.SystemProperties;
 import android.telephony.AccessNetworkConstants;
@@ -45,6 +49,7 @@ import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsException;
 import android.telephony.ims.ImsManager;
 import android.telephony.ims.ImsMmTelManager;
+import android.telephony.ims.ImsStateCallback;
 import android.telephony.ims.ProvisioningManager;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -62,6 +67,8 @@ import org.mockito.quality.Strictness;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public class QnsImsManagerTest {
@@ -427,5 +434,58 @@ public class QnsImsManagerTest {
                 null);
         assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
         assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+    }
+
+    @Test
+    public void testImsStateEvents()
+            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        final int eventImsStateChanged = 11005;
+        CountDownLatch imsAvailableLatch = new CountDownLatch(2);
+        CountDownLatch imsUnavailableLatch = new CountDownLatch(2);
+        HandlerThread handlerThread = new HandlerThread("testImsStateEvent");
+        handlerThread.start();
+        Handler handler =
+                new Handler(handlerThread.getLooper()) {
+                    @Override
+                    public void handleMessage(@NonNull Message msg) {
+                        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
+                        switch (msg.what) {
+                            case eventImsStateChanged:
+                                if (ar != null) {
+                                    QnsImsManager.ImsState state =
+                                            (QnsImsManager.ImsState) ar.result;
+                                    if (state.isImsAvailable()) {
+                                        imsAvailableLatch.countDown();
+                                    } else {
+                                        imsUnavailableLatch.countDown();
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                };
+
+        Field callbackField = QnsImsManager.class.getDeclaredField("mQnsImsStateCallback");
+        callbackField.setAccessible(true);
+        ImsStateCallback imsStateCallback = (ImsStateCallback) callbackField.get(mQnsImsMgr);
+
+        mQnsImsMgr.registerImsStateChanged(handler, eventImsStateChanged);
+        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(false));
+
+        imsStateCallback.onAvailable();
+        imsStateCallback.onAvailable();
+        imsStateCallback.onUnavailable(100);
+        imsStateCallback.onUnavailable(100);
+
+        assertTrue(imsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(imsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
+
+        mQnsImsMgr.unregisterImsStateChanged(handler);
+        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(false));
+
+        assertTrue(imsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(imsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
     }
 }

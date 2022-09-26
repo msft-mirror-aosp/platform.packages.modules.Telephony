@@ -45,11 +45,13 @@ public class QnsProvisioningListener {
     private static final int EVENT_IWLAN_NETWORK_STATUS_CHANGED = EVENT_BASE + 2;
     private static final int EVENT_CALLBACK_REGISTERED = EVENT_BASE + 3;
     private static final int EVENT_NOTIFY_PROVISION_INFO_CHANGED = EVENT_BASE + 4;
+    private static final int EVENT_IMS_STATE_CHANGED = EVENT_BASE + 5;
     private final String LOG_TAG;
     private final Context mContext;
     private final int mSlotIndex;
     private final QnsProvisioningInfo mProvisioningInfo;
     private final QnsEventDispatcher mQnsEventDispatcher;
+    private final QnsImsManager mQnsImsManager;
     @VisibleForTesting QnsProvisioningHandler mQnsProvisioningHandler;
 
     private final QnsProvisioningCallback mQnsProvisioningCallback;
@@ -83,6 +85,9 @@ public class QnsProvisioningListener {
         mIwlanNetworkStatusTracker = IwlanNetworkStatusTracker.getInstance(context);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(
                 mSlotIndex, mQnsProvisioningHandler, EVENT_IWLAN_NETWORK_STATUS_CHANGED);
+
+        mQnsImsManager = QnsImsManager.getInstance(mContext, mSlotIndex);
+        mQnsImsManager.registerImsStateChanged(mQnsProvisioningHandler, EVENT_IMS_STATE_CHANGED);
     }
 
     public static QnsProvisioningListener getInstance(@NonNull Context context, int slotIndex) {
@@ -93,6 +98,7 @@ public class QnsProvisioningListener {
     public void close() {
         mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(
                 mSlotIndex, mQnsProvisioningHandler);
+        mQnsImsManager.unregisterImsStateChanged(mQnsProvisioningHandler);
         mQnsEventDispatcher.unregisterEvent(mQnsProvisioningHandler);
         mRegistrantList.removeAll();
         mProvisioningInfo.clear();
@@ -469,6 +475,20 @@ public class QnsProvisioningListener {
                         if (info.getIwlanAvailable()) {
                             resetRetryRegisterProvisioningCallbackCount();
                             registerProvisioningCallback();
+                        }
+                    }
+                    break;
+                case EVENT_IMS_STATE_CHANGED:
+                    if (ar != null) {
+                        QnsImsManager.ImsState state = (QnsImsManager.ImsState) ar.result;
+                        if (state.isImsAvailable()) {
+                            log("ImsState is changed to available");
+                            unregisterProvisioningCallback();
+                            resetRetryRegisterProvisioningCallbackCount();
+                            registerProvisioningCallback();
+                        } else {
+                            log("ImsState is changed to unavailable");
+                            clearLastProvisioningInfo();
                         }
                     }
                     break;

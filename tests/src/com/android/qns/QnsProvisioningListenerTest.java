@@ -47,6 +47,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
+import java.lang.reflect.Field;
 import java.util.concurrent.Executor;
 
 @RunWith(JUnit4.class)
@@ -346,6 +347,60 @@ public class QnsProvisioningListenerTest extends QnsTest {
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
         verify(mMockProvisioningManager, times(1))
+                .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
+        mQnsProvisioningCallback = arg.getValue();
+    }
+
+    @Test
+    public void testOnImsStateChangedEventHandler()
+            throws ImsException, NoSuchFieldException, IllegalAccessException {
+        int eventImsStateChanged = 11005;
+
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        eventImsStateChanged,
+                        null));
+
+        QnsImsManager.ImsState unavailable = new QnsImsManager.ImsState(false);
+        QnsImsManager.ImsState available = new QnsImsManager.ImsState(true);
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        eventImsStateChanged,
+                        new QnsAsyncResult(null, unavailable, null)));
+
+        for (int i : new int[] {100, 200, 400, 800}) {
+            if (mQnsProvisioningListener.mQnsProvisioningHandler.hasMessages(
+                    eventImsStateChanged)) {
+                waitFor(i);
+            } else {
+                QnsProvisioningListener.QnsProvisioningInfo clearInfo =
+                        new QnsProvisioningListener.QnsProvisioningInfo();
+                clearInfo.clear();
+
+                Field field = QnsProvisioningListener.class.getDeclaredField("mProvisioningInfo");
+                field.setAccessible(true);
+                QnsProvisioningListener.QnsProvisioningInfo provisioningInfo =
+                        (QnsProvisioningListener.QnsProvisioningInfo)
+                                field.get(mQnsProvisioningListener);
+
+                assertEquals(clearInfo.toString(), provisioningInfo.toString());
+                break;
+            }
+        }
+
+        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
+                Message.obtain(
+                        mQnsProvisioningListener.mQnsProvisioningHandler,
+                        eventImsStateChanged,
+                        new QnsAsyncResult(null, available, null)));
+
+        waitFor(1000);
+
+        ArgumentCaptor<ProvisioningManager.Callback> arg =
+                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
+        verify(mMockProvisioningManager, times(2))
                 .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
         mQnsProvisioningCallback = arg.getValue();
     }

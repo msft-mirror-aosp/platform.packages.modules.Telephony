@@ -94,6 +94,7 @@ public class QnsImsManager {
     private ImsManager mImsManager;
     private ImsMmTelManager mImsMmTelManager;
     private QnsImsStateCallback mQnsImsStateCallback;
+    private final QnsRegistrantList mQnsImsStateListener;
     private final QnsImsManagerHandler mQnsImsManagerHandler;
     private QnsImsRegistrationCallback mQnsImsRegistrationCallback;
     private final QnsRegistrantList mImsRegistrationStatusListeners;
@@ -110,6 +111,7 @@ public class QnsImsManager {
         handlerThread.start();
         mQnsImsManagerHandler = new QnsImsManagerHandler(handlerThread.getLooper());
 
+        mQnsImsStateListener = new QnsRegistrantList();
         mImsRegistrationStatusListeners = new QnsRegistrantList();
 
         initQnsImsManager();
@@ -380,8 +382,47 @@ public class QnsImsManager {
         }
     }
 
+    /** class for the IMS State. */
+    public static class ImsState {
+        private final boolean mImsAvailable;
+
+        public ImsState(boolean imsAvailable) {
+            mImsAvailable = imsAvailable;
+        }
+
+        public boolean isImsAvailable() {
+            return mImsAvailable;
+        }
+    }
+
     private void onImsStateChanged(boolean imsAvailable) {
         log("onImsStateChanged " + imsAvailable);
+        ImsState imsState = new ImsState(imsAvailable);
+        notifyImsStateChanged(imsState);
+    }
+
+    /**
+     * Registers to monitor Ims State
+     *
+     * @param h Handler to get an event
+     * @param what message id.
+     */
+    public void registerImsStateChanged(Handler h, int what) {
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
+        mQnsImsStateListener.add(r);
+    }
+
+    /**
+     * Unregisters ims state for given handler.
+     *
+     * @param h Handler
+     */
+    public void unregisterImsStateChanged(Handler h) {
+        mQnsImsStateListener.remove(h);
+    }
+
+    protected void notifyImsStateChanged(ImsState imsState) {
+        mQnsImsStateListener.notifyResult(imsState);
     }
 
     private static class StateConsumer extends Semaphore implements Consumer<Integer> {
