@@ -530,7 +530,7 @@ public class AccessNetworkSelectionPolicyBuilder {
     static final int RSRQ = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ;
     static final int RSSNR = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR;
     static final int RSCP = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP;
-    static final int ECNO = QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO;
+    static final int ECNO = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_ECNO;
     static final int AVAIL = QnsConstants.SIGNAL_AVAILABLE;
     static final int UNAVAIL = QnsConstants.SIGNAL_UNAVAILABLE;
     static final int GOOD = QnsConstants.POLICY_GOOD;

@@ -23,7 +23,6 @@ import static android.telephony.TelephonyManager.UNKNOWN_CARRIER_ID;
 
 import static com.android.qns.QnsConstants.FALLBACK_REASON_INVALID;
 import static com.android.qns.QnsConstants.MAX_COUNT_INVALID;
-import static com.android.qns.QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;

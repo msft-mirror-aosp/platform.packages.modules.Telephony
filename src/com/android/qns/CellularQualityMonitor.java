@@ -333,23 +333,18 @@ public class CellularQualityMonitor extends QualityMonitor {
             if (entry.getValue().length == 0) continue;
             int networkType = Integer.parseInt(entry.getKey().split("_")[0]);
             int measurementType = Integer.parseInt(entry.getKey().split("_")[1]);
-            if (measurementType == QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO) {
-                AlternativeEventListener.getInstance(mContext, mSlotIndex)
-                        .setEcnoSignalThreshold(entry.getValue());
-            } else {
-                SignalThresholdInfo.Builder builder =
-                        new SignalThresholdInfo.Builder()
-                                .setRadioAccessNetworkType(networkType)
-                                .setSignalMeasurementType(measurementType)
-                                .setThresholds(entry.getValue())
-                                .setIsEnabled(true);
-                int backhaulTime = mThresholdWaitTimer.getOrDefault(entry.getKey(), -1);
-                if (backhaulTime > 0) {
-                    builder.setHysteresisMs(backhaulTime);
-                }
-                mSignalThresholdInfoList.add(builder.build());
-                Log.d(mTag, "Updated SignalThresholdInfo List: " + mSignalThresholdInfoList);
+            SignalThresholdInfo.Builder builder =
+                    new SignalThresholdInfo.Builder()
+                            .setRadioAccessNetworkType(networkType)
+                            .setSignalMeasurementType(measurementType)
+                            .setThresholds(entry.getValue())
+                            .setIsEnabled(true);
+            int backhaulTime = mThresholdWaitTimer.getOrDefault(entry.getKey(), -1);
+            if (backhaulTime > 0) {
+                builder.setHysteresisMs(backhaulTime);
             }
+            mSignalThresholdInfoList.add(builder.build());
+            Log.d(mTag, "Updated SignalThresholdInfo List: " + mSignalThresholdInfoList);
         }
     }
 
@@ -431,7 +426,6 @@ public class CellularQualityMonitor extends QualityMonitor {
             mSSUpdateRequest = null;
         }
         mSignalStrengthListener.unregister();
-        AlternativeEventListener.getInstance(mContext, mSlotIndex).setEcnoSignalThreshold(null);
     }
 
     /** This methods starts listening for the thresholds. */
@@ -513,7 +507,7 @@ public class CellularQualityMonitor extends QualityMonitor {
                     signalStrength = ((CellSignalStrengthNr) css).getSsSinr();
                 }
                 break;
-            case QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO:
+            case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_ECNO:
                 if (accessNetwork == AccessNetworkType.UTRAN
                         && css instanceof CellSignalStrengthWcdma) {
                     signalStrength = ((CellSignalStrengthWcdma) css).getEcNo();
@@ -562,9 +556,9 @@ public class CellularQualityMonitor extends QualityMonitor {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR:
                 return threshold >= SignalThresholdInfo.SIGNAL_SSSINR_MIN_VALUE
                         && threshold <= SignalThresholdInfo.SIGNAL_SSSINR_MAX_VALUE;
-            case QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO:
-                return threshold >= QnsConstants.SIGNAL_ECNO_MIN_VALUE
-                        && threshold <= QnsConstants.SIGNAL_ECNO_MAX_VALUE;
+            case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_ECNO:
+                return threshold >= SignalThresholdInfo.SIGNAL_ECNO_MIN_VALUE
+                        && threshold <= SignalThresholdInfo.SIGNAL_ECNO_MAX_VALUE;
 
             default:
                 return false;

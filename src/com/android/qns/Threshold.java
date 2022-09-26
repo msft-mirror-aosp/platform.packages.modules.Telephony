@@ -219,7 +219,7 @@ public class Threshold {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR:
                 sb.append("SSSINR");
                 break;
-            case QnsConstants.SIGNAL_MEASUREMENT_TYPE_ECNO:
+            case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_ECNO:
                 sb.append("ECNO");
                 break;
             case QnsConstants.SIGNAL_MEASUREMENT_AVAILABILITY:

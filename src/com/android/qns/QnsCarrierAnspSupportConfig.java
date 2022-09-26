@@ -531,20 +531,20 @@ public class QnsCarrierAnspSupportConfig {
     /**
      * List of 3 customized utran(3G) Ec/No threshold values which are considered for rove-in and
      * rove-out in idle state.
-     * <p>
-     * 3 threshold integers must be within the boundaries:
-     * Note: When a value is set to "65535", it means an invalid threshold value.
-     * {@link QnsConstants#SIGNAL_ECNO_MIN_VALUE}
-     * {@link QnsConstants#SIGNAL_ECNO_MAX_VALUE}
      *
-     * {@code 3 values defined by default(Good, Bad, Worst)}
+     * <p>3 threshold integers must be within the boundaries: Note: When a value is set to "65535",
+     * it means an invalid threshold value. {@link SignalThresholdInfo#SIGNAL_ECNO_MIN_VALUE} {@link
+     * SignalThresholdInfo#SIGNAL_ECNO_MAX_VALUE}
+     *
+     * <p>{@code 3 values defined by default(Good, Bad, Worst)}
+     *
      * <UL>
-     *  <LI>"Good:65535"</LI>
-     *  <LI>"Bad:65535"</LI>
-     *  <LI>"Worst:65535"</LI>
+     *   <LI>"Good:65535"
+     *   <LI>"Bad:65535"
+     *   <LI>"Worst:65535"
      * </UL>
-     * <p>
-     * This key is considered invalid if the format is violated. If the key not configured, a
+     *
+     * <p>This key is considered invalid if the format is violated. If the key not configured, a
      * default value will be applied.
      */
     public static final String KEY_IDLE_UTRAN_ECNO_INT_ARRAY = "qns.idle_utran_ecno_int_array";

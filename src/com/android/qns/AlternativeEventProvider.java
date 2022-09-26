@@ -111,7 +111,6 @@ public abstract class AlternativeEventProvider {
         }
     }
 
-
     /**
      * Listener need to register CallBack with implements of EventCallback.
      *
@@ -149,7 +148,7 @@ public abstract class AlternativeEventProvider {
          */
         void onEmergencyPreferenceChanged(@AccessNetworkConstants.TransportType int transport);
 
-         /**
+        /**
          * Try WFC connection state change notification.
          *
          * @param isEnabled

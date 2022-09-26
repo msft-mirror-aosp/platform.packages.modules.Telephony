@@ -73,6 +73,7 @@ public class AlternativeEventListenerTest extends QnsTest {
                 mLatch.countDown();
             }
         }
+
     }
 
     @Before
@@ -460,4 +461,5 @@ public class AlternativeEventListenerTest extends QnsTest {
         assertNotNull(mThresholds);
         assertArrayEquals(ecnoThresholds, mThresholds);
     }
+
 }

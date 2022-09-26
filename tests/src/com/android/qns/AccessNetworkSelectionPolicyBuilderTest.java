@@ -58,9 +58,6 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     @Mock private QnsCarrierConfigManager mConfig;
 
     private AccessNetworkSelectionPolicyBuilder mBuilder = null;
-
-    // static final int WLAN = AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
-    // static final int WWAN = AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
     static final int ROVE_IN = QnsConstants.ROVE_IN;
     static final int ROVE_OUT = QnsConstants.ROVE_OUT;
     static final int IDLE = QnsConstants.CALL_TYPE_IDLE;
@@ -70,38 +67,11 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     static final int CELL_PREF = QnsConstants.CELL_PREF;
     static final int HOME = QnsConstants.COVERAGE_HOME;
     static final int ROAM = QnsConstants.COVERAGE_ROAM;
-    // static final int IWLAN = AccessNetworkConstants.AccessNetworkType.IWLAN;
-    // static final int GUARDING_NONE = QnsConstants.GUARDING_NONE;
-    // static final int GUARDING_CELL = QnsConstants.GUARDING_CELLULAR;
-    // static final int GUARDING_WIFI = QnsConstants.GUARDING_WIFI;
-
-    /*
-    static final int AVAILABILITY = QnsConstants.SIGNAL_MEASUREMENT_AVAILABILITY;
-    static final int EQUAL = QnsConstants.THRESHOLD_MATCH_TYPE_EQUAL_TO;
-    static final int LARGER = QnsConstants.THRESHOLD_EQUAL_OR_LARGER;
-    static final int SMALLER = QnsConstants.THRESHOLD_EQUAL_OR_SMALLER;
-    */
     static final int NGRAN = AccessNetworkType.NGRAN;
     static final int EUTRAN = AccessNetworkType.EUTRAN;
     static final int UTRAN = AccessNetworkType.UTRAN;
     static final int GERAN = AccessNetworkType.GERAN;
     static final int IWLAN = AccessNetworkType.IWLAN;
-    /*
-        static final int RSSI = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI;
-        static final int SSRSRP = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP;
-        static final int SSRSRQ = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRQ;
-        static final int SSSINR = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR;
-        static final int RSRP = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP;
-        static final int RSRQ = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ;
-        static final int RSSNR = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR;
-        static final int RSCP = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP;
-        static final int ECNO = SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR + 2;
-        static final int AVAIL = QnsConstants.SIGNAL_AVAILABLE;
-        static final int UNAVAIL = QnsConstants.SIGNAL_UNAVAILABLE;
-        static final int GOOD = QnsConstants.POLICY_GOOD;
-        static final int BAD = QnsConstants.POLICY_BAD;
-        static final int TOLERABLE = QnsConstants.POLICY_TOLERABLE;
-    */
 
     private HashMap<String, QnsConfigArray> mTestConfigsMap =
             new HashMap<String, QnsConfigArray>() {

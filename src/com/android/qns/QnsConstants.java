@@ -16,8 +16,6 @@
 
 package com.android.qns;
 
-import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR;
-
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.telephony.AccessNetworkConstants;
@@ -57,11 +55,6 @@ public class QnsConstants {
     public static final int KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD = -80;
     public static final int KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD = -65;
     public static final int KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD = -75;
-
-    // The max and min values in 3GPP TS 45.008.
-    public static final int SIGNAL_ECNO_MIN_VALUE = -24;
-    public static final int SIGNAL_ECNO_MAX_VALUE = 0;
-    public static final int SIGNAL_MEASUREMENT_TYPE_ECNO = SIGNAL_MEASUREMENT_TYPE_SSSINR + 2;
 
     public static final int CALL_TYPE_IDLE = 0;
     public static final int CALL_TYPE_VOICE = 1;
