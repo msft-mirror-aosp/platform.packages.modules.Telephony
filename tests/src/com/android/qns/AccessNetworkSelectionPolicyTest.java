@@ -23,9 +23,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.SignalThresholdInfo;
-import android.telephony.data.ApnSetting;
 
 import com.android.qns.AccessNetworkSelectionPolicy.GuardingPreCondition;
 import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
@@ -43,7 +43,7 @@ import java.util.List;
 
 @RunWith(JUnit4.class)
 public class AccessNetworkSelectionPolicyTest extends QnsTest {
-    int apnType = ApnSetting.TYPE_IMS;
+    int mNetCapability = NetworkCapabilities.NET_CAPABILITY_IMS;
     int targetTransportType = AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
     private PreCondition mPreCondition =
             new PreCondition(
@@ -62,21 +62,10 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     }
 
     @Test
-    public void testCanHandleApnType() {
-        AccessNetworkSelectionPolicy ansp =
-                new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, mPreCondition, thgroups);
-        assertTrue(ansp.canHandleApnType(ApnSetting.TYPE_IMS));
-        assertFalse(ansp.canHandleApnType(ApnSetting.TYPE_EMERGENCY));
-        assertFalse(ansp.canHandleApnType(ApnSetting.TYPE_XCAP));
-        assertFalse(ansp.canHandleApnType(ApnSetting.TYPE_MMS));
-    }
-
-    @Test
     public void testGetTargetTransportType() {
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, mPreCondition, thgroups);
+                        mNetCapability, targetTransportType, mPreCondition, thgroups);
         assertEquals(targetTransportType, ansp.getTargetTransportType());
         assertNotEquals(AccessNetworkConstants.TRANSPORT_TYPE_WLAN, ansp.getTargetTransportType());
     }
@@ -85,7 +74,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     public void testSatisfyPrecondition() {
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, mPreCondition, thgroups);
+                        mNetCapability, targetTransportType, mPreCondition, thgroups);
         assertTrue(
                 ansp.satisfyPrecondition(
                         new PreCondition(
@@ -149,7 +138,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
 
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, mPreCondition, thgroups);
+                        mNetCapability, targetTransportType, mPreCondition, thgroups);
 
         assertFalse(
                 ansp.satisfiedByThreshold(
@@ -197,7 +186,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                 .thenReturn(-80);
         AccessNetworkSelectionPolicy ansp =
                 new AccessNetworkSelectionPolicy(
-                        apnType, targetTransportType, mPreCondition, thgroups);
+                        mNetCapability, targetTransportType, mPreCondition, thgroups);
 
         assertNull(ansp.findUnmatchedThresholds(null, mockCellularQualityMonitor));
         assertNull(ansp.findUnmatchedThresholds(mockWifiQualityMonitor, null));
@@ -323,17 +312,17 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                         QnsConstants.GUARDING_CELLULAR);
 
         GuardingPreCondition copy = guardingPreCondition;
-        assertTrue(guardingPreCondition.equals(copy));
+        assertEquals(guardingPreCondition, copy);
 
         PreCondition preCondition = guardingPreCondition;
-        assertTrue(guardingPreCondition.equals(preCondition));
+        assertEquals(guardingPreCondition, preCondition);
 
         preCondition =
                 new PreCondition(
                         QnsConstants.CALL_TYPE_IDLE,
                         QnsConstants.CELL_PREF,
                         QnsConstants.COVERAGE_ROAM);
-        assertFalse(guardingPreCondition.equals(preCondition));
+        assertNotEquals(guardingPreCondition, preCondition);
 
         preCondition =
                 new GuardingPreCondition(
@@ -341,13 +330,14 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                         QnsConstants.CELL_PREF,
                         QnsConstants.COVERAGE_HOME,
                         QnsConstants.GUARDING_CELLULAR);
-        assertFalse(guardingPreCondition.equals(preCondition));
+        assertNotEquals(guardingPreCondition, preCondition);
     }
 
     @Test
     public void testHasWifiThresholdWithoutCellularCondition() {
         AccessNetworkSelectionPolicy ansp =
-                new AccessNetworkSelectionPolicy(apnType, targetTransportType, mPreCondition, null);
+                new AccessNetworkSelectionPolicy(
+                        mNetCapability, targetTransportType, mPreCondition, null);
         AccessNetworkSelectionPolicy.PostCondition postCondition = ansp.new PostCondition(null);
         assertFalse(postCondition.hasWifiThresholdWithoutCellularCondition());
 

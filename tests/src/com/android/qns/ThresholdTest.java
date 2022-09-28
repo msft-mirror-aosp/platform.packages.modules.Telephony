@@ -135,7 +135,7 @@ public class ThresholdTest {
     }
 
     @Test
-    public void testIsMultipleAPNTypeCheckCriteria() {
+    public void testIsMultipleNetCapabilityTypeCheckCriteria() {
         Threshold[] th =
                 new Threshold[] {
                     new Threshold(

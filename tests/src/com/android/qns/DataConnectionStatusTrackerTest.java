@@ -41,6 +41,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -90,7 +91,10 @@ public class DataConnectionStatusTrackerTest {
                     super.onLooperPrepared();
                     mDataConnectionStatusTracker =
                             new DataConnectionStatusTracker(
-                                    mContext, this.getLooper(), 0, ApnSetting.TYPE_IMS);
+                                    mContext,
+                                    this.getLooper(),
+                                    0,
+                                    NetworkCapabilities.NET_CAPABILITY_IMS);
                     setReady(true);
                 }
             };
@@ -543,7 +547,7 @@ public class DataConnectionStatusTrackerTest {
 
         loadPrecisionDataConnectionStateWithApnSetting(
                 TRANSPORT_TYPE_WLAN,
-                ApnSetting.TYPE_IMS,
+                NetworkCapabilities.NET_CAPABILITY_IMS,
                 TelephonyManager.DATA_CONNECTING,
                 TelephonyManager.NETWORK_TYPE_IWLAN);
 
@@ -556,7 +560,7 @@ public class DataConnectionStatusTrackerTest {
         mReady = false;
         loadPrecisionDataConnectionStateWithApnSetting(
                 TRANSPORT_TYPE_WLAN,
-                ApnSetting.TYPE_IMS,
+                NetworkCapabilities.NET_CAPABILITY_IMS,
                 TelephonyManager.DATA_CONNECTED,
                 TelephonyManager.NETWORK_TYPE_IWLAN);
 
@@ -759,7 +763,7 @@ public class DataConnectionStatusTrackerTest {
             int accessNetwork, int apnType, int telephonyState, int currentRat) {
         ApnSetting apnSetting =
                 new ApnSetting.Builder()
-                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                        .setApnTypeBitmask(NetworkCapabilities.NET_CAPABILITY_IMS)
                         .setApnName("ims")
                         .setEntryName("IMS")
                         .setApnTypeBitmask(apnType)
@@ -828,7 +832,7 @@ public class DataConnectionStatusTrackerTest {
 
     private void validateApnSetting(int transportType) {
         ApnSetting apnSetting = mDataConnectionStatusTracker.getLastApnSetting(transportType);
-        Assert.assertTrue(apnSetting.canHandleType(ApnSetting.TYPE_IMS));
+        Assert.assertTrue(apnSetting.canHandleType(NetworkCapabilities.NET_CAPABILITY_IMS));
     }
 
     @After

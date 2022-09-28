@@ -24,8 +24,8 @@ import java.util.List;
 
 public class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicyBuilder {
 
-    public AnspImsPreferModePolicyBuilder(Context context, int slotIndex, int apnType) {
-        super(context, slotIndex, apnType);
+    public AnspImsPreferModePolicyBuilder(Context context, int slotIndex, int netCapability) {
+        super(context, slotIndex, netCapability);
         LOG_TAG = "QnsAnspImsPrefBuilder";
     }
 

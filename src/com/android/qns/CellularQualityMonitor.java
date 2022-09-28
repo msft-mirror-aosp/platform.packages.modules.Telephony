@@ -18,6 +18,7 @@ package com.android.qns;
 import static android.telephony.CellInfo.UNAVAILABLE;
 
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -37,7 +38,6 @@ import android.telephony.SignalThresholdInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -73,9 +73,9 @@ public class CellularQualityMonitor extends QualityMonitor {
     private final HandlerThread mHandlerThread;
 
     /**
-     * thresholdMatrix stores the thresholds according to measurement type and apn type. For ex:
-     * LTE_RSRP: {TYPE_IMS: [-112, -110, -90], TYPE_XCAP: [-100, -99]} LTE_RSSNR:{TYPE_IMS: [-10,
-     * -15], TYPE_EMERGENCY: [-15]}
+     * thresholdMatrix stores the thresholds according to measurement type and netCapability. For
+     * ex: LTE_RSRP: {TYPE_IMS: [-112, -110, -90], TYPE_XCAP: [-100, -99]} LTE_RSSNR:{TYPE_IMS:
+     * [-10, -15], TYPE_EMERGENCY: [-15]}
      */
     private final ConcurrentHashMap<String, SparseArray<List<Integer>>> mThresholdMatrix =
             new ConcurrentHashMap<>();
@@ -287,17 +287,20 @@ public class CellularQualityMonitor extends QualityMonitor {
 
     @Override
     public synchronized void registerThresholdChange(
-            ThresholdCallback thresholdCallback, int apnType, Threshold[] ths, int slotIndex) {
-        Log.d(mTag, "registerThresholdChange for apnType= " + apnType);
-        super.registerThresholdChange(thresholdCallback, apnType, ths, slotIndex);
-        updateThresholdsForApn(apnType, slotIndex, ths);
+            ThresholdCallback thresholdCallback,
+            int netCapability,
+            Threshold[] ths,
+            int slotIndex) {
+        Log.d(mTag, "registerThresholdChange for netCapability= " + netCapability);
+        super.registerThresholdChange(thresholdCallback, netCapability, ths, slotIndex);
+        updateThresholdsForNetCapability(netCapability, slotIndex, ths);
     }
 
     @Override
-    public synchronized void unregisterThresholdChange(int apnType, int slotIndex) {
-        Log.d(mTag, "unregisterThresholdChange for apnType= " + apnType);
-        super.unregisterThresholdChange(apnType, slotIndex);
-        updateThresholdsMatrix(apnType, null);
+    public synchronized void unregisterThresholdChange(int netCapability, int slotIndex) {
+        Log.d(mTag, "unregisterThresholdChange for netCapability= " + netCapability);
+        super.unregisterThresholdChange(netCapability, slotIndex);
+        updateThresholdsMatrix(netCapability, null);
         if (updateRegisteredThresholdsArray()) {
             createSignalThresholdsInfoList();
             listenRequests();
@@ -305,13 +308,14 @@ public class CellularQualityMonitor extends QualityMonitor {
     }
 
     @Override
-    public synchronized void updateThresholdsForApn(int apnType, int slotIndex, Threshold[] ths) {
-        Log.d(mTag, "updateThresholdsForApn for apnType= " + apnType);
-        super.updateThresholdsForApn(apnType, slotIndex, ths);
+    public synchronized void updateThresholdsForNetCapability(
+            int netCapability, int slotIndex, Threshold[] ths) {
+        Log.d(mTag, "updateThresholdsForNetCapability for netCapability= " + netCapability);
+        super.updateThresholdsForNetCapability(netCapability, slotIndex, ths);
         if (ths != null && ths.length > 0 && !validateThresholdList(ths)) {
             throw new IllegalStateException("Thresholds are not in valid range.");
         }
-        updateThresholdsMatrix(apnType, ths);
+        updateThresholdsMatrix(netCapability, ths);
         if (updateRegisteredThresholdsArray()) {
             createSignalThresholdsInfoList();
             listenRequests();
@@ -350,13 +354,16 @@ public class CellularQualityMonitor extends QualityMonitor {
     private boolean updateRegisteredThresholdsArray() {
         boolean isUpdated = false;
         for (Map.Entry<String, SparseArray<List<Integer>>> entry : mThresholdMatrix.entrySet()) {
-            SparseArray<List<Integer>> apnThresholds =
+            SparseArray<List<Integer>> netCapabilityThresholds =
                     mThresholdMatrix.getOrDefault(entry.getKey(), new SparseArray<>());
             Set<Integer> thresholdsSet = new HashSet<>(); // to store unique thresholds
             int count = 0;
-            for (int i = 0; (i < apnThresholds.size() && count <= MAX_THRESHOLD_COUNT); i++) {
+            for (int i = 0;
+                    (i < netCapabilityThresholds.size() && count <= MAX_THRESHOLD_COUNT);
+                    i++) {
                 List<Integer> thresholdsList =
-                        apnThresholds.get(apnThresholds.keyAt(i), new ArrayList<>());
+                        netCapabilityThresholds.get(
+                                netCapabilityThresholds.keyAt(i), new ArrayList<>());
                 for (int t : thresholdsList) {
                     if (thresholdsSet.add(t)) {
                         count++;
@@ -389,14 +396,15 @@ public class CellularQualityMonitor extends QualityMonitor {
         return isUpdated;
     }
 
-    private void updateThresholdsMatrix(int apnType, Threshold[] ths) {
+    private void updateThresholdsMatrix(int netCapability, Threshold[] ths) {
 
         Log.d(mTag, "Current threshold matrix: " + mThresholdMatrix);
-        // clear old threshold for the apn type in given apn type from threshold matrix.
+        // clear old threshold for the netCapability in given netCapability from threshold matrix.
         for (Map.Entry<String, SparseArray<List<Integer>>> entry : mThresholdMatrix.entrySet()) {
-            SparseArray<List<Integer>> apnThresholds = mThresholdMatrix.get(entry.getKey());
-            if (apnThresholds != null) {
-                apnThresholds.remove(apnType);
+            SparseArray<List<Integer>> netCapabilityThresholds =
+                    mThresholdMatrix.get(entry.getKey());
+            if (netCapabilityThresholds != null) {
+                netCapabilityThresholds.remove(netCapability);
             }
         }
         if (ths == null || ths.length == 0) {
@@ -406,12 +414,13 @@ public class CellularQualityMonitor extends QualityMonitor {
         // store new thresholds in threshold matrix
         for (Threshold th : ths) {
             String key = th.getAccessNetwork() + "_" + th.getMeasurementType();
-            SparseArray<List<Integer>> apnThresholds =
+            SparseArray<List<Integer>> netCapabilityThresholds =
                     mThresholdMatrix.getOrDefault(key, new SparseArray<>());
-            List<Integer> thresholdsList = apnThresholds.get(apnType, new ArrayList<>());
+            List<Integer> thresholdsList =
+                    netCapabilityThresholds.get(netCapability, new ArrayList<>());
             thresholdsList.add(th.getThreshold());
-            apnThresholds.put(apnType, thresholdsList);
-            mThresholdMatrix.put(key, apnThresholds);
+            netCapabilityThresholds.put(netCapability, thresholdsList);
+            mThresholdMatrix.put(key, netCapabilityThresholds);
             mThresholdWaitTimer.put(key, th.getWaitTime());
         }
         Log.d(mTag, "updated thresholds matrix: " + mThresholdMatrix);
@@ -441,7 +450,7 @@ public class CellularQualityMonitor extends QualityMonitor {
             mSignalStrengthListener.register();
             if (!mIsQnsListenerRegistered) {
                 mQnsTelephonyListener.registerQnsTelephonyInfoChanged(
-                        ApnSetting.TYPE_NONE,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         mHandler,
                         EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED,
                         null,
@@ -450,7 +459,8 @@ public class CellularQualityMonitor extends QualityMonitor {
             }
         } else {
             Log.d(mTag, "No requests are pending to listen");
-            mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_NONE, mHandler);
+            mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(
+                    NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
             mIsQnsListenerRegistered = false;
         }
     }

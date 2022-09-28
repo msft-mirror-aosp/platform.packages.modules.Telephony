@@ -22,11 +22,11 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.SignalThresholdInfo;
-import android.telephony.data.ApnSetting;
 
 import androidx.test.core.app.ApplicationProvider;
 
@@ -126,9 +126,9 @@ public class WifiQualityMonitorTest {
                         QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_IMS, ths1, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_IMS, ths1, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_XCAP, ths2, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_XCAP, ths2, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         // smaller threshold should register
         Assert.assertEquals(ths1[0].getThreshold(), regThreshold);
@@ -137,7 +137,7 @@ public class WifiQualityMonitorTest {
     @Test
     public void testUnregisterThresholdChange_RoveIn() {
         testRegisterThresholdChange_RoveIn();
-        mWifiQualityMonitor.unregisterThresholdChange(ApnSetting.TYPE_IMS, 0);
+        mWifiQualityMonitor.unregisterThresholdChange(NetworkCapabilities.NET_CAPABILITY_IMS, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths2[0].getThreshold(), regThreshold);
     }
@@ -160,9 +160,9 @@ public class WifiQualityMonitorTest {
                         QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_IMS, ths1, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_IMS, ths1, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_XCAP, ths2, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_XCAP, ths2, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         // bigger threshold should register
         Assert.assertEquals(ths2[0].getThreshold(), regThreshold);
@@ -171,13 +171,13 @@ public class WifiQualityMonitorTest {
     @Test
     public void testUnregisterThresholdChange_RoveOut() {
         testRegisterThresholdChange_RoveOut();
-        mWifiQualityMonitor.unregisterThresholdChange(ApnSetting.TYPE_XCAP, 0);
+        mWifiQualityMonitor.unregisterThresholdChange(NetworkCapabilities.NET_CAPABILITY_XCAP, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths1[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForApn_RoveIn_Add() {
+    public void testUpdateThresholdsForNetCapability_RoveIn_Add() {
         testRegisterThresholdChange_RoveIn();
         ths3[0] =
                 new Threshold(
@@ -186,21 +186,23 @@ public class WifiQualityMonitorTest {
                         -110,
                         QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
-        mWifiQualityMonitor.updateThresholdsForApn(ApnSetting.TYPE_IMS, 0, ths3);
+        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_IMS, 0, ths3);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths3[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForApn_RoveIn_Remove() {
-        testUpdateThresholdsForApn_RoveIn_Add();
-        mWifiQualityMonitor.updateThresholdsForApn(ApnSetting.TYPE_IMS, 0, null);
+    public void testUpdateThresholdsForNetCapability_RoveIn_Remove() {
+        testUpdateThresholdsForNetCapability_RoveIn_Add();
+        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_IMS, 0, null);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths2[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForApn_RoveOut_Add() {
+    public void testUpdateThresholdsForNetCapability_RoveOut_Add() {
         testRegisterThresholdChange_RoveOut();
         ths3[0] =
                 new Threshold(
@@ -209,15 +211,17 @@ public class WifiQualityMonitorTest {
                         -75,
                         QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
-        mWifiQualityMonitor.updateThresholdsForApn(ApnSetting.TYPE_IMS, 0, ths3);
+        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_IMS, 0, ths3);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths3[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForApn_RoveOut_Remove() {
+    public void testUpdateThresholdsForNetCapability_RoveOut_Remove() {
         testRegisterThresholdChange_RoveOut();
-        mWifiQualityMonitor.updateThresholdsForApn(ApnSetting.TYPE_IMS, 0, null);
+        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_IMS, 0, null);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         Assert.assertEquals(ths2[0].getThreshold(), regThreshold);
     }
@@ -258,13 +262,13 @@ public class WifiQualityMonitorTest {
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_IMS, ths1, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_IMS, ths1, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_XCAP, ths1, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_XCAP, ths1, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_EMERGENCY, ths2, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_EIMS, ths2, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, ApnSetting.TYPE_MMS, ths3, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_MMS, ths3, 0);
         Intent i = new Intent();
         i.setAction(WifiManager.RSSI_CHANGED_ACTION);
         i.putExtra(WifiManager.EXTRA_NEW_RSSI, -75);

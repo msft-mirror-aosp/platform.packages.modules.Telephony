@@ -36,7 +36,7 @@ public class DataConnectionStatusTracker {
     protected final Context mContext;
     protected final int mSlotIndex;
     private final String LOG_TAG;
-    private final int mApnType;
+    private final int mNetCapability;
     @VisibleForTesting protected final Handler mHandler;
     private DataConnectionChangedInfo mLastUpdatedDcChangedInfo;
     private final QnsTelephonyListener mQnsTelephonyListener;
@@ -78,10 +78,10 @@ public class DataConnectionStatusTracker {
     private int mState = STATE_INACTIVE;
     private int mDataConnectionFailCause;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
-    private SparseArray<ApnSetting> mApnSettings = new SparseArray<>();
+    private SparseArray<ApnSetting> mLastApnSettings = new SparseArray<>();
 
     public DataConnectionStatusTracker(
-            @NonNull Context context, Looper looper, int slotIndex, int apnType) {
+            @NonNull Context context, Looper looper, int slotIndex, int netCapability) {
         LOG_TAG =
                 QnsConstants.QNS_TAG
                         + "_"
@@ -89,17 +89,17 @@ public class DataConnectionStatusTracker {
                         + "_"
                         + slotIndex
                         + "_"
-                        + QnsUtils.getStringApnTypes(apnType);
+                        + QnsUtils.getNameOfNetCapability(netCapability);
 
         mContext = context;
         mSlotIndex = slotIndex;
-        mApnType = apnType;
+        mNetCapability = netCapability;
 
         mHandler = new DataConnectionStatusTrackerHandler(looper);
         mDataConnectionStatusRegistrants = new QnsRegistrantList();
         mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
         mQnsTelephonyListener.registerPreciseDataConnectionStateChanged(
-                mApnType, mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED, null, true);
+                mNetCapability, mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED, null, true);
     }
 
     protected void log(String s) {
@@ -133,7 +133,7 @@ public class DataConnectionStatusTracker {
     /** Returns Latest APN setting for the transport type */
     public ApnSetting getLastApnSetting(int transportType) {
         try {
-            return mApnSettings.get(transportType);
+            return mLastApnSettings.get(transportType);
         } catch (Exception e) {
             return null;
         }
@@ -247,7 +247,7 @@ public class DataConnectionStatusTracker {
             default:
                 break;
         }
-        mApnSettings.put(mTransportType, status.getApnSetting());
+        mLastApnSettings.put(mTransportType, status.getApnSetting());
     }
 
     private void notifyDataConnectionStarted(int transportType) {
@@ -272,7 +272,7 @@ public class DataConnectionStatusTracker {
     }
 
     public void close() {
-        mQnsTelephonyListener.unregisterPreciseDataConnectionStateChanged(mApnType, mHandler);
+        mQnsTelephonyListener.unregisterPreciseDataConnectionStateChanged(mNetCapability, mHandler);
         mDataConnectionStatusRegistrants.removeAll();
     }
 

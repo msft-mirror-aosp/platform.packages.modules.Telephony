@@ -32,9 +32,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.Rlog;
-import android.telephony.data.ApnSetting;
 
 import com.android.qns.AccessNetworkSelectionPolicy.PreCondition;
 import com.android.qns.QnsCarrierConfigManager.QnsConfigArray;
@@ -218,7 +218,9 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-        mBuilder = new AccessNetworkSelectionPolicyBuilder(mConfig, ApnSetting.TYPE_IMS);
+        mBuilder =
+                new AccessNetworkSelectionPolicyBuilder(
+                        mConfig, NetworkCapabilities.NET_CAPABILITY_IMS);
         stubConfigManager();
     }
 
@@ -388,11 +390,21 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
         doReturn(false).when(mConfig).isCurrentTransportTypeInVoiceCallSupported();
         doReturn(false).when(mConfig).isChooseWfcPreferredTransportInBothBadCondition(anyInt());
         doReturn(true).when(mConfig).allowImsOverIwlanCellularLimitedCase();
-        doReturn(true).when(mConfig).isAccessNetworkAllowed(NGRAN, ApnSetting.TYPE_IMS);
-        doReturn(true).when(mConfig).isAccessNetworkAllowed(EUTRAN, ApnSetting.TYPE_IMS);
-        doReturn(false).when(mConfig).isAccessNetworkAllowed(UTRAN, ApnSetting.TYPE_IMS);
-        doReturn(false).when(mConfig).isAccessNetworkAllowed(GERAN, ApnSetting.TYPE_IMS);
-        doReturn(false).when(mConfig).isAccessNetworkAllowed(IWLAN, ApnSetting.TYPE_IMS);
+        doReturn(true)
+                .when(mConfig)
+                .isAccessNetworkAllowed(NGRAN, NetworkCapabilities.NET_CAPABILITY_IMS);
+        doReturn(true)
+                .when(mConfig)
+                .isAccessNetworkAllowed(EUTRAN, NetworkCapabilities.NET_CAPABILITY_IMS);
+        doReturn(false)
+                .when(mConfig)
+                .isAccessNetworkAllowed(UTRAN, NetworkCapabilities.NET_CAPABILITY_IMS);
+        doReturn(false)
+                .when(mConfig)
+                .isAccessNetworkAllowed(GERAN, NetworkCapabilities.NET_CAPABILITY_IMS);
+        doReturn(false)
+                .when(mConfig)
+                .isAccessNetworkAllowed(IWLAN, NetworkCapabilities.NET_CAPABILITY_IMS);
 
         String[] conditions;
         List<Integer> directionList = List.of(ROVE_IN, ROVE_OUT);

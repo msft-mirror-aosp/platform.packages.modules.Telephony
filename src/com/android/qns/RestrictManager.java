@@ -21,6 +21,7 @@ import static com.android.qns.DataConnectionStatusTracker.STATE_HANDOVER;
 
 import android.annotation.IntDef;
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -28,7 +29,6 @@ import android.os.SystemClock;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.util.Log;
 import android.util.Pair;
 
@@ -163,7 +163,7 @@ public class RestrictManager {
     private AlternativeEventListener mAltEventListener;
     private QnsImsManager mQnsImsManager;
     private WifiBackhaulMonitor mWifiBackhaulMonitor;
-    private int mApnType;
+    private int mNetCapability;
     private int mSlotId;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
     private int mLastEvaluatedTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
@@ -301,7 +301,7 @@ public class RestrictManager {
                         mFallbackCounterOnDataConnectionFail = 0;
                     }
 
-                    if (mApnType == ApnSetting.TYPE_IMS
+                    if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                             && hasRestrictionType(
                                     AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                                     RESTRICT_TYPE_FALLBACK_TO_WWAN_RTT_BACKHAUL_FAIL)) {
@@ -422,9 +422,9 @@ public class RestrictManager {
             Context context,
             Looper loop,
             int slotId,
-            int apnType,
+            int netCapability,
             DataConnectionStatusTracker dcst) {
-        this(context, loop, slotId, apnType, dcst, null, null);
+        this(context, loop, slotId, netCapability, dcst, null, null);
     }
 
     @VisibleForTesting
@@ -432,7 +432,7 @@ public class RestrictManager {
             Context context,
             Looper loop,
             int slotId,
-            int apnType,
+            int netCapability,
             DataConnectionStatusTracker dcst,
             QnsCarrierConfigManager configManager,
             AlternativeEventListener altListener) {
@@ -447,7 +447,7 @@ public class RestrictManager {
                         + "_"
                         + slotId
                         + "_"
-                        + QnsUtils.getStringApnTypes(apnType);
+                        + QnsUtils.getNameOfNetCapability(netCapability);
         mTelephonyListener = QnsTelephonyListener.getInstance(context, slotId);
         mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotId);
         if (configManager == null) {
@@ -457,7 +457,7 @@ public class RestrictManager {
         }
         mSlotId = slotId;
         mHandler = new RestrictManagerHandler(loop);
-        mApnType = apnType;
+        mNetCapability = netCapability;
         mDataConnectionStatusTracker = dcst;
         if (altListener == null) {
             mAltEventListener = AlternativeEventListener.getInstance(context, mSlotId);
@@ -466,13 +466,13 @@ public class RestrictManager {
         }
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
                 mHandler, EVENT_DATA_CONNECTION_CHANGED);
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mTelephonyListener.registerCallStateListener(
                     mHandler, EVENT_CALL_STATE_CHANGED, null, true);
             mTelephonyListener.registerSrvccStateListener(
                     mHandler, EVENT_SRVCC_STATE_CHANGED, null);
         }
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mQnsImsManager = QnsImsManager.getInstance(context, slotId);
             mQnsImsManager.registerImsRegistrationStatusChanged(
                     mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
@@ -505,20 +505,22 @@ public class RestrictManager {
 
     public void close() {
         mDataConnectionStatusTracker.unRegisterDataConnectionStatusChanged(mHandler);
-        if (mIsRttStatusCheckRegistered && mApnType == ApnSetting.TYPE_IMS) {
+        if (mIsRttStatusCheckRegistered
+                && mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mIsRttStatusCheckRegistered = false;
             mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
         }
 
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mTelephonyListener.unregisterCallStateChanged(mHandler);
             mTelephonyListener.unregisterSrvccStateChanged(mHandler);
         }
         mQnsEventDispatcher.unregisterEvent(mHandler);
-        if (mApnType == ApnSetting.TYPE_IMS || mApnType == ApnSetting.TYPE_EMERGENCY) {
-            mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
         }
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
         }
     }
@@ -547,7 +549,7 @@ public class RestrictManager {
 
     @VisibleForTesting
     void restrictNonPreferredTransport() {
-        if (mApnType == ApnSetting.TYPE_IMS
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 && !mCellularNetworkStatusTracker.isAirplaneModeEnabled()) {
             Log.d(TAG, "Restrict non-preferred transport at power up");
             int transportType = getPreferredTransportType();
@@ -573,7 +575,7 @@ public class RestrictManager {
     }
 
     private void checkIfCancelNonPreferredRestriction(int transportType) {
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             releaseRestriction(transportType, RESTRICT_TYPE_NON_PREFERRED_TRANSPORT);
         }
     }
@@ -709,7 +711,7 @@ public class RestrictManager {
         clearInitialPdnConnectionFailFallbackRestriction();
 
         checkIfCancelNonPreferredRestriction(getOtherTransport(transportType));
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             if (mLastEvaluatedTransportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID
                     || transportType == mLastEvaluatedTransportType) {
                 processHandoverGuardingOperation(transportType);
@@ -846,7 +848,7 @@ public class RestrictManager {
 
     private void checkFallbackOnDataConnectionFail(int transportType) {
         int[] fallbackConfigOnInitDataFail =
-                mQnsCarrierConfigManager.getInitialDataConnectionFallbackConfig(mApnType);
+                mQnsCarrierConfigManager.getInitialDataConnectionFallbackConfig(mNetCapability);
 
         Log.d(
                 TAG,
@@ -923,7 +925,8 @@ public class RestrictManager {
                 currTransportType,
                 RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL,
                 sReleaseEventMap.get(RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL),
-                mQnsCarrierConfigManager.getFallbackGuardTimerOnInitialConnectionFail(mApnType));
+                mQnsCarrierConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        mNetCapability));
     }
 
     @VisibleForTesting
@@ -971,7 +974,7 @@ public class RestrictManager {
     }
 
     private void registerRttStatusCheckEvent() {
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
 
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 if (!mIsRttStatusCheckRegistered) {
@@ -996,7 +999,7 @@ public class RestrictManager {
                             event.getReasonInfo().getCode(), prefMode);
             if (fallbackTimeMillis > 0
                     && mQnsCarrierConfigManager.isAccessNetworkAllowed(
-                            mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
+                            mCellularAccessNetwork, NetworkCapabilities.NET_CAPABILITY_IMS)) {
                 fallbackToWwanForImsRegistration(fallbackTimeMillis);
             }
         }
@@ -1011,7 +1014,7 @@ public class RestrictManager {
                             event.getReasonInfo().getCode(), prefMode);
             if (fallbackTimeMillis > 0
                     && mQnsCarrierConfigManager.isAccessNetworkAllowed(
-                            mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
+                            mCellularAccessNetwork, NetworkCapabilities.NET_CAPABILITY_IMS)) {
                 fallbackToWwanForImsRegistration(fallbackTimeMillis);
             }
         }
@@ -1022,7 +1025,7 @@ public class RestrictManager {
         int fallbackTimeMillis = mQnsCarrierConfigManager.getWlanRttFallbackHystTimer();
         if (fallbackTimeMillis > 0
                 && mQnsCarrierConfigManager.isAccessNetworkAllowed(
-                        mCellularAccessNetwork, ApnSetting.TYPE_IMS)) {
+                        mCellularAccessNetwork, NetworkCapabilities.NET_CAPABILITY_IMS)) {
 
             fallbackToWwanForImsRegistration(
                     AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
@@ -1144,8 +1147,9 @@ public class RestrictManager {
     void setCellularAccessNetwork(int accessNetwork) {
         mCellularAccessNetwork = accessNetwork;
         Log.d(TAG, "Current Cellular Network:" + mCellularAccessNetwork);
-        if (mApnType == ApnSetting.TYPE_IMS
-                && !mQnsCarrierConfigManager.isAccessNetworkAllowed(accessNetwork, mApnType)) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                && !mQnsCarrierConfigManager.isAccessNetworkAllowed(
+                        accessNetwork, mNetCapability)) {
             processReleaseEvent(
                     AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RELEASE_EVENT_IMS_NOT_SUPPORT_RAT);
         }
@@ -1391,7 +1395,7 @@ public class RestrictManager {
             if (hoRestrictTimeOnLowRtpQuality > 0) {
                 Log.d(TAG, "registerLowRtpQualityEvent");
                 mAltEventListener.registerLowRtpQualityEvent(
-                        mApnType,
+                        mNetCapability,
                         mHandler,
                         EVENT_LOW_RTP_QUALITY_REPORTED,
                         null,
@@ -1401,16 +1405,17 @@ public class RestrictManager {
     }
 
     private void unregisterLowRtpQualityEvent() {
-        if (mApnType == ApnSetting.TYPE_IMS || mApnType == ApnSetting.TYPE_EMERGENCY) {
-            mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
         }
     }
 
     private int getGuardingTimeMillis(int transportType, int callType) {
         int delayMillis;
-        switch (mApnType) {
-            case ApnSetting.TYPE_IMS:
-            case ApnSetting.TYPE_EMERGENCY:
+        switch (mNetCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
                 if (!mQnsCarrierConfigManager.isHysteresisTimerEnabled(mCellularCoverage)) {
                     Log.d(
                             TAG,
@@ -1420,10 +1425,12 @@ public class RestrictManager {
                 }
                 if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
                     delayMillis =
-                            mQnsCarrierConfigManager.getWwanHysteresisTimer(mApnType, callType);
+                            mQnsCarrierConfigManager.getWwanHysteresisTimer(
+                                    mNetCapability, callType);
                 } else {
                     delayMillis =
-                            mQnsCarrierConfigManager.getWlanHysteresisTimer(mApnType, callType);
+                            mQnsCarrierConfigManager.getWlanHysteresisTimer(
+                                    mNetCapability, callType);
                 }
                 if (delayMillis > 0
                         && mQnsCarrierConfigManager.isGuardTimerHystersisOnPrefSupported()) {
@@ -1448,19 +1455,21 @@ public class RestrictManager {
                     }
                 }
                 break;
-            case ApnSetting.TYPE_MMS:
-            case ApnSetting.TYPE_XCAP:
-            case ApnSetting.TYPE_CBS:
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
                 callType =
                         mAltEventListener.isIdleState()
                                 ? QnsConstants.CALL_TYPE_IDLE
                                 : QnsConstants.CALL_TYPE_VOICE;
                 if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
                     delayMillis =
-                            mQnsCarrierConfigManager.getWwanHysteresisTimer(mApnType, callType);
+                            mQnsCarrierConfigManager.getWwanHysteresisTimer(
+                                    mNetCapability, callType);
                 } else if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
                     delayMillis =
-                            mQnsCarrierConfigManager.getWlanHysteresisTimer(mApnType, callType);
+                            mQnsCarrierConfigManager.getWlanHysteresisTimer(
+                                    mNetCapability, callType);
                 } else {
                     delayMillis = 0;
                 }
@@ -1581,7 +1590,7 @@ public class RestrictManager {
         pw.println(
                 prefix
                         + "RestrictManager["
-                        + ApnSetting.getApnTypeString(mApnType)
+                        + QnsUtils.getNameOfNetCapability(mNetCapability)
                         + "_"
                         + mSlotId
                         + "]:");

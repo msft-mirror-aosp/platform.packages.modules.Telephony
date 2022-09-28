@@ -16,9 +16,6 @@
 
 package com.android.qns;
 
-import static android.telephony.data.ApnSetting.TYPE_EMERGENCY;
-import static android.telephony.data.ApnSetting.TYPE_IMS;
-import static android.telephony.data.ApnSetting.TYPE_MMS;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
@@ -62,22 +59,6 @@ public class QnsUtils {
     private static final String CARRIER_ID_PREFIX = "carrier_config_carrierid_";
 
     /**
-     * Get Supported APN Strings from Bit mask
-     *
-     * @param apnTypesMask bitmask of APN types.
-     * @return list of APN types Strings
-     */
-    public static String getStringApnTypesFromBitmask(int apnTypesMask) {
-        StringBuilder sb = new StringBuilder();
-
-        List<Integer> apnTypes = getApnTypes(apnTypesMask);
-        final String[] types = getApnTypesString(apnTypes).split(",");
-
-        sb.append(TextUtils.join("|", types));
-        return sb.toString();
-    }
-
-    /**
      * Get supported APN types
      *
      * @param apnTypeBitmask bitmask of APN types.
@@ -99,23 +80,14 @@ public class QnsUtils {
         return types;
     }
 
-    private static String getApnTypesString(List<Integer> apnTypes) {
-        List<String> apnstrings = new ArrayList<>();
-
-        Integer[] types = apnTypes.toArray(new Integer[0]);
-        for (int i = 0; i < types.length; i++) {
-            String apnString = ApnSetting.getApnTypeString(types[i]);
-            if (!TextUtils.isEmpty(apnString)) apnstrings.add(apnString);
-        }
-        return TextUtils.join(",", apnstrings);
-    }
-
-    public static String getStringApnTypes(int apnType) {
-        return ApnSetting.getApnTypeString(apnType);
-    }
-
+    /**
+     * Get names of AccessNetworkTypes
+     *
+     * @param accessNetworkTypes list of accessNetworkType
+     * @return String of AccessNetworkTypes name
+     */
     public static String getStringAccessNetworkTypes(List<Integer> accessNetworkTypes) {
-        if (accessNetworkTypes != null && accessNetworkTypes.size() == 0) {
+        if (accessNetworkTypes == null || accessNetworkTypes.size() == 0) {
             return "[empty]";
         }
         List<String> types = new ArrayList<>();
@@ -125,15 +97,19 @@ public class QnsUtils {
         return TextUtils.join("|", types);
     }
 
+    /**
+     * Get a subId per slot id.
+     *
+     * @param context Context
+     * @param slotId slot id.
+     * @return Subscription id per slot id.
+     */
     public static int getSubId(Context context, int slotId) {
-        int subid = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
-
         try {
-            subid = getSubscriptionInfo(context, slotId).getSubscriptionId();
+            return getSubscriptionInfo(context, slotId).getSubscriptionId();
         } catch (IllegalStateException e) {
-            subid = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+            return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         }
-        return subid;
     }
 
     /**
@@ -292,7 +268,8 @@ public class QnsUtils {
      * @param capabilitiesString capability strings joined by {@code |}
      * @return Set of capabilities
      */
-    public static @NetCapability Set<Integer> getNetworkCapabilitiesFromString(
+    @NetCapability
+    public static Set<Integer> getNetworkCapabilitiesFromString(
             @NonNull String capabilitiesString) {
         // e.g. "IMS|" is not allowed
         if (!capabilitiesString.matches("(\\s*[a-zA-Z]+\\s*)(\\|\\s*[a-zA-Z]+\\s*)*")) {
@@ -312,7 +289,8 @@ public class QnsUtils {
      * @param netCaps Network capabilities.
      * @return Network capabilities in string format.
      */
-    public static @NonNull String networkCapabilitiesToString(
+    @NonNull
+    public static String networkCapabilitiesToString(
             @NetCapability @Nullable Collection<Integer> netCaps) {
         if (netCaps == null || netCaps.isEmpty()) return "";
         return "["
@@ -330,7 +308,8 @@ public class QnsUtils {
      * @param netCap Network capability.
      * @return Network capability in string format.
      */
-    public static @NonNull String networkCapabilityToString(@NetCapability int netCap) {
+    @NonNull
+    public static String networkCapabilityToString(@NetCapability int netCap) {
         switch (netCap) {
             case NetworkCapabilities.NET_CAPABILITY_MMS:
                 return "MMS";
@@ -415,8 +394,8 @@ public class QnsUtils {
      * @param capabilityString The capability in string format
      * @return The network capability. -1 if not found.
      */
-    public static @NetCapability int getNetworkCapabilityFromString(
-            @NonNull String capabilityString) {
+    @NetCapability
+    public static int getNetworkCapabilityFromString(@NonNull String capabilityString) {
         switch (capabilityString.toUpperCase(Locale.ROOT)) {
             case "MMS":
                 return NetworkCapabilities.NET_CAPABILITY_MMS;
@@ -453,6 +432,116 @@ public class QnsUtils {
         }
     }
 
+    /**
+     * Get the network capability from the apn type.
+     *
+     * @param apnType apn type.
+     * @return network capability
+     */
+    @NetCapability
+    public static int getNetCapabilityFromApnType(int apnType) {
+        switch (apnType) {
+            case ApnSetting.TYPE_IMS:
+                return NetworkCapabilities.NET_CAPABILITY_IMS;
+            case ApnSetting.TYPE_EMERGENCY:
+                return NetworkCapabilities.NET_CAPABILITY_EIMS;
+            case ApnSetting.TYPE_MMS:
+                return NetworkCapabilities.NET_CAPABILITY_MMS;
+            case ApnSetting.TYPE_XCAP:
+                return NetworkCapabilities.NET_CAPABILITY_XCAP;
+            case ApnSetting.TYPE_CBS:
+                return NetworkCapabilities.NET_CAPABILITY_CBS;
+            default:
+                throw new IllegalArgumentException("Unsupported apnType: " + apnType);
+        }
+    }
+
+    /**
+     * Get the apn type from the network capability.
+     *
+     * @param netCapability network capability.
+     * @return apn type.
+     */
+    public static int getApnTypeFromNetCapability(@NetCapability int netCapability) {
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                return ApnSetting.TYPE_IMS;
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+                return ApnSetting.TYPE_EMERGENCY;
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+                return ApnSetting.TYPE_MMS;
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return ApnSetting.TYPE_XCAP;
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
+                return ApnSetting.TYPE_CBS;
+            default:
+                throw new IllegalArgumentException("Unsupported netCapability: " + netCapability);
+        }
+    }
+
+    /**
+     * Convert a network capability to string.
+     *
+     * <p>This is for debugging and logging purposes only.
+     *
+     * @param netCapability Network capability.
+     * @return Network capability in string format.
+     */
+    @NonNull
+    public static String getNameOfNetCapability(@NetCapability int netCapability) {
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                return "ims";
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+                return "eims";
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+                return "mms";
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
+                return "cbs";
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return "xcap";
+            default:
+                throw new IllegalArgumentException("Unsupported netCapability: " + netCapability);
+        }
+    }
+
+    /**
+     * Get the network capability from the string.
+     *
+     * @param apnTypes comma(,) delimited list of APN types.
+     * @return The network capability. -1 if not found.
+     */
+    @NetCapability
+    public static List<Integer> getNetworkCapabilitiesFromApnTypesString(@NonNull String apnTypes) {
+        List<Integer> apnTypeList =
+                QnsUtils.getApnTypes(ApnSetting.getApnTypesBitmaskFromString(apnTypes));
+        List<Integer> netCapabilities =
+                apnTypeList.stream()
+                        .mapToInt(apnType -> apnType)
+                        .mapToObj(QnsUtils::getNetCapabilityFromApnType)
+                        .collect(Collectors.toList());
+        return netCapabilities;
+    }
+
+    /**
+     * Get a list of supported network capabilities from apnTypeBitmask
+     *
+     * @param apnTypeBitmask bitmask of APN types.
+     * @return list of Network Capabilities
+     */
+    public static List<Integer> getNetCapabilitiesFromApnTypeBitmask(int apnTypeBitmask) {
+        List<Integer> netCapabilities = new ArrayList<>();
+        List<Integer> apnTypes = getApnTypes(apnTypeBitmask);
+        for (int apnType : apnTypes) {
+            try {
+                netCapabilities.add(getNetCapabilityFromApnType(apnType));
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+        }
+        return netCapabilities;
+    }
+
     public static PersistableBundle readQnsDefaultConfigFromAssets(
             Context context, int qnsCarrierID) {
 
@@ -468,6 +557,7 @@ public class QnsUtils {
             PersistableBundle assetConfigBundle,
             String key) {
 
+        // TODO: PersistableBundle.get is deprecated.
         if (carrierConfigBundle == null || carrierConfigBundle.get(key) == null) {
             log("key not set in pb file: " + key);
 
@@ -696,23 +786,6 @@ public class QnsUtils {
 
     protected static void log(String log) {
         Log.d(QnsUtils.class.getSimpleName(), log);
-    }
-
-    protected static @NetCapability int apnTypeToNetworkCapability(int apnType) {
-        switch (apnType) {
-            case TYPE_IMS:
-                return NetworkCapabilities.NET_CAPABILITY_IMS;
-            case TYPE_MMS:
-                return NetworkCapabilities.NET_CAPABILITY_MMS;
-            case ApnSetting.TYPE_XCAP:
-                return NetworkCapabilities.NET_CAPABILITY_XCAP;
-            case TYPE_EMERGENCY:
-                return NetworkCapabilities.NET_CAPABILITY_EIMS;
-            case ApnSetting.TYPE_CBS:
-                return NetworkCapabilities.NET_CAPABILITY_CBS;
-            default:
-                throw new IllegalArgumentException("Unsupported apn type: " + apnType);
-        }
     }
 
     protected static class QnsExecutor implements Executor {

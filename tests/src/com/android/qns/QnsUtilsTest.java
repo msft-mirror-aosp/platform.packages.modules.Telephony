@@ -97,35 +97,6 @@ public class QnsUtilsTest {
     }
 
     @Test
-    public void testGetStringApnTypesFromBitmask() {
-        int mask = 0;
-        assertEquals("", QnsUtils.getStringApnTypesFromBitmask(mask));
-        mask = ApnSetting.TYPE_DEFAULT | ApnSetting.TYPE_MMS;
-        assertTrue(QnsUtils.getStringApnTypesFromBitmask(mask).contains("default"));
-        assertTrue(QnsUtils.getStringApnTypesFromBitmask(mask).contains("mms"));
-        mask = ApnSetting.TYPE_IMS | ApnSetting.TYPE_MMS | ApnSetting.TYPE_XCAP;
-        assertTrue(QnsUtils.getStringApnTypesFromBitmask(mask).contains("ims"));
-        assertTrue(QnsUtils.getStringApnTypesFromBitmask(mask).contains("mms"));
-        assertTrue(QnsUtils.getStringApnTypesFromBitmask(mask).contains("xcap"));
-        mask = 1 << 31;
-        assertEquals("", QnsUtils.getStringApnTypesFromBitmask(mask));
-    }
-
-    @Test
-    public void testGetStringApnTypes() {
-        int[] types =
-                new int[] {
-                    ApnSetting.TYPE_XCAP,
-                    ApnSetting.TYPE_DEFAULT,
-                    ApnSetting.TYPE_IMS,
-                    ApnSetting.TYPE_EMERGENCY
-                };
-        for (int type : types) {
-            assertEquals(ApnSetting.getApnTypeString(type), QnsUtils.getStringApnTypes(type));
-        }
-    }
-
-    @Test
     public void testGetStringAccessNetworkTypes() {
         assertEquals("[empty]", QnsUtils.getStringAccessNetworkTypes(new ArrayList<>()));
 
@@ -180,7 +151,7 @@ public class QnsUtilsTest {
 
     @Test
     public void testGetSystemElapsedRealTime() {
-        Long elapsedRealTime = SystemClock.elapsedRealtime();
+        long elapsedRealTime = SystemClock.elapsedRealtime();
         assertTrue(QnsUtils.getSystemElapsedRealTime() >= elapsedRealTime);
         assertFalse(QnsUtils.getSystemElapsedRealTime() - elapsedRealTime > 100);
     }
@@ -1033,13 +1004,6 @@ public class QnsUtilsTest {
     }
 
     @Test
-    public void testApnTypeToNetworkCapability_Invalid() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> QnsUtils.apnTypeToNetworkCapability(ApnSetting.AUTH_TYPE_UNKNOWN));
-    }
-
-    @Test
     public void testIsValidSlotIndex() {
         when(mTelephonyManager.getActiveModemCount()).thenReturn(-1, 1, 2, 3);
         assertFalse(QnsUtils.isValidSlotIndex(mContext, 0));
@@ -1160,6 +1124,61 @@ public class QnsUtilsTest {
                 QnsUtils.networkCapabilityToString(
                         NetworkCapabilities.NET_CAPABILITY_PRIORITIZE_LATENCY));
         assertEquals("Unknown(-1)", QnsUtils.networkCapabilityToString(-1));
+    }
+
+    @Test
+    public void testTransitionBtwApnTypeAndNetCapability() {
+        int[] netCapabilities =
+                new int[] {
+                    NetworkCapabilities.NET_CAPABILITY_IMS,
+                    NetworkCapabilities.NET_CAPABILITY_EIMS,
+                    NetworkCapabilities.NET_CAPABILITY_MMS,
+                    NetworkCapabilities.NET_CAPABILITY_XCAP,
+                    NetworkCapabilities.NET_CAPABILITY_CBS
+                };
+        for (int netCapability : netCapabilities) {
+            int apnType = QnsUtils.getApnTypeFromNetCapability(netCapability);
+            int netCapabilityFromApnType = QnsUtils.getNetCapabilityFromApnType(apnType);
+            assertEquals(netCapability, netCapabilityFromApnType);
+        }
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        QnsUtils.getApnTypeFromNetCapability(
+                                NetworkCapabilities.NET_CAPABILITY_INTERNET));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> QnsUtils.getNetCapabilityFromApnType(ApnSetting.TYPE_DEFAULT));
+    }
+
+    @Test
+    public void testTransitionBtwApnTypeNameAndNetCapabilityName() {
+        int[] netCapabilities =
+                new int[] {
+                    NetworkCapabilities.NET_CAPABILITY_IMS,
+                    NetworkCapabilities.NET_CAPABILITY_EIMS,
+                    NetworkCapabilities.NET_CAPABILITY_MMS,
+                    NetworkCapabilities.NET_CAPABILITY_XCAP,
+                    NetworkCapabilities.NET_CAPABILITY_CBS
+                };
+        for (int netCapability : netCapabilities) {
+            String netCapabilityName = QnsUtils.getNameOfNetCapability(netCapability);
+            int apnType = QnsUtils.getApnTypeFromNetCapability(netCapability);
+            String apnTypeName = ApnSetting.getApnTypeString(apnType);
+            int netCapabilityFromApntype = QnsUtils.getNetCapabilityFromApnType(apnType);
+            String netCapabilityNameFromApnType =
+                    QnsUtils.getNameOfNetCapability(netCapabilityFromApntype);
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+                assertEquals(netCapabilityName, "eims");
+                assertEquals(apnTypeName, "emergency");
+                assertEquals(netCapabilityName, netCapabilityNameFromApnType);
+            } else {
+                assertEquals(netCapabilityName, apnTypeName);
+                assertEquals(apnTypeName, netCapabilityNameFromApnType);
+                assertEquals(netCapabilityName, netCapabilityNameFromApnType);
+            }
+        }
     }
 
     @After

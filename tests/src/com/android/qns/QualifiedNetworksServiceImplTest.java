@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
@@ -61,7 +62,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     @Mock private QnsCarrierConfigManager mMockConfigManager;
     @Mock private QnsProvisioningListener mMockProvisioningListener;
     @Mock private QnsTelephonyListener mMockQnsTelephonyListener;
-    private int mSlotIndex = 0;
+    private final int mSlotIndex = 0;
     @Mock private AccessNetworkEvaluator mMockAne;
 
     @Before
@@ -114,28 +115,35 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     @Test
     public void testQualifiedNetworksInfo() {
         QualifiedNetworksInfo info =
-                new QualifiedNetworksInfo(ApnSetting.TYPE_IMS, new ArrayList<>());
-        assertEquals(info.getApnType(), ApnSetting.TYPE_IMS);
+                new QualifiedNetworksInfo(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, new ArrayList<>());
+        assertEquals(info.getNetCapability(), NetworkCapabilities.NET_CAPABILITY_IMS);
         assertTrue(info.getAccessNetworkTypes().isEmpty());
         info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
         assertEquals(List.of(AccessNetworkType.EUTRAN), info.getAccessNetworkTypes());
-        info.setApnType(ApnSetting.TYPE_MMS);
-        assertEquals(ApnSetting.TYPE_MMS, info.getApnType());
+        info.setNetCapability(NetworkCapabilities.NET_CAPABILITY_MMS);
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_MMS, info.getNetCapability());
     }
 
     @Test
     public void testAneCreation() {
-        int supportedApns =
-                ApnSetting.TYPE_IMS
-                        | ApnSetting.TYPE_EMERGENCY
-                        | ApnSetting.TYPE_MMS
-                        | ApnSetting.TYPE_XCAP;
-        when(mMockConfigManager.getQnsSupportedApnTypes())
-                .thenReturn(supportedApns, ApnSetting.TYPE_IMS | ApnSetting.TYPE_XCAP);
+        List<Integer> supportedNetCapabilities1 = new ArrayList<>();
+        supportedNetCapabilities1.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        supportedNetCapabilities1.add(NetworkCapabilities.NET_CAPABILITY_EIMS);
+        supportedNetCapabilities1.add(NetworkCapabilities.NET_CAPABILITY_MMS);
+        supportedNetCapabilities1.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        List<Integer> supportedNetCapabilities2 = new ArrayList<>();
+        supportedNetCapabilities2.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        supportedNetCapabilities2.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+
+        when(mMockConfigManager.getQnsSupportedNetCapabilities())
+                .thenReturn(supportedNetCapabilities1)
+                .thenReturn(supportedNetCapabilities2);
         when(mMockConfigManager.getQnsSupportedTransportType(anyInt()))
                 .thenAnswer(
                         (invocation) -> {
-                            if (ApnSetting.TYPE_XCAP == (int) invocation.getArgument(0)) {
+                            if (NetworkCapabilities.NET_CAPABILITY_XCAP
+                                    == (int) invocation.getArgument(0)) {
                                 return QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN;
                             }
                             return QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH;
@@ -206,7 +214,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
 
         QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
                 mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
-        provider.mEvaluators.put(ApnSetting.TYPE_IMS, mMockAne);
+        provider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_IMS, mMockAne);
         provider.reportThrottleStatusChanged(List.of(builder.build()));
     }
 
@@ -235,12 +243,13 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
                 mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
         QualifiedNetworksInfo info =
-                new QualifiedNetworksInfo(ApnSetting.TYPE_IMS, new ArrayList<>());
+                new QualifiedNetworksInfo(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, new ArrayList<>());
         info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
         QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
         provider.mHandler.handleMessage(
                 Message.obtain(provider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar));
-        assertEquals(info.getApnType(), ApnSetting.TYPE_IMS);
+        assertEquals(info.getNetCapability(), NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(List.of(AccessNetworkType.EUTRAN), info.getAccessNetworkTypes());
         provider.mHandler.handleMessage(
                 Message.obtain(provider.mHandler, TEST_QNS_CONFIGURATION_LOADED, ar));

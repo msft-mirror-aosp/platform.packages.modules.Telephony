@@ -18,14 +18,17 @@ package com.android.qns;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Looper;
-import android.telephony.data.ApnSetting;
 
 import org.junit.After;
 import org.junit.Before;
@@ -83,49 +86,56 @@ public class CellularNetworkStatusTrackerTest extends QnsTest {
     @Test
     public void testRegisterQnsTelephonyInfoChanged() {
         mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_IMS, mHandler, 0);
-        verify(mMockQnsTelephonyListener)
-                .registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, mHandler, 0, null, true);
-
-        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_XCAP, mHandler, 1);
-        verify(mMockQnsTelephonyListener)
-                .registerQnsTelephonyInfoChanged(ApnSetting.TYPE_XCAP, mHandler, 1, null, true);
-
-        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_MMS, mHandler, 2);
-        verify(mMockQnsTelephonyListener)
-                .registerQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, mHandler, 2, null, true);
-
-        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_EMERGENCY, mHandler, 0);
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 0);
         verify(mMockQnsTelephonyListener)
                 .registerQnsTelephonyInfoChanged(
-                        ApnSetting.TYPE_EMERGENCY, mHandler, 0, null, true);
+                        NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 0, null, true);
+
+        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_XCAP, mHandler, 1);
+        verify(mMockQnsTelephonyListener)
+                .registerQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, mHandler, 1, null, true);
+
+        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_MMS, mHandler, 2);
+        verify(mMockQnsTelephonyListener)
+                .registerQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, mHandler, 2, null, true);
+
+        mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 0);
+        verify(mMockQnsTelephonyListener)
+                .registerQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 0, null, true);
     }
 
     @Test
     public void testUnregisterQnsTelephonyInfoChanged() {
         testRegisterQnsTelephonyInfoChanged();
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_IMS, mHandler);
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
         verify(mMockQnsTelephonyListener)
-                .unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, mHandler);
+                .unregisterQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
 
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_XCAP, mHandler);
+                NetworkCapabilities.NET_CAPABILITY_XCAP, mHandler);
         verify(mMockQnsTelephonyListener)
-                .unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_XCAP, mHandler);
+                .unregisterQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, mHandler);
 
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_MMS, mHandler);
+                NetworkCapabilities.NET_CAPABILITY_MMS, mHandler);
         verify(mMockQnsTelephonyListener)
-                .unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, mHandler);
+                .unregisterQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, mHandler);
 
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(
-                ApnSetting.TYPE_EMERGENCY, mHandler);
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler);
         verify(mMockQnsTelephonyListener)
-                .unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_EMERGENCY, mHandler);
+                .unregisterQnsTelephonyInfoChanged(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler);
     }
 
     @Test

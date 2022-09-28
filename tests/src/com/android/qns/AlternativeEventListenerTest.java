@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 
 import android.content.Context;
 import android.net.LinkProperties;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Message;
 import android.os.test.TestLooper;
@@ -159,9 +160,10 @@ public class AlternativeEventListenerTest extends QnsTest {
         int expectedReason = QnsConstants.RTP_LOW_QUALITY_REASON_JITTER;
 
         // register to IMS, Emergency:
-        mListener.registerLowRtpQualityEvent(ApnSetting.TYPE_IMS, mHandler, 1, null, rtpConfig);
         mListener.registerLowRtpQualityEvent(
-                ApnSetting.TYPE_EMERGENCY, mHandler, 2, null, rtpConfig);
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null, rtpConfig);
+        mListener.registerLowRtpQualityEvent(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 2, null, rtpConfig);
 
         mAltEventProvider.notifyCallInfo(
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
@@ -209,15 +211,16 @@ public class AlternativeEventListenerTest extends QnsTest {
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
 
         // register to IMS, Emergency:
-        mListener.registerLowRtpQualityEvent(ApnSetting.TYPE_IMS, mHandler, 1, null, rtpConfig);
         mListener.registerLowRtpQualityEvent(
-                ApnSetting.TYPE_EMERGENCY, mHandler, 2, null, rtpConfig);
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null, rtpConfig);
+        mListener.registerLowRtpQualityEvent(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 2, null, rtpConfig);
         mAltEventProvider.notifyRtpLowQuality(expectedReason);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
 
         // unregister for IMS
-        mListener.unregisterLowRtpQualityEvent(ApnSetting.TYPE_IMS, mHandler);
+        mListener.unregisterLowRtpQualityEvent(NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
         mAltEventProvider.notifyRtpLowQuality(expectedReason);
         msg = mTestLooper.nextMessage();
         assertNull(msg);
@@ -230,7 +233,7 @@ public class AlternativeEventListenerTest extends QnsTest {
         assertNotNull(msg);
 
         // unregister for Emergency:
-        mListener.unregisterLowRtpQualityEvent(ApnSetting.TYPE_EMERGENCY, mHandler);
+        mListener.unregisterLowRtpQualityEvent(NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler);
         mAltEventProvider.notifyRtpLowQuality(expectedReason);
         msg = mTestLooper.nextMessage();
         assertNull(msg);
@@ -238,10 +241,14 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testForCallTypeChangedScenarios() {
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, null, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_EMERGENCY, mHandler, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_MMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, null, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_MMS, mHandler, 1, null);
 
         // Test1:
         mAltEventProvider.notifyCallInfo(
@@ -295,17 +302,22 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testUnregisterCallTypeChangedListener() {
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, null, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_EMERGENCY, mHandler, 1, null);
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_MMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, null, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_MMS, mHandler, 1, null);
 
         mAltEventProvider.notifyCallInfo(
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
 
-        mListener.unregisterCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler);
+        mListener.unregisterCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
         mAltEventProvider.notifyCallInfo(
                 1, QnsConstants.CALL_TYPE_VOICE, PreciseCallState.PRECISE_CALL_STATE_DISCONNECTED);
         msg = mTestLooper.nextMessage();
@@ -316,7 +328,8 @@ public class AlternativeEventListenerTest extends QnsTest {
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
 
-        mListener.unregisterCallTypeChangedListener(ApnSetting.TYPE_EMERGENCY, mHandler);
+        mListener.unregisterCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mHandler);
         mAltEventProvider.notifyCallInfo(
                 1,
                 QnsConstants.CALL_TYPE_EMERGENCY,
@@ -327,7 +340,8 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testEmergencyOverImsCallTypeChangedScenarios() {
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null);
         PreciseDataConnectionState emergencyDataStatus =
                 new PreciseDataConnectionState.Builder()
                         .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_INVALID)
@@ -433,7 +447,8 @@ public class AlternativeEventListenerTest extends QnsTest {
 
     @Test
     public void testOnSrvccStateChanged() {
-        mListener.registerCallTypeChangedListener(ApnSetting.TYPE_IMS, mHandler, 1, null);
+        mListener.registerCallTypeChangedListener(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null);
 
         mListener.onSrvccStateChanged(TelephonyManager.SRVCC_STATE_HANDOVER_COMPLETED);
         Message msg = mTestLooper.nextMessage();

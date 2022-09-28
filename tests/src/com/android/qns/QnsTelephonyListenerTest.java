@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 
 import android.content.Context;
 import android.net.LinkProperties;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
@@ -109,7 +110,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         QnsTelephonyListener.QnsTelephonyInfo qtInfo = mQtListener.new QnsTelephonyInfo();
         qtInfo.setRegisteredPlmn("00102");
         qtInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_EDGE);
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_MMS, h, 1, null, false);
 
         mQtListener.notifyQnsTelephonyInfo(qtInfo);
         Message msg = mTestLooper.nextMessage();
@@ -117,8 +119,10 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         QnsTelephonyListener.QnsTelephonyInfo output =
                 (QnsTelephonyListener.QnsTelephonyInfo) ((QnsAsyncResult) msg.obj).result;
         assertEquals(qtInfo, output);
+        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_MMS, h);
 
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
         mQtListener.notifyQnsTelephonyInfo(qtInfo);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
@@ -133,20 +137,22 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         qtInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_EDGE);
         QnsTelephonyListener.QnsTelephonyInfoIms qtInfoIms =
                 mQtListener.new QnsTelephonyInfoIms(qtInfo, true, true, true, true);
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_MMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_MMS, h, 1, null, false);
         mQtListener.notifyQnsTelephonyInfoIms(qtInfoIms);
 
         Message msg = mTestLooper.nextMessage();
-        assertNull(msg); // should not notify for non-IMS apn.
+        assertNull(msg); // should not notify for non-IMS network capability.
 
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
         mQtListener.notifyQnsTelephonyInfoIms(qtInfoIms);
 
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         QnsTelephonyListener.QnsTelephonyInfoIms output =
                 (QnsTelephonyListener.QnsTelephonyInfoIms) ((QnsAsyncResult) msg.obj).result;
-        assertEquals(qtInfoIms, output); // notify for IMS apn
+        assertEquals(qtInfoIms, output); // notify for IMS network capability
     }
 
     @Test
@@ -174,11 +180,14 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testGetLastPreciseDataConnectionState() {
         PreciseDataConnectionState output;
-        List<Integer> typeIMS = new ArrayList<>();
-        List<Integer> typeXcap = new ArrayList<>();
-        typeIMS.add(ApnSetting.TYPE_IMS);
-        typeXcap.add(ApnSetting.TYPE_XCAP);
-        lenient().when(QnsUtils.getApnTypes(anyInt())).thenReturn(typeXcap).thenReturn(typeIMS);
+        List<Integer> imsCapabilities = new ArrayList<>();
+        List<Integer> xcapCapabilities = new ArrayList<>();
+        imsCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        xcapCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        lenient()
+                .when(QnsUtils.getNetCapabilitiesFromApnTypeBitmask(anyInt()))
+                .thenReturn(xcapCapabilities)
+                .thenReturn(imsCapabilities);
 
         PreciseDataConnectionState connectionStateIms =
                 new PreciseDataConnectionState.Builder()
@@ -214,11 +223,15 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionStateXcap);
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionStateIms);
 
-        output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
+        output =
+                mQtListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertNotEquals(connectionStateXcap, output);
         assertEquals(connectionStateIms, output);
 
-        output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_XCAP);
+        output =
+                mQtListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP);
         assertEquals(connectionStateXcap, output);
     }
 
@@ -263,46 +276,79 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
 
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(handoverStateIms);
-        output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
+        output =
+                mQtListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertNull(output);
 
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectedStateIms);
 
-        output = mQtListener.getLastPreciseDataConnectionState(ApnSetting.TYPE_IMS);
+        output =
+                mQtListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertNull(output);
     }
 
     @Test
     public void testRegisterQnsTelephonyInfoChanged() {
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
 
-        assertNotNull(mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS));
-        assertEquals(1, mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS).size());
+        assertNotNull(
+                mQtListener.mQnsTelephonyInfoRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertEquals(
+                1,
+                mQtListener
+                        .mQnsTelephonyInfoRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_IMS)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_XCAP, h, 2, null, true);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_XCAP, h, 2, null, true);
 
-        assertNotNull(mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_XCAP));
+        assertNotNull(
+                mQtListener.mQnsTelephonyInfoRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP));
         assertEquals(
-                1, mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
+                1,
+                mQtListener
+                        .mQnsTelephonyInfoRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
         assertEquals(1, mTestLooper.dispatchAll());
     }
 
     @Test
     public void testRegisterPreciseDataConnectionStateChanged() {
         mQtListener.registerPreciseDataConnectionStateChanged(
-                ApnSetting.TYPE_IMS, h, 1, null, false);
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
 
-        assertNotNull(mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_IMS));
-        assertEquals(1, mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_IMS).size());
+        assertNotNull(
+                mQtListener.mNetCapabilityRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertEquals(
+                1,
+                mQtListener
+                        .mNetCapabilityRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_IMS)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
         mQtListener.registerPreciseDataConnectionStateChanged(
-                ApnSetting.TYPE_XCAP, h, 2, null, true);
+                NetworkCapabilities.NET_CAPABILITY_XCAP, h, 2, null, true);
 
-        assertNotNull(mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_XCAP));
-        assertEquals(1, mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
-        // not notified since precise data connection state is null for apn type.
+        assertNotNull(
+                mQtListener.mNetCapabilityRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP));
+        assertEquals(
+                1,
+                mQtListener
+                        .mNetCapabilityRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
+        // not notified since precise data connection state is null for network capability.
         assertEquals(0, mTestLooper.dispatchAll());
     }
 
@@ -330,38 +376,76 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testUnregisterQnsTelephonyInfoChanged() {
         testRegisterQnsTelephonyInfoChanged();
-        mQtListener.unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h);
+        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_IMS, h);
 
-        assertNotNull(mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS));
-        assertEquals(0, mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS).size());
+        assertNotNull(
+                mQtListener.mQnsTelephonyInfoRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertEquals(
+                0,
+                mQtListener
+                        .mQnsTelephonyInfoRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_IMS)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        assertNotNull(mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_XCAP));
+        assertNotNull(
+                mQtListener.mQnsTelephonyInfoRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP));
         assertEquals(
-                1, mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
+                1,
+                mQtListener
+                        .mQnsTelephonyInfoRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        mQtListener.unregisterQnsTelephonyInfoChanged(ApnSetting.TYPE_XCAP, h);
+        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_XCAP, h);
         assertEquals(
-                0, mQtListener.mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
+                0,
+                mQtListener
+                        .mQnsTelephonyInfoRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
     }
 
     @Test
     public void testUnregisterPreciseDataConnectionStateChanged() {
         testRegisterPreciseDataConnectionStateChanged();
-        mQtListener.unregisterPreciseDataConnectionStateChanged(ApnSetting.TYPE_IMS, h);
+        mQtListener.unregisterPreciseDataConnectionStateChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h);
 
-        assertNotNull(mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_IMS));
-        assertEquals(0, mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_IMS).size());
+        assertNotNull(
+                mQtListener.mNetCapabilityRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertEquals(
+                0,
+                mQtListener
+                        .mNetCapabilityRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_IMS)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        assertNotNull(mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_XCAP));
-        assertEquals(1, mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
+        assertNotNull(
+                mQtListener.mNetCapabilityRegistrantMap.get(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP));
+        assertEquals(
+                1,
+                mQtListener
+                        .mNetCapabilityRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        mQtListener.unregisterPreciseDataConnectionStateChanged(ApnSetting.TYPE_XCAP, h);
-        assertEquals(0, mQtListener.mApnTypeRegistrantMap.get(ApnSetting.TYPE_XCAP).size());
+        mQtListener.unregisterPreciseDataConnectionStateChanged(
+                NetworkCapabilities.NET_CAPABILITY_XCAP, h);
+        assertEquals(
+                0,
+                mQtListener
+                        .mNetCapabilityRegistrantMap
+                        .get(NetworkCapabilities.NET_CAPABILITY_XCAP)
+                        .size());
         assertEquals(0, mTestLooper.dispatchAll());
     }
 
@@ -642,9 +726,11 @@ public final class QnsTelephonyListenerTest extends QnsTest {
      */
     @Test
     public void testOnPreciseDataConnectionStateChanged() {
-        List<Integer> types = new ArrayList<>();
-        types.add(ApnSetting.TYPE_IMS);
-        lenient().when(QnsUtils.getApnTypes(anyInt())).thenReturn(types);
+        List<Integer> imsCapabilities = new ArrayList<>();
+        imsCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        lenient()
+                .when(QnsUtils.getNetCapabilitiesFromApnTypeBitmask(anyInt()))
+                .thenReturn(imsCapabilities);
 
         PreciseDataConnectionState connectionState =
                 new PreciseDataConnectionState.Builder()
@@ -663,7 +749,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         .build();
 
         mQtListener.registerPreciseDataConnectionStateChanged(
-                ApnSetting.TYPE_XCAP, h, 1, null, false);
+                NetworkCapabilities.NET_CAPABILITY_XCAP, h, 1, null, false);
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionState);
 
         Message msg = mTestLooper.nextMessage();
@@ -687,7 +773,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         .build();
 
         mQtListener.registerPreciseDataConnectionStateChanged(
-                ApnSetting.TYPE_IMS, h, 1, null, false);
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(connectionState);
 
         msg = mTestLooper.nextMessage();
@@ -721,7 +807,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     @Test
     public void testOnBarringInfoChanged_Supported() {
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(true, true);
         mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
@@ -736,7 +823,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     @Test
     public void testOnBarringInfoChanged_SosNotSupported() {
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(true, false);
         mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);
@@ -751,7 +839,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     @Test
     public void testOnBarringInfoChanged_VoiceNotSupported() {
-        mQtListener.registerQnsTelephonyInfoChanged(ApnSetting.TYPE_IMS, h, 1, null, false);
+        mQtListener.registerQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, h, 1, null, false);
 
         BarringInfo barringInfo = setupBarringInfo(false, true);
         mQtListener.mTelephonyListener.onBarringInfoChanged(barringInfo);

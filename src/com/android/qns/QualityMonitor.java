@@ -74,15 +74,18 @@ public abstract class QualityMonitor {
 
     /** This method registers the thresholds to monitor the signal strengths */
     public void registerThresholdChange(
-            ThresholdCallback thresholdCallback, int apnType, Threshold[] ths, int slotIndex) {
-        String key = getKey(apnType, slotIndex);
+            ThresholdCallback thresholdCallback,
+            int netCapability,
+            Threshold[] ths,
+            int slotIndex) {
+        String key = getKey(netCapability, slotIndex);
         Log.d(mTag, "Registering for slotIndex=[" + slotIndex + "], key=[" + key + "]");
         mThresholdCallbackMap.put(key, thresholdCallback.callback);
     }
 
     /** Unregister the Cellular & Wifi Quality threshold */
-    public void unregisterThresholdChange(int apnType, int slotIndex) {
-        String key = getKey(apnType, slotIndex);
+    public void unregisterThresholdChange(int netCapability, int slotIndex) {
+        String key = getKey(netCapability, slotIndex);
         Log.d(mTag, "Unregister threshold change for key=[" + key + "]");
         mThresholdCallbackMap.remove(key);
         mThresholdsList.remove(key);
@@ -90,19 +93,20 @@ public abstract class QualityMonitor {
     }
 
     /**
-     * It replace/set the new threshold values to listen for the given apn type.
+     * It replace/set the new threshold values to listen for the given netCapability.
      *
-     * @param apnType Apn Type for which new thresholds are updated
+     * @param netCapability Network Capability for which new thresholds are updated
      * @param slotIndex slot id
      * @param ths updated thresholds array. If ths is empty; if thresholds are registered for given
-     *     apn type, it will be cleared and removed from registered list.
+     *     netCapability, it will be cleared and removed from registered list.
      */
-    public void updateThresholdsForApn(int apnType, int slotIndex, Threshold[] ths) {
-        String key = getKey(apnType, slotIndex);
+    public void updateThresholdsForNetCapability(
+            int netCapability, int slotIndex, Threshold[] ths) {
+        String key = getKey(netCapability, slotIndex);
         if (mThresholdCallbackMap.get(key) == null) {
             throw new IllegalStateException(
-                    "For the apn type = "
-                            + apnType
+                    "For the netCapability = "
+                            + netCapability
                             + "["
                             + slotIndex
                             + "], no callback is registered");
@@ -121,8 +125,8 @@ public abstract class QualityMonitor {
     /**
      * This method provides unique key to store the hashmap values and need to optimize in future.
      */
-    protected String getKey(int apnType, int slotIndex) {
-        return apnType + "_" + slotIndex;
+    protected String getKey(int netCapability, int slotIndex) {
+        return netCapability + "_" + slotIndex;
     }
 
     @VisibleForTesting

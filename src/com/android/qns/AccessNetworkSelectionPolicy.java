@@ -28,7 +28,7 @@ public class AccessNetworkSelectionPolicy {
     private static final AtomicInteger mAid = new AtomicInteger();
 
     private final int mPolicyId;
-    private final int mApnType;
+    private final int mNetCapability;
     private final int mTargetTransportType; // AccessNetworkConstants WWAN or WLAN
     private final PreCondition mPreCondition;
     private final PostCondition mPostCondition;
@@ -36,7 +36,7 @@ public class AccessNetworkSelectionPolicy {
     private ThresholdGroup mLastMatchedThresholdGroup;
 
     public AccessNetworkSelectionPolicy(
-            int apnType,
+            int netCapability,
             int targetTransportType,
             PreCondition preCondition,
             List<ThresholdGroup> thgroups) {
@@ -48,8 +48,8 @@ public class AccessNetworkSelectionPolicy {
                         + "_"
                         + mPolicyId
                         + "_"
-                        + QnsUtils.getStringApnTypes(apnType);
-        mApnType = apnType;
+                        + QnsUtils.getNameOfNetCapability(netCapability);
+        mNetCapability = netCapability;
         mTargetTransportType = targetTransportType;
         mPreCondition = preCondition;
         mPostCondition = new PostCondition(thgroups);
@@ -60,16 +60,12 @@ public class AccessNetworkSelectionPolicy {
         return "[AnsPolicy"
                 + mPolicyId
                 + ":"
-                + QnsUtils.getStringApnTypes(mApnType)
+                + QnsUtils.getNameOfNetCapability(mNetCapability)
                 + "]"
                 + QnsConstants.transportTypeToString(mTargetTransportType)
                 + ","
                 + mPreCondition.toString()
                 + mPostCondition.toString();
-    }
-
-    public boolean canHandleApnType(int apnType) {
-        return (mApnType & apnType) > 0;
     }
 
     public int getTargetTransportType() {

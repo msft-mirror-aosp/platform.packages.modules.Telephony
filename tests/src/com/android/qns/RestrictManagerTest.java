@@ -48,6 +48,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -56,7 +57,6 @@ import android.os.SystemClock;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.telephony.ims.ImsReasonInfo;
 
 import org.junit.After;
@@ -68,8 +68,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
-
-import java.util.concurrent.CountDownLatch;
 
 @RunWith(JUnit4.class)
 public class RestrictManagerTest extends QnsTest {
@@ -86,7 +84,6 @@ public class RestrictManagerTest extends QnsTest {
     private static final int DEFAULT_RESTRICT_WITH_LOW_RTP_QUALITY_TIME = 60000;
     private RestrictManager mRestrictManager;
     private QnsImsManager mQnsImsManager;
-    private CountDownLatch mLatch;
 
     protected TestLooper mTestLooper;
 
@@ -128,7 +125,6 @@ public class RestrictManagerTest extends QnsTest {
                 .thenReturn(0);
         mTestLooper = new TestLooper();
         mHandlerThread.start();
-        mLatch = new CountDownLatch(1);
 
         waitUntilReady();
         mRestrictManager =
@@ -136,7 +132,7 @@ public class RestrictManagerTest extends QnsTest {
                         sMockContext,
                         mTestLooper.getLooper(),
                         0,
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         mMockDcst,
                         mConfigManager,
                         mAltListener);
@@ -367,7 +363,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testGuardingWithHandoverComplete() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(90000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -458,7 +454,7 @@ public class RestrictManagerTest extends QnsTest {
                 new QnsCarrierConfigManager.RtpMetricsConfig(0, 0, 0, 0);
         when(mConfigManager.getRTPMetricsData()).thenReturn(config);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(0);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -511,7 +507,7 @@ public class RestrictManagerTest extends QnsTest {
                 new QnsCarrierConfigManager.RtpMetricsConfig(0, 0, 0, 0);
         when(mConfigManager.getRTPMetricsData()).thenReturn(config);
         when(mConfigManager.getWlanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(0);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -553,7 +549,7 @@ public class RestrictManagerTest extends QnsTest {
                 new QnsCarrierConfigManager.RtpMetricsConfig(0, 0, 0, 0);
         when(mConfigManager.getRTPMetricsData()).thenReturn(config);
         when(mConfigManager.getWlanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(0);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -602,7 +598,7 @@ public class RestrictManagerTest extends QnsTest {
         long throttleTime = SystemClock.elapsedRealtime() + 12000;
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(90000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -986,10 +982,12 @@ public class RestrictManagerTest extends QnsTest {
     public void testImsRegistrationUnregistered() {
         when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(false);
         when(mConfigManager.getFallbackTimeImsUnreigstered(
                         eq(ImsReasonInfo.CODE_SIP_BUSY), anyInt()))
@@ -1041,10 +1039,12 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testImsHoRegisterFailed() {
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(false);
         when(mConfigManager.getFallbackTimeImsHoRegisterFailed(
                         eq(ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE), anyInt()))
@@ -1104,7 +1104,8 @@ public class RestrictManagerTest extends QnsTest {
         long throttleTime = SystemClock.elapsedRealtime() + 12000;
         when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         when(mConfigManager.getFallbackTimeImsUnreigstered(
                         eq(ImsReasonInfo.CODE_SIP_BUSY), anyInt()))
@@ -1160,7 +1161,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testHandoverHystOfVoiceGreaterThanIdleState() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1173,7 +1174,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(45000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertTrue(
@@ -1193,7 +1194,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testHandoverHystGreaterBetweenStates() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1206,7 +1207,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(45000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertTrue(
@@ -1221,7 +1222,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VIDEO))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VIDEO))
                 .thenReturn(80000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VIDEO);
         assertTrue(
@@ -1241,7 +1242,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testHandoverHystWithZeroConfigBetweenCallStates() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1254,7 +1255,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(0);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertFalse(
@@ -1266,7 +1267,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testHandoverHystOfVoicelessThanIdleState() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(60000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1279,7 +1280,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(30000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertTrue(
@@ -1299,7 +1300,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testHandoverHystEqualBetweenStates() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(120000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1312,7 +1313,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(120000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertTrue(
@@ -1332,7 +1333,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testWlanHandoverGuardingTimerVideoWithZero() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1345,7 +1346,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VIDEO))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VIDEO))
                 .thenReturn(0);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VIDEO);
         assertFalse(
@@ -1357,7 +1358,7 @@ public class RestrictManagerTest extends QnsTest {
     public void testIsRestrictExceptGuarding() {
         when(mConfigManager.isHysteresisTimerEnabled(QnsConstants.COVERAGE_HOME)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(90000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -1370,7 +1371,7 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_GUARDING));
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_VOICE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_VOICE))
                 .thenReturn(60000);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_VOICE);
         assertTrue(
@@ -1446,9 +1447,11 @@ public class RestrictManagerTest extends QnsTest {
 
     private void setupEnableInitialDataConnectionFailFallbackWithRetryTimer() {
         int[] fallbackConfigs = new int[] {1, 0, 30000, 2};
-        when(mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(fallbackConfigs);
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
@@ -1566,9 +1569,11 @@ public class RestrictManagerTest extends QnsTest {
 
     private void setupEnablePdnFallbackOnInitialDataConnectionFail() {
         int[] fallbackConfigs = new int[] {1, 2, 0, 2};
-        when(mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(fallbackConfigs);
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
         mRestrictManager.setCellularCoverage(QnsConstants.COVERAGE_HOME);
         mRestrictManager.setQnsCallType(QnsConstants.CALL_TYPE_IDLE);
@@ -1603,7 +1608,8 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testDisablePdnFallbackRunningOnGuardTimerExpiry() {
         setupEnablePdnFallbackOnInitialDataConnectionFail();
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
         validateEnablePdnFallbackOnRetryCounterOverTransportType(
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
@@ -1629,7 +1635,8 @@ public class RestrictManagerTest extends QnsTest {
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 RESTRICT_TYPE_FALLBACK_ON_DATA_CONNECTION_FAIL);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.UTRAN);
         assertFalse(
@@ -1661,7 +1668,8 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testDisableFallbackOnDataConnectionFailOnFallbackCountMet() {
         setupEnablePdnFallbackOnInitialDataConnectionFail();
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
 
         // First Fallback
@@ -1731,7 +1739,8 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testIgnoreFallbackCountOnSingleRat() {
         setupEnablePdnFallbackOnInitialDataConnectionFail();
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
 
         // First Fallback
@@ -1808,7 +1817,8 @@ public class RestrictManagerTest extends QnsTest {
     @Test
     public void testClearFallbackCountOnDataConnectedOverTransportType() {
         setupEnablePdnFallbackOnInitialDataConnectionFail();
-        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS))
+        when(mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(30000);
 
         // First Fallback
@@ -1900,7 +1910,7 @@ public class RestrictManagerTest extends QnsTest {
     }
 
     @Test
-    public void testHandlerEventOnDataConnectionChangedEvent() throws InterruptedException {
+    public void testHandlerEventOnDataConnectionChangedEvent() {
         // Handler message with WLAN Connected received
         QnsAsyncResult asyncResult =
                 new QnsAsyncResult(
@@ -2042,10 +2052,10 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         when(mConfigManager.isHysteresisTimerEnabled(coverage)).thenReturn(true);
         when(mConfigManager.getWwanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         when(mConfigManager.getWlanHysteresisTimer(
-                        ApnSetting.TYPE_IMS, QnsConstants.CALL_TYPE_IDLE))
+                        NetworkCapabilities.NET_CAPABILITY_IMS, QnsConstants.CALL_TYPE_IDLE))
                 .thenReturn(30000);
         // Set Wfc preference with coverage with Hysteris based on Pref supported
         mRestrictManager.setCellularCoverage(coverage);
@@ -2089,7 +2099,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2104,7 +2115,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2131,7 +2143,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2141,7 +2154,8 @@ public class RestrictManagerTest extends QnsTest {
         mTestLooper.moveTimeForward(8000);
         mTestLooper.dispatchAll();
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.UTRAN);
         assertFalse(
@@ -2156,7 +2170,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2179,7 +2194,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2199,7 +2215,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2219,7 +2236,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mCellularNetworkStatusTracker.isAirplaneModeEnabled()).thenReturn(false);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.onWlanRttFail();
         assertTrue(
@@ -2238,7 +2256,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
         when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
@@ -2261,7 +2280,8 @@ public class RestrictManagerTest extends QnsTest {
         when(mWifiBackhaulMonitor.isRttCheckEnabled()).thenReturn(true);
         when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         when(mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnSetting.TYPE_IMS))
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(true);
         mRestrictManager.setCellularAccessNetwork(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =

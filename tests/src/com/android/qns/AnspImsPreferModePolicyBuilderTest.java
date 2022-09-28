@@ -26,8 +26,8 @@ import static com.android.qns.QnsConstants.ROVE_IN;
 import static com.android.qns.QnsConstants.ROVE_OUT;
 import static com.android.qns.QnsConstants.WIFI_PREF;
 
+import android.net.NetworkCapabilities;
 import android.telephony.AccessNetworkConstants;
-import android.telephony.data.ApnSetting;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -48,7 +48,9 @@ public class AnspImsPreferModePolicyBuilderTest extends QnsTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-        mBuilder = new AnspImsPreferModePolicyBuilder(sMockContext, 0, ApnSetting.TYPE_IMS);
+        mBuilder =
+                new AnspImsPreferModePolicyBuilder(
+                        sMockContext, 0, NetworkCapabilities.NET_CAPABILITY_IMS);
     }
 
     @After

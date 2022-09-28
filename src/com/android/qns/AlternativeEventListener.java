@@ -26,13 +26,13 @@ import static android.telephony.PreciseCallState.PRECISE_CALL_STATE_IDLE;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.telephony.Annotation;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -248,22 +248,22 @@ public class AlternativeEventListener {
     /**
      * Register low RTP quality event.
      *
-     * @param apnType APN type
+     * @param netCapability Network Capability
      * @param h Handler want to receive event.
      * @param what event Id to receive
      * @param userObj user object
      */
     public void registerLowRtpQualityEvent(
-            int apnType,
+            int netCapability,
             @NonNull Handler h,
             int what,
             Object userObj,
             QnsCarrierConfigManager.RtpMetricsConfig config) {
         if (h != null) {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
-            if (apnType == ApnSetting.TYPE_IMS) {
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 mLowRtpQuallityListener = r;
-            } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
+            } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 mEmcLowRtpQuallityListener = r;
             }
             if (mEventProvider != null) {
@@ -275,13 +275,13 @@ public class AlternativeEventListener {
     /**
      * Unregister low RTP quality event.
      *
-     * @param apnType APN type
+     * @param netCapability Network Capability
      * @param h Handler want to receive event.
      */
-    public void unregisterLowRtpQualityEvent(int apnType, @NonNull Handler h) {
-        if (apnType == ApnSetting.TYPE_IMS) {
+    public void unregisterLowRtpQualityEvent(int netCapability, @NonNull Handler h) {
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mLowRtpQuallityListener = null;
-        } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             mEmcLowRtpQuallityListener = null;
         }
         mCallInfoManager.mRtpMetricsConfig = null;
@@ -290,24 +290,25 @@ public class AlternativeEventListener {
     /**
      * register call type changed event.
      *
-     * @param apnType apnType of caller
+     * @param netCapability Network Capability of caller
      * @param h Handler want to receive event.
      * @param what event Id to receive
      * @param userObj user object
      */
     public void registerCallTypeChangedListener(
-            @ApnSetting.ApnType int apnType, @NonNull Handler h, int what, Object userObj) {
-        if (apnType != ApnSetting.TYPE_IMS && apnType != ApnSetting.TYPE_EMERGENCY) {
-            log("registerCallTypeChangedListener : wrong ApnType");
+            int netCapability, @NonNull Handler h, int what, Object userObj) {
+        if (netCapability != NetworkCapabilities.NET_CAPABILITY_IMS
+                && netCapability != NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            log("registerCallTypeChangedListener : wrong netCapability");
             return;
         }
         if (h != null) {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
-            if (apnType == ApnSetting.TYPE_IMS) {
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 mCallTypeChangedEventListener = r;
                 QnsTelephonyListener.getInstance(mContext, mSlotIndex)
                         .registerSrvccStateListener(mHandler, EVENT_SRVCC_STATE_CHANGED, null);
-            } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
+            } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 mEmergencyCallTypeChangedEventListener = r;
             }
         } else {
@@ -318,21 +319,21 @@ public class AlternativeEventListener {
     /**
      * Unregister call type changed event.
      *
-     * @param apnType apnType of caller
+     * @param netCapability Network Capability of caller
      * @param h Handler want to receive event.
      */
-    public void unregisterCallTypeChangedListener(
-            @ApnSetting.ApnType int apnType, @NonNull Handler h) {
-        if (apnType != ApnSetting.TYPE_IMS && apnType != ApnSetting.TYPE_EMERGENCY) {
-            log("unregisterCallTypeChangedListener : wrong ApnType");
+    public void unregisterCallTypeChangedListener(int netCapability, @NonNull Handler h) {
+        if (netCapability != NetworkCapabilities.NET_CAPABILITY_IMS
+                && netCapability != NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            log("unregisterCallTypeChangedListener : wrong netCapability");
             return;
         }
         if (h != null) {
-            if (apnType == ApnSetting.TYPE_IMS) {
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 mCallTypeChangedEventListener = null;
                 QnsTelephonyListener.getInstance(mContext, mSlotIndex)
                         .unregisterSrvccStateChanged(mHandler);
-            } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
+            } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 mEmergencyCallTypeChangedEventListener = null;
             }
         } else {
@@ -363,7 +364,7 @@ public class AlternativeEventListener {
     void clearNormalCallInfo() {
         mCallInfoManager.clearCallInfo();
         mCallInfoManager.mLastReportedCallType = QnsConstants.CALL_TYPE_IDLE;
-        unregisterLowRtpQualityEvent(ApnSetting.TYPE_IMS, null);
+        unregisterLowRtpQualityEvent(NetworkCapabilities.NET_CAPABILITY_IMS, null);
     }
 
     @VisibleForTesting
@@ -414,8 +415,8 @@ public class AlternativeEventListener {
                     if ((state == PRECISE_CALL_STATE_ACTIVE
                                     || state == PRECISE_CALL_STATE_DIALING
                                     || state == PRECISE_CALL_STATE_ALERTING)
-                            && !isDataNetworkConnected(ApnSetting.TYPE_EMERGENCY)
-                            && isDataNetworkConnected(ApnSetting.TYPE_IMS)) {
+                            && !isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_EIMS)
+                            && isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_IMS)) {
                         log("Emergency call is progressing without emergency PDN");
                         if (mCallInfoManager.mLastReportedCallType
                                 != QnsConstants.CALL_TYPE_EMERGENCY) {
@@ -484,10 +485,10 @@ public class AlternativeEventListener {
         }
     }
 
-    private boolean isDataNetworkConnected(int apnType) {
+    private boolean isDataNetworkConnected(int netCapability) {
         PreciseDataConnectionState preciseDataStatus =
                 QnsTelephonyListener.getInstance(mContext, mSlotIndex)
-                        .getLastPreciseDataConnectionState(apnType);
+                        .getLastPreciseDataConnectionState(netCapability);
         if (preciseDataStatus == null) return false;
         int state = preciseDataStatus.getState();
         return (state == TelephonyManager.DATA_CONNECTED

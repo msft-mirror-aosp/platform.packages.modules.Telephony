@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
@@ -27,7 +28,6 @@ import android.telephony.SignalStrengthUpdateRequest;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -51,14 +51,14 @@ import java.util.concurrent.TimeUnit;
 public final class CellularQualityMonitorTest extends QnsTest {
     @Mock private QnsTelephonyListener.QnsTelephonyInfo mQnsTelephonyInfo;
     private CellularQualityMonitor mCellularQualityMonitor;
-    int apnType1 = ApnSetting.TYPE_IMS;
-    int apnType2 = ApnSetting.TYPE_EMERGENCY;
-    int slotIndex = 0;
-    Threshold th1[];
-    Threshold th2[];
-    Threshold th3[] = new Threshold[1];
+    int mApnType1 = NetworkCapabilities.NET_CAPABILITY_IMS;
+    int mApnType2 = NetworkCapabilities.NET_CAPABILITY_EIMS;
+    int mSlotIndex = 0;
+    Threshold[] mTh1;
+    Threshold[] mTh2;
+    Threshold[] mTh3 = new Threshold[1];
     Threshold[] mOutputThs;
-    CountDownLatch latch;
+    CountDownLatch mLatch;
     ThresholdListener mThresholdListener;
 
     private class ThresholdListener extends ThresholdCallback
@@ -71,7 +71,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
         @Override
         public void onCellularThresholdChanged(Threshold[] thresholds) {
             mOutputThs = thresholds;
-            latch.countDown();
+            mLatch.countDown();
         }
     }
 
@@ -87,7 +87,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                                     QualityMonitor.getInstance(
                                             sMockContext,
                                             AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                                            slotIndex);
+                                            mSlotIndex);
                     setReady(true);
                 }
             };
@@ -98,10 +98,10 @@ public final class CellularQualityMonitorTest extends QnsTest {
         super.setUp();
         mHandlerThread.start();
         waitUntilReady();
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(e);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -116,7 +116,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        th2 =
+        mTh2 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -125,7 +125,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.INVALID_ID)
                 };
-        th3 =
+        mTh3 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -207,34 +207,34 @@ public final class CellularQualityMonitorTest extends QnsTest {
     public void testRegisterThresholdChange() {
 
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType1, th1, slotIndex);
+                mThresholdListener, mApnType1, mTh1, mSlotIndex);
         Assert.assertEquals(1, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(1, mCellularQualityMonitor.mThresholdsList.size());
         Assert.assertEquals(2, mCellularQualityMonitor.getSignalThresholdInfo().size());
 
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType2, th2, slotIndex);
+                mThresholdListener, mApnType2, mTh2, mSlotIndex);
         Assert.assertEquals(2, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(2, mCellularQualityMonitor.mThresholdsList.size());
 
         Assert.assertTrue(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType1, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType1, mSlotIndex)));
         Assert.assertTrue(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType2, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType2, mSlotIndex)));
 
         Assert.assertEquals(
                 2,
                 mCellularQualityMonitor
                         .mThresholdsList
-                        .get(mCellularQualityMonitor.getKey(apnType1, slotIndex))
+                        .get(mCellularQualityMonitor.getKey(mApnType1, mSlotIndex))
                         .size());
         Assert.assertEquals(
                 1,
                 mCellularQualityMonitor
                         .mThresholdsList
-                        .get(mCellularQualityMonitor.getKey(apnType2, slotIndex))
+                        .get(mCellularQualityMonitor.getKey(mApnType2, mSlotIndex))
                         .size());
 
         // multiple measurement type supported
@@ -244,27 +244,27 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testUnregisterThresholdChange() {
         testRegisterThresholdChange();
-        mCellularQualityMonitor.unregisterThresholdChange(apnType1, slotIndex);
+        mCellularQualityMonitor.unregisterThresholdChange(mApnType1, mSlotIndex);
         Assert.assertEquals(1, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(1, mCellularQualityMonitor.mThresholdsList.size());
         Assert.assertTrue(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType2, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType2, mSlotIndex)));
         Assert.assertFalse(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType1, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType1, mSlotIndex)));
         Assert.assertEquals(1, mCellularQualityMonitor.getSignalThresholdInfo().size());
 
-        mCellularQualityMonitor.unregisterThresholdChange(apnType2, slotIndex);
+        mCellularQualityMonitor.unregisterThresholdChange(mApnType2, mSlotIndex);
         Assert.assertEquals(0, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(0, mCellularQualityMonitor.mThresholdsList.size());
 
         Assert.assertFalse(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType1, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType1, mSlotIndex)));
         Assert.assertFalse(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType2, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType2, mSlotIndex)));
 
         Assert.assertEquals(0, mCellularQualityMonitor.getSignalThresholdInfo().size());
     }
@@ -272,21 +272,21 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testUpdateThresholdsForApn() {
         testRegisterThresholdChange();
-        mCellularQualityMonitor.updateThresholdsForApn(apnType2, slotIndex, th3);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType2, mSlotIndex, mTh3);
         Assert.assertEquals(2, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(2, mCellularQualityMonitor.mThresholdsList.size());
         Assert.assertTrue(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType1, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType1, mSlotIndex)));
         Assert.assertTrue(
                 mCellularQualityMonitor.mThresholdsList.containsKey(
-                        mCellularQualityMonitor.getKey(apnType2, slotIndex)));
+                        mCellularQualityMonitor.getKey(mApnType2, mSlotIndex)));
 
         Assert.assertEquals(
                 1,
                 mCellularQualityMonitor
                         .mThresholdsList
-                        .get(mCellularQualityMonitor.getKey(apnType2, slotIndex))
+                        .get(mCellularQualityMonitor.getKey(mApnType2, mSlotIndex))
                         .size());
         Assert.assertEquals(2, mCellularQualityMonitor.getSignalThresholdInfo().size());
     }
@@ -301,9 +301,9 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testDiffApnDiffThresholdSameMeasurementType() {
         int[] thresholds = new int[] {-110, -112, -99, -100, -70};
-        int apn1 = ApnSetting.TYPE_MMS;
-        int apn2 = ApnSetting.TYPE_IMS;
-        int apn3 = ApnSetting.TYPE_XCAP;
+        int apn1 = NetworkCapabilities.NET_CAPABILITY_MMS;
+        int apn2 = NetworkCapabilities.NET_CAPABILITY_IMS;
+        int apn3 = NetworkCapabilities.NET_CAPABILITY_XCAP;
         Threshold[] t1 =
                 new Threshold[] {
                     new Threshold(
@@ -343,19 +343,19 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                 };
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t1, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t1, mSlotIndex);
         List<SignalThresholdInfo> stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         Assert.assertArrayEquals(new int[] {thresholds[0]}, stInfo.get(0).getThresholds());
 
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn2, t2, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn2, t2, mSlotIndex);
         stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         int[] th_array = new int[] {thresholds[0], thresholds[1], thresholds[2]};
         Arrays.sort(th_array);
         Assert.assertArrayEquals(th_array, stInfo.get(0).getThresholds());
 
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn3, t3, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn3, t3, mSlotIndex);
         stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         th_array = new int[] {thresholds[0], thresholds[1], thresholds[2], thresholds[3]};
@@ -366,9 +366,9 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testDiffApnSameThresholdSameMeasurementType() {
         int[] thresholds = new int[] {-110, -100, -110, -100, -70};
-        int apn1 = ApnSetting.TYPE_MMS;
-        int apn2 = ApnSetting.TYPE_IMS;
-        int apn3 = ApnSetting.TYPE_XCAP;
+        int apn1 = NetworkCapabilities.NET_CAPABILITY_MMS;
+        int apn2 = NetworkCapabilities.NET_CAPABILITY_IMS;
+        int apn3 = NetworkCapabilities.NET_CAPABILITY_XCAP;
         Threshold[] t1 =
                 new Threshold[] {
                     new Threshold(
@@ -408,19 +408,19 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                 };
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t1, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t1, mSlotIndex);
         List<SignalThresholdInfo> stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         Assert.assertArrayEquals(new int[] {thresholds[0]}, stInfo.get(0).getThresholds());
 
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn2, t2, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn2, t2, mSlotIndex);
         stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         int[] th_array = new int[] {thresholds[0], thresholds[1]};
         Arrays.sort(th_array);
         Assert.assertArrayEquals(th_array, stInfo.get(0).getThresholds());
 
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn3, t3, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn3, t3, mSlotIndex);
         stInfo = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(1, stInfo.size());
         th_array = new int[] {thresholds[0], thresholds[1], thresholds[4]};
@@ -433,7 +433,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
         int[] thresholds_rsrp = new int[] {-110, -100};
         int[] thresholds_rssnr = new int[] {-11, -10};
         int[] thresholds_rsrq = new int[] {-20};
-        int apn1 = ApnSetting.TYPE_IMS;
+        int apn1 = NetworkCapabilities.NET_CAPABILITY_IMS;
         Threshold[] t =
                 new Threshold[] {
                     new Threshold(
@@ -467,7 +467,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t, slotIndex);
+        mCellularQualityMonitor.registerThresholdChange(mThresholdListener, apn1, t, mSlotIndex);
         List<SignalThresholdInfo> stInfoList = mCellularQualityMonitor.getSignalThresholdInfo();
         Assert.assertEquals(3, stInfoList.size());
         for (SignalThresholdInfo stInfo : stInfoList) {
@@ -489,7 +489,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testNullThresholds() {
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType1, null, slotIndex);
+                mThresholdListener, mApnType1, null, mSlotIndex);
         Assert.assertEquals(1, mCellularQualityMonitor.mThresholdCallbackMap.size());
         Assert.assertEquals(0, mCellularQualityMonitor.mThresholdsList.size());
     }
@@ -497,16 +497,16 @@ public final class CellularQualityMonitorTest extends QnsTest {
     @Test
     public void testBackhaulTimerUpdate() {
         int waitTime = 4000;
-        th1[0].setWaitTime(waitTime);
+        mTh1[0].setWaitTime(waitTime);
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType1, new Threshold[] {th1[0]}, slotIndex);
+                mThresholdListener, mApnType1, new Threshold[] {mTh1[0]}, mSlotIndex);
         List<SignalThresholdInfo> signalThresholdInfoList =
                 mCellularQualityMonitor.getSignalThresholdInfo();
         assertNotNull(signalThresholdInfoList);
         SignalThresholdInfo stInfo = signalThresholdInfoList.get(0);
         Assert.assertEquals(waitTime, stInfo.getHysteresisMs());
 
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th2);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh2);
         signalThresholdInfoList = mCellularQualityMonitor.getSignalThresholdInfo();
         assertNotNull(signalThresholdInfoList);
         stInfo = signalThresholdInfoList.get(0);
@@ -515,7 +515,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
     @Test
     public void testOnSignalStrengthsChanged_Matching() throws InterruptedException {
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -525,7 +525,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType1, th1, slotIndex);
+                mThresholdListener, mApnType1, mTh1, mSlotIndex);
         ArgumentCaptor<TelephonyCallback> capture =
                 ArgumentCaptor.forClass(TelephonyCallback.class);
         verify(mockTelephonyManager)
@@ -544,12 +544,12 @@ public final class CellularQualityMonitorTest extends QnsTest {
                         new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
                         new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
         verifyReportedThreshold(-91);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.UTRAN,
@@ -558,14 +558,14 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
         verifyReportedThreshold(-102);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.GERAN,
@@ -574,14 +574,14 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
         verifyReportedThreshold(-79);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.NGRAN,
@@ -590,23 +590,23 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
         verifyReportedThreshold(-80);
     }
 
     private void verifyReportedThreshold(int expected) throws InterruptedException {
-        assertTrue(latch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mOutputThs.length > 0);
         assertEquals(expected, mOutputThs[0].getThreshold());
     }
 
     @Test
     public void testOnSignalStrengthsChanged_NotMatching() throws InterruptedException {
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -616,7 +616,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
         mCellularQualityMonitor.registerThresholdChange(
-                mThresholdListener, apnType1, th1, slotIndex);
+                mThresholdListener, mApnType1, mTh1, mSlotIndex);
         ArgumentCaptor<TelephonyCallback> capture =
                 ArgumentCaptor.forClass(TelephonyCallback.class);
         verify(mockTelephonyManager)
@@ -635,13 +635,13 @@ public final class CellularQualityMonitorTest extends QnsTest {
                         new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
                         new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
-        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNull(mOutputThs);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.UTRAN,
@@ -650,15 +650,15 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
-        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNull(mOutputThs);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.GERAN,
@@ -667,15 +667,15 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
-        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNull(mOutputThs);
 
-        th1 =
+        mTh1 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.NGRAN,
@@ -684,12 +684,12 @@ public final class CellularQualityMonitorTest extends QnsTest {
                             QnsConstants.THRESHOLD_EQUAL_OR_SMALLER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
-        mCellularQualityMonitor.updateThresholdsForApn(apnType1, slotIndex, th1);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mApnType1, mSlotIndex, mTh1);
 
-        latch = new CountDownLatch(1);
+        mLatch = new CountDownLatch(1);
         mOutputThs = null;
         callback.onSignalStrengthsChanged(ss);
-        assertFalse(latch.await(100, TimeUnit.MILLISECONDS));
+        assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNull(mOutputThs);
     }
 

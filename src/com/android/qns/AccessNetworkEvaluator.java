@@ -20,6 +20,7 @@ import static android.telephony.ServiceState.ROAMING_TYPE_DOMESTIC;
 import static android.telephony.ServiceState.ROAMING_TYPE_INTERNATIONAL;
 
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -69,7 +70,7 @@ public class AccessNetworkEvaluator {
     protected final int mSlotIndex;
     protected final Context mContext;
     private final String LOG_TAG;
-    private final int mApnType;
+    private final int mNetCapability;
     @VisibleForTesting protected final Handler mHandler;
     private final HandlerThread mHandlerThread;
     private final RestrictManager mRestrictManager;
@@ -111,7 +112,7 @@ public class AccessNetworkEvaluator {
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();
 
-    public AccessNetworkEvaluator(int slotIndex, int apnType, Context context) {
+    public AccessNetworkEvaluator(int slotIndex, int netCapability, Context context) {
 
         LOG_TAG =
                 QnsConstants.QNS_TAG
@@ -120,16 +121,17 @@ public class AccessNetworkEvaluator {
                         + "_"
                         + slotIndex
                         + "_"
-                        + QnsUtils.getStringApnTypes(apnType);
+                        + QnsUtils.getNameOfNetCapability(netCapability);
         // load configurations & sort by purpose.
         mSlotIndex = slotIndex;
-        mApnType = apnType;
+        mNetCapability = netCapability;
         mContext = context;
 
         log("created AccessNetworkEvaluator");
 
         // make handler to handle events for evaluate available AccessNetworks.
-        mHandlerThread = new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mApnType);
+        mHandlerThread =
+                new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mNetCapability);
         mHandlerThread.start();
         mHandler = new EvaluatorEventHandler(mHandlerThread.getLooper());
         Executor executor = new QnsUtils.QnsExecutor(mHandler);
@@ -140,7 +142,7 @@ public class AccessNetworkEvaluator {
         mIwlanNetworkStatusTracker = IwlanNetworkStatusTracker.getInstance(context);
         mDataConnectionStatusTracker =
                 new DataConnectionStatusTracker(
-                        mContext, mHandlerThread.getLooper(), mSlotIndex, mApnType);
+                        mContext, mHandlerThread.getLooper(), mSlotIndex, mNetCapability);
         mQnsImsManager = QnsImsManager.getInstance(context, slotIndex);
         mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(mContext, mSlotIndex);
 
@@ -164,7 +166,7 @@ public class AccessNetworkEvaluator {
                         mContext,
                         mHandler.getLooper(),
                         mSlotIndex,
-                        mApnType,
+                        mNetCapability,
                         mDataConnectionStatusTracker);
 
         mHandler.post(() -> buildAccessNetworkSelectionPolicy(false));
@@ -176,7 +178,7 @@ public class AccessNetworkEvaluator {
     @VisibleForTesting
     public AccessNetworkEvaluator(
             int slotIndex,
-            int apnType,
+            int netCapability,
             Context context,
             RestrictManager restrictManager,
             QnsCarrierConfigManager configManager,
@@ -197,10 +199,10 @@ public class AccessNetworkEvaluator {
                         + "_"
                         + slotIndex
                         + "_"
-                        + QnsUtils.getStringApnTypes(apnType);
+                        + QnsUtils.getNameOfNetCapability(netCapability);
         // load configurations & sort by purpose.
         mSlotIndex = slotIndex;
-        mApnType = apnType;
+        mNetCapability = netCapability;
         mContext = context;
         mRestrictManager = restrictManager;
         mConfigManager = configManager;
@@ -214,7 +216,8 @@ public class AccessNetworkEvaluator {
         mQnsProvisioningListener = qnsProvisioningListener;
         mQnsImsManager = qnsImsManager;
         mWifiBackhaulMonitor = wifiBackhaulMonitor;
-        mHandlerThread = new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mApnType);
+        mHandlerThread =
+                new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mNetCapability);
         mHandlerThread.start();
         mHandler = new EvaluatorEventHandler(mHandlerThread.getLooper());
         mHandler.post(() -> buildAccessNetworkSelectionPolicy(false));
@@ -230,7 +233,7 @@ public class AccessNetworkEvaluator {
         mConfigManager.setQnsProvisioningInfo(mLastProvisioningInfo);
         mHandler.post(() -> buildAccessNetworkSelectionPolicy(true));
         mRestrictManager.clearRestrictions();
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 mWifiBackhaulMonitor.registerForRttStatusChange(
                         mHandler, EVENT_WIFI_RTT_STATUS_CHANGED);
@@ -321,7 +324,7 @@ public class AccessNetworkEvaluator {
 
     protected void notifyForQualifiedNetworksChanged(List<Integer> accessNetworkTypes) {
         mIsNotifiedLastQualifiedAccessNetworkTypes = true;
-        QualifiedNetworksInfo info = new QualifiedNetworksInfo(mApnType, accessNetworkTypes);
+        QualifiedNetworksInfo info = new QualifiedNetworksInfo(mNetCapability, accessNetworkTypes);
         QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
         mQualifiedNetworksChangedRegistrants.notifyRegistrants(ar);
     }
@@ -348,8 +351,8 @@ public class AccessNetworkEvaluator {
 
     protected void registerListeners() {
         log("registerListeners");
-        mWifiQualityMonitor.registerThresholdChange(listener, mApnType, null, mSlotIndex);
-        mCellularQualityMonitor.registerThresholdChange(listener, mApnType, null, mSlotIndex);
+        mWifiQualityMonitor.registerThresholdChange(listener, mNetCapability, null, mSlotIndex);
+        mCellularQualityMonitor.registerThresholdChange(listener, mNetCapability, null, mSlotIndex);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(
                 mSlotIndex, mHandler, EVENT_IWLAN_NETWORK_STATUS_CHANGED);
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
@@ -357,16 +360,17 @@ public class AccessNetworkEvaluator {
         mQnsImsManager.registerImsRegistrationStatusChanged(
                 mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
         mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
-                mApnType, mHandler, EVENT_QNS_TELEPHONY_INFO_CHANGED);
-        if (mApnType == ApnSetting.TYPE_IMS || mApnType == ApnSetting.TYPE_EMERGENCY) {
+                mNetCapability, mHandler, EVENT_QNS_TELEPHONY_INFO_CHANGED);
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             mAltEventListener.registerCallTypeChangedListener(
-                    mApnType, mHandler, EVENT_SET_CALL_TYPE, null);
+                    mNetCapability, mHandler, EVENT_SET_CALL_TYPE, null);
         }
-        if (mApnType == ApnSetting.TYPE_EMERGENCY) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             mAltEventListener.registerEmergencyPreferredTransportTypeChanged(
                     mHandler, EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED, null);
         }
-        if (mApnType == ApnSetting.TYPE_IMS) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mAltEventListener.registerTryWfcConnectionStateListener(
                     mHandler, EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED, null);
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
@@ -396,20 +400,21 @@ public class AccessNetworkEvaluator {
 
     protected void unregisterListeners() {
         log("unregisterListeners");
-        mWifiQualityMonitor.unregisterThresholdChange(mApnType, mSlotIndex);
-        mCellularQualityMonitor.unregisterThresholdChange(mApnType, mSlotIndex);
+        mWifiQualityMonitor.unregisterThresholdChange(mNetCapability, mSlotIndex);
+        mCellularQualityMonitor.unregisterThresholdChange(mNetCapability, mSlotIndex);
         mDataConnectionStatusTracker.unRegisterDataConnectionStatusChanged(mHandler);
         mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
-        mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(mApnType, mHandler);
+        mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(mNetCapability, mHandler);
         mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(mSlotIndex, mHandler);
-        mAltEventListener.unregisterLowRtpQualityEvent(mApnType, mHandler);
-        if (mApnType == ApnSetting.TYPE_IMS || mApnType == ApnSetting.TYPE_EMERGENCY) {
-            mAltEventListener.unregisterCallTypeChangedListener(mApnType, mHandler);
+        mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            mAltEventListener.unregisterCallTypeChangedListener(mNetCapability, mHandler);
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
             }
         }
-        if (mApnType == ApnSetting.TYPE_EMERGENCY) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             mAltEventListener.unregisterEmergencyPreferredTransportTypeChanged();
         }
         mQnsProvisioningListener.unregisterProvisioningItemInfoChanged(mHandler);
@@ -443,8 +448,9 @@ public class AccessNetworkEvaluator {
                     QnsUtils.getCellularAccessNetworkType(
                             infoIms.getDataRegState(), infoIms.getDataNetworkType());
 
-            int coverage = getCoverage(infoIms, mApnType);
-            if (mApnType == ApnSetting.TYPE_IMS && infoIms.isCellularAvailable()) {
+            int coverage = getCoverage(infoIms, mNetCapability);
+            if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                    && infoIms.isCellularAvailable()) {
                 checkVoPs = vopsCheckRequired(cellularAccessNetworkType, coverage, mCallType);
                 volteRoamingSupported = mConfigManager.isVolteRoamingSupported(coverage);
             }
@@ -460,7 +466,7 @@ public class AccessNetworkEvaluator {
             }
             boolean cellAvailable =
                     infoIms.isCellularAvailable(
-                            mApnType, checkVoPs, checkBarring, volteRoamingSupported);
+                            mNetCapability, checkVoPs, checkBarring, volteRoamingSupported);
             if (mCellularAvailable != cellAvailable) {
                 mCellularAvailable = cellAvailable;
                 needEvaluate = true;
@@ -487,7 +493,7 @@ public class AccessNetworkEvaluator {
                     "onQnsTelephonyInfoChanged cellularAccessNetworkType:"
                             + mCellularAccessNetworkType);
         }
-        int coverage = getCoverage(info, mApnType);
+        int coverage = getCoverage(info, mNetCapability);
         if (mCoverage != coverage) {
             mCoverage = coverage;
             needEvaluate = true;
@@ -501,7 +507,7 @@ public class AccessNetworkEvaluator {
     }
 
     @VisibleForTesting
-    int getCoverage(QnsTelephonyListener.QnsTelephonyInfo info, int apnType) {
+    int getCoverage(QnsTelephonyListener.QnsTelephonyInfo info, int netCapability) {
         if (DBG) {
             log(
                     "getCoverage roaming?"
@@ -512,7 +518,7 @@ public class AccessNetworkEvaluator {
                             + info.getRegisteredPlmn());
         }
         if (info.isCoverage()) {
-            if (mConfigManager.needToCheckInternationalRoaming(apnType)) {
+            if (mConfigManager.needToCheckInternationalRoaming(netCapability)) {
                 if (DBG) log("needToCheckInternationalRoaming : true ");
                 if (info.getRoamingType() == ROAMING_TYPE_INTERNATIONAL) {
                     if (mConfigManager.isDefinedDomesticRoamingPlmn(info.getRegisteredPlmn())) {
@@ -664,7 +670,8 @@ public class AccessNetworkEvaluator {
 
     @VisibleForTesting
     void onSetCallType(@QnsConstants.QnsCallType int callType) {
-        if (mApnType == ApnSetting.TYPE_IMS && callType == QnsConstants.CALL_TYPE_EMERGENCY) {
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                && callType == QnsConstants.CALL_TYPE_EMERGENCY) {
             if (!mDataConnectionStatusTracker.isActiveState()) return;
         }
         mCallType = callType;
@@ -679,7 +686,7 @@ public class AccessNetworkEvaluator {
 
     private void onEmergencyPreferredTransportTypeChanged(
             @AccessNetworkConstants.TransportType int transport) {
-        if (mApnType != ApnSetting.TYPE_EMERGENCY) {
+        if (mNetCapability != NetworkCapabilities.NET_CAPABILITY_EIMS) {
             return;
         }
         log(
@@ -710,7 +717,7 @@ public class AccessNetworkEvaluator {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
                 needEvaluate = true;
                 initLastNotifiedQualifiedNetwork();
-                if (mApnType == ApnSetting.TYPE_IMS) {
+                if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                     if (mAltEventListener != null) mAltEventListener.clearNormalCallInfo();
                 }
                 mCallType = QnsConstants.CALL_TYPE_IDLE;
@@ -845,7 +852,7 @@ public class AccessNetworkEvaluator {
     }
 
     private void onImsRegStateChanged(QnsImsManager.ImsRegistrationState imsRegEvent) {
-        if (mConfigManager.getRatPreference(mApnType)
+        if (mConfigManager.getRatPreference(mNetCapability)
                 != QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE) {
             return;
         }
@@ -913,7 +920,7 @@ public class AccessNetworkEvaluator {
         }
 
         if (mConfigManager.allowImsOverIwlanCellularLimitedCase()
-                && !isAccessNetworkAllowed(mCellularAccessNetworkType, mApnType)
+                && !isAccessNetworkAllowed(mCellularAccessNetworkType, mNetCapability)
                 && mCallType == QnsConstants.CALL_TYPE_IDLE
                 && mIwlanAvailable) {
             log("isWfcEnabled:true for idle, allow wfc");
@@ -922,7 +929,7 @@ public class AccessNetworkEvaluator {
 
         if (mConfigManager.allowVideoOverIWLANWithCellularLimitedCase()
                 && mCallType == QnsConstants.CALL_TYPE_VIDEO
-                && mApnType == ApnSetting.TYPE_IMS) {
+                && mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             log("isWfcEnabled:true for video");
             return true;
         }
@@ -956,12 +963,13 @@ public class AccessNetworkEvaluator {
         }
     }
 
-    private boolean isAccessNetworkAllowed(int accessNetwork, int apnType) {
-        switch (apnType) {
-            case ApnSetting.TYPE_IMS:
-                return mConfigManager.isAccessNetworkAllowed(accessNetwork, apnType);
-            case ApnSetting.TYPE_EMERGENCY:
-                return mConfigManager.isAccessNetworkAllowed(accessNetwork, ApnSetting.TYPE_IMS);
+    private boolean isAccessNetworkAllowed(int accessNetwork, int netCapability) {
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                return mConfigManager.isAccessNetworkAllowed(accessNetwork, netCapability);
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+                return mConfigManager.isAccessNetworkAllowed(
+                        accessNetwork, NetworkCapabilities.NET_CAPABILITY_IMS);
             default:
                 if (accessNetwork == AccessNetworkType.UNKNOWN) {
                     return false;
@@ -992,7 +1000,7 @@ public class AccessNetworkEvaluator {
                 }
             }
 
-            if (mApnType == ApnSetting.TYPE_IMS
+            if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                     && (mQnsEventDispatcher.isAirplaneModeToggleOn()
                             || !QnsTelephonyListener.getInstance(mContext, mSlotIndex)
                                     .getLastQnsTelephonyInfo()
@@ -1021,8 +1029,9 @@ public class AccessNetworkEvaluator {
             }
         }
 
-        if (mConfigManager.getRatPreference(mApnType) != QnsConstants.RAT_PREFERENCE_DEFAULT) {
-            switch (mConfigManager.getRatPreference(mApnType)) {
+        if (mConfigManager.getRatPreference(mNetCapability)
+                != QnsConstants.RAT_PREFERENCE_DEFAULT) {
+            switch (mConfigManager.getRatPreference(mNetCapability)) {
                 case QnsConstants.RAT_PREFERENCE_WIFI_ONLY:
                     if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
                         sb.append(" isAllowRatPrefWiFiOnly:false");
@@ -1137,7 +1146,7 @@ public class AccessNetworkEvaluator {
             return;
         }
         log("evaluate reason:" + evaluateSpecificReasonToString(specificReason));
-        if (mApnType == ApnSetting.TYPE_EMERGENCY
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS
                 && mDataConnectionStatusTracker.isInactiveState()) {
             log("QNS only handles HO of EMERGENCY data connection");
             return;
@@ -1164,10 +1173,11 @@ public class AccessNetworkEvaluator {
                                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN, isAllowedForIwlan);
         log(" availability Iwlan:" + availabilityIwlan + " Cellular:" + availabilityCellular);
 
-        if (mWifiBackhaulMonitor.isRttCheckEnabled() && mApnType == ApnSetting.TYPE_IMS) {
+        if (mWifiBackhaulMonitor.isRttCheckEnabled()
+                && mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mWifiBackhaulMonitor.setCellularAvailable(
                     availabilityCellular
-                            && isAccessNetworkAllowed(mCellularAccessNetworkType, mApnType));
+                            && isAccessNetworkAllowed(mCellularAccessNetworkType, mNetCapability));
         }
         // QualifiedNetworksService checks AccessNetworkSelectionPolicy only in the case both
         // networks(cellular and iwlan) are available. If only one network is available, no
@@ -1313,10 +1323,11 @@ public class AccessNetworkEvaluator {
                         ? mCellularAccessNetworkType
                         : AccessNetworkType.IWLAN;
         if (mConfigManager.isHandoverAllowedByPolicy(
-                mApnType, srcAccessNetwork, dstAccessNetwork, mCoverage)) {
+                mNetCapability, srcAccessNetwork, dstAccessNetwork, mCoverage)) {
             return true;
         } else {
-            if (mApnType == ApnSetting.TYPE_IMS && mCallType == QnsConstants.CALL_TYPE_IDLE) {
+            if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                    && mCallType == QnsConstants.CALL_TYPE_IDLE) {
                 // Telephony will make new connection with preferred AccessNetwork
                 log("handover is not allowed. but need to move to target Transport.");
                 return true;
@@ -1330,7 +1341,7 @@ public class AccessNetworkEvaluator {
             }
             if (dstAccessNetwork != AccessNetworkType.IWLAN
                     && mCellularAvailable
-                    && mConfigManager.getRatPreference(mApnType)
+                    && mConfigManager.getRatPreference(mNetCapability)
                             == QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR) {
                 // Telephony will make new connection when change transport type
                 log(
@@ -1344,9 +1355,9 @@ public class AccessNetworkEvaluator {
 
     private boolean useDifferentApnOverIwlan() {
         // supports MMS, XCAP and CBS
-        if (mApnType != ApnSetting.TYPE_MMS
-                && mApnType != ApnSetting.TYPE_XCAP
-                && mApnType != ApnSetting.TYPE_CBS) {
+        if (mNetCapability != NetworkCapabilities.NET_CAPABILITY_MMS
+                && mNetCapability != NetworkCapabilities.NET_CAPABILITY_XCAP
+                && mNetCapability != NetworkCapabilities.NET_CAPABILITY_CBS) {
             return false;
         }
 
@@ -1413,7 +1424,7 @@ public class AccessNetworkEvaluator {
         if (mConfigManager.allowImsOverIwlanCellularLimitedCase()) {
             for (Integer accessNetwork : accessNetworkTypes) {
                 if (accessNetwork == AccessNetworkType.IWLAN
-                        || isAccessNetworkAllowed(accessNetwork, mApnType)) {
+                        || isAccessNetworkAllowed(accessNetwork, mNetCapability)) {
                     supportAccessNetworkTypes.add(accessNetwork);
                 }
             }
@@ -1432,7 +1443,8 @@ public class AccessNetworkEvaluator {
         if (equalsLastNotifiedQualifiedNetwork(supportAccessNetworkTypes)) {
             return;
         } else {
-            if (mApnType == ApnSetting.TYPE_IMS && mWifiBackhaulMonitor.isRttCheckEnabled()) {
+            if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                    && mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 if (supportAccessNetworkTypes.contains(AccessNetworkType.IWLAN)) {
                     if (!isRttSuccess()) {
                         mWifiBackhaulMonitor.requestRttCheck();
@@ -1547,8 +1559,8 @@ public class AccessNetworkEvaluator {
     }
 
     private void unregisterThresholdToQualityMonitor() {
-        mWifiQualityMonitor.updateThresholdsForApn(mApnType, mSlotIndex, null);
-        mCellularQualityMonitor.updateThresholdsForApn(mApnType, mSlotIndex, null);
+        mWifiQualityMonitor.updateThresholdsForNetCapability(mNetCapability, mSlotIndex, null);
+        mCellularQualityMonitor.updateThresholdsForNetCapability(mNetCapability, mSlotIndex, null);
     }
 
     private void registerThresholdsToQualityMonitor(List<Threshold> thresholds) {
@@ -1574,10 +1586,10 @@ public class AccessNetworkEvaluator {
         }
 
         // refresh threshold to be monitored.
-        mWifiQualityMonitor.updateThresholdsForApn(
-                mApnType, mSlotIndex, monitorWiFiThresholds.toArray(new Threshold[0]));
-        mCellularQualityMonitor.updateThresholdsForApn(
-                mApnType, mSlotIndex, monitorCellThresholds.toArray(new Threshold[0]));
+        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                mNetCapability, mSlotIndex, monitorWiFiThresholds.toArray(new Threshold[0]));
+        mCellularQualityMonitor.updateThresholdsForNetCapability(
+                mNetCapability, mSlotIndex, monitorCellThresholds.toArray(new Threshold[0]));
     }
 
     protected void updateThrottleStatus(
@@ -1607,7 +1619,8 @@ public class AccessNetworkEvaluator {
     }
 
     private boolean isRttSuccess() {
-        return !isAccessNetworkAllowed(mCellularAccessNetworkType, ApnSetting.TYPE_IMS)
+        return !isAccessNetworkAllowed(
+                        mCellularAccessNetworkType, NetworkCapabilities.NET_CAPABILITY_IMS)
                 || mIsRttCheckSuccess;
     }
 
@@ -1681,7 +1694,7 @@ public class AccessNetworkEvaluator {
             if (!accessNetworkTypes.isEmpty()
                     && accessNetworkTypes.get(0) != AccessNetworkType.IWLAN
                     && getPreferredMode() == QnsConstants.CELL_PREF
-                    && isAccessNetworkAllowed(accessNetworkTypes.get(0), mApnType)) {
+                    && isAccessNetworkAllowed(accessNetworkTypes.get(0), mNetCapability)) {
                 if (!accessNetworkTypes.contains(AccessNetworkType.IWLAN)) {
                     accessNetworkTypes.add(AccessNetworkType.IWLAN);
                     log(
@@ -1692,7 +1705,8 @@ public class AccessNetworkEvaluator {
                     && !mLastQualifiedAccessNetworkTypes.isEmpty()
                     && mLastQualifiedAccessNetworkTypes.get(0) != AccessNetworkType.IWLAN
                     && getPreferredMode() == QnsConstants.CELL_PREF
-                    && isAccessNetworkAllowed(mLastQualifiedAccessNetworkTypes.get(0), mApnType)) {
+                    && isAccessNetworkAllowed(
+                            mLastQualifiedAccessNetworkTypes.get(0), mNetCapability)) {
                 if (!mLastQualifiedAccessNetworkTypes.contains(AccessNetworkType.IWLAN)) {
                     accessNetworkTypes.addAll(mLastQualifiedAccessNetworkTypes);
                     accessNetworkTypes.add(AccessNetworkType.IWLAN);
@@ -1716,7 +1730,7 @@ public class AccessNetworkEvaluator {
         if (mConfigManager.isOverrideImsPreferenceSupported()
                 && mLastQualifiedAccessNetworkTypes.size() > 1
                 && mLastQualifiedAccessNetworkTypes.get(1) == AccessNetworkType.IWLAN) {
-            if (!isAccessNetworkAllowed(mCellularAccessNetworkType, mApnType)
+            if (!isAccessNetworkAllowed(mCellularAccessNetworkType, mNetCapability)
                     || getPreferredMode() != QnsConstants.CELL_PREF) {
                 log("reevaluateLastNotifiedSecondAccessNetwork, Removed a second access network");
                 reportQualifiedNetwork(
@@ -1730,7 +1744,7 @@ public class AccessNetworkEvaluator {
         if (mAnspPolicyMap == null || bForceUpdate) {
             log("Building list of AccessNetworkSelectionPolicy.");
             mAnspPolicyMap =
-                    AccessNetworkSelectionPolicyBuilder.build(mContext, mSlotIndex, mApnType);
+                    AccessNetworkSelectionPolicyBuilder.build(mContext, mSlotIndex, mNetCapability);
             if (DBG) {
                 mAnspPolicyMap
                         .values()
@@ -1783,7 +1797,8 @@ public class AccessNetworkEvaluator {
 
     private PreCondition getMatchingPreCondition() {
         int callType = mCallType;
-        if ((mApnType == ApnSetting.TYPE_EMERGENCY || mApnType == ApnSetting.TYPE_IMS)
+        if ((mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS
+                        || mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS)
                 && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
             callType = QnsConstants.CALL_TYPE_VOICE;
         }
@@ -1931,7 +1946,12 @@ public class AccessNetworkEvaluator {
     public void dump(PrintWriter pw, String prefix) {
         pw.println(prefix + "------------------------------");
         pw.println(
-                prefix + "ANE[" + ApnSetting.getApnTypeString(mApnType) + "_" + mSlotIndex + "]:");
+                prefix
+                        + "ANE["
+                        + QnsUtils.getNameOfNetCapability(mNetCapability)
+                        + "_"
+                        + mSlotIndex
+                        + "]:");
         pw.println(prefix + "mInitialized=" + mInitialized);
         pw.println(
                 prefix

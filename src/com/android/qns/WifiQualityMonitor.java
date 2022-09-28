@@ -159,7 +159,7 @@ public class WifiQualityMonitor extends QualityMonitor {
         if (mWifiManager == null) {
             Log.e(mTag, "Failed to get WiFi Service");
         }
-        /** Network Callback for Threshold Register. */
+        /* Network Callback for Threshold Register. */
         mWiFiThresholdCallback = new WiFiThresholdCallback();
         builder =
                 new NetworkRequest.Builder()
@@ -167,7 +167,7 @@ public class WifiQualityMonitor extends QualityMonitor {
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
                         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
 
-        /** Network Callback for Threshold Register. */
+        /* Network Callback for Threshold Register. */
         mWiFiStatusCallback = new WiFiStatusCallback();
     }
 
@@ -179,6 +179,7 @@ public class WifiQualityMonitor extends QualityMonitor {
 
     // To-do:  To be handled for more Measurement types(e.g. WiFi PER).
     private int getCurrentQuality(int measurementType) {
+        // TODO getConnectionInfo is deprecated.
         return mWifiManager.getConnectionInfo().getRssi();
     }
 
@@ -187,22 +188,29 @@ public class WifiQualityMonitor extends QualityMonitor {
      */
     @Override
     public synchronized void registerThresholdChange(
-            ThresholdCallback thresholdCallback, int apnType, Threshold[] ths, int slotIndex) {
-        Log.d(mTag, "registerThresholds for apn=" + apnType);
-        super.registerThresholdChange(thresholdCallback, apnType, ths, slotIndex);
-        updateThresholdsForApn(apnType, slotIndex, ths);
+            ThresholdCallback thresholdCallback,
+            int netCapability,
+            Threshold[] ths,
+            int slotIndex) {
+        Log.d(
+                mTag,
+                "registerThresholds for netCapability="
+                        + QnsUtils.getNameOfNetCapability(netCapability));
+        super.registerThresholdChange(thresholdCallback, netCapability, ths, slotIndex);
+        updateThresholdsForNetCapability(netCapability, slotIndex, ths);
     }
 
     // To-do:  To be handled for more Measurement types(e.g. WiFi PER)
     @Override
-    public synchronized void unregisterThresholdChange(int apnType, int slotIndex) {
-        super.unregisterThresholdChange(apnType, slotIndex);
+    public synchronized void unregisterThresholdChange(int netCapability, int slotIndex) {
+        super.unregisterThresholdChange(netCapability, slotIndex);
         checkForThresholdRegistration();
     }
 
     @Override
-    public synchronized void updateThresholdsForApn(int apnType, int slotIndex, Threshold[] ths) {
-        super.updateThresholdsForApn(apnType, slotIndex, ths);
+    public synchronized void updateThresholdsForNetCapability(
+            int netCapability, int slotIndex, Threshold[] ths) {
+        super.updateThresholdsForNetCapability(netCapability, slotIndex, ths);
         checkForThresholdRegistration();
     }
 

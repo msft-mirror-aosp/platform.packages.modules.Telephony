@@ -30,6 +30,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -103,7 +104,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private Map<PreCondition, List<AccessNetworkSelectionPolicy>> mTestAnspPolicyMap = null;
     private CountDownLatch latch;
     private int mSlotIndex = 0;
-    private int mApnType = ApnSetting.TYPE_IMS;
+    private int mNetCapability = NetworkCapabilities.NET_CAPABILITY_IMS;
     private HandlerThread mHandlerThread;
     private MockitoSession mMockitoSession;
     private int mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
@@ -139,7 +140,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        mApnType,
+                        mNetCapability,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -330,13 +331,13 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Test
     public void testMoveTransportTypeAllowed() {
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         QnsConstants.COVERAGE_ROAM))
@@ -388,13 +389,13 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Test
     public void testMoveTransportTypeAllowedEmergencyOverIms() {
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME))
@@ -420,7 +421,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue(ane.moveTransportTypeAllowed());
 
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.UTRAN,
                         QnsConstants.COVERAGE_HOME))
@@ -514,7 +515,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(configManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(true);
         when(configManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
         when(configManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(false);
-        when(configManager.getRatPreference(ApnSetting.TYPE_IMS))
+        when(configManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_DEFAULT);
 
         when(dataConnectionStatusTracker.isActiveState()).thenReturn(true);
@@ -702,7 +703,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -792,22 +793,25 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         infoIms.setCoverage(true);
         infoIms.setRoamingType(ServiceState.ROAMING_TYPE_INTERNATIONAL);
         infoIms.setRegisteredPlmn(TEST_PLMN);
-        when(configManager.needToCheckInternationalRoaming(ApnSetting.TYPE_IMS)).thenReturn(true);
+        when(configManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(true);
         when(configManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(false);
-        assertEquals(QnsConstants.COVERAGE_ROAM, ane.getCoverage(infoIms, mApnType));
+        assertEquals(QnsConstants.COVERAGE_ROAM, ane.getCoverage(infoIms, mNetCapability));
         when(configManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(true);
-        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mApnType));
+        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mNetCapability));
         infoIms.setCoverage(false);
         when(configManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(false);
-        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mApnType));
-        when(configManager.needToCheckInternationalRoaming(ApnSetting.TYPE_IMS)).thenReturn(false);
-        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mApnType));
+        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mNetCapability));
+        when(configManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(false);
+        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mNetCapability));
         infoIms.setCoverage(true);
         infoIms.setRoamingType(ServiceState.ROAMING_TYPE_DOMESTIC);
-        when(configManager.needToCheckInternationalRoaming(ApnSetting.TYPE_IMS)).thenReturn(true);
-        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mApnType));
+        when(configManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(true);
+        assertEquals(QnsConstants.COVERAGE_HOME, ane.getCoverage(infoIms, mNetCapability));
         when(configManager.isDefinedInternationalRoamingPlmn(TEST_PLMN)).thenReturn(true);
-        assertEquals(QnsConstants.COVERAGE_ROAM, ane.getCoverage(infoIms, mApnType));
+        assertEquals(QnsConstants.COVERAGE_ROAM, ane.getCoverage(infoIms, mNetCapability));
     }
 
     @Test
@@ -815,7 +819,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -844,7 +848,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         .setCarrierEnabled(true)
                         .build();
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
@@ -862,7 +866,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -884,12 +888,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
 
         when(configManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(false);
-        when(configManager.getRatPreference(ApnSetting.TYPE_XCAP))
+        when(configManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_XCAP))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR);
         when(dataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
@@ -1047,12 +1051,14 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
                         new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
                 .sendToTarget();
-        assertFalse(latch.await(100, TimeUnit.MILLISECONDS)); // no report since ANE is for IMS apn.
+        assertFalse(
+                latch.await(
+                        100, TimeUnit.MILLISECONDS)); // no report since ANE is for IMS capability.
         when(dataConnectionStatusTracker.isInactiveState()).thenReturn(true);
         ane =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -1156,7 +1162,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                 mQualifiedNetworksInfo
                         .getAccessNetworkTypes()
                         .contains(AccessNetworkConstants.AccessNetworkType.EUTRAN));
-        verify(wifiQualityMonitor).updateThresholdsForApn(anyInt(), anyInt(), isNotNull());
+        verify(wifiQualityMonitor)
+                .updateThresholdsForNetCapability(anyInt(), anyInt(), isNotNull());
     }
 
     private void generateAnspPolicyMap() throws NoSuchFieldException, IllegalAccessException {
@@ -1188,13 +1195,19 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         AccessNetworkSelectionPolicy ansp1 =
                 new AccessNetworkSelectionPolicy(
-                        ApnSetting.TYPE_IMS, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, p1, tg1);
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        p1,
+                        tg1);
         List<AccessNetworkSelectionPolicy> anspList = new ArrayList<>();
         anspList.add(ansp1);
 
         AccessNetworkSelectionPolicy ansp2 =
                 new AccessNetworkSelectionPolicy(
-                        ApnSetting.TYPE_IMS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, p2, tg2);
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        p2,
+                        tg2);
         List<AccessNetworkSelectionPolicy> anspList2 = new ArrayList<>();
         anspList2.add(ansp2);
 
@@ -1340,7 +1353,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(configManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(true, false);
         assertFalse((Boolean) method.invoke(ane, transport));
 
-        when(configManager.getRatPreference(mApnType)).thenAnswer(pref -> mRatPreference);
+        when(configManager.getRatPreference(mNetCapability)).thenAnswer(pref -> mRatPreference);
 
         // RAT_PREFERENCE_DEFAULT
         mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
@@ -1379,7 +1392,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         assertFalse((Boolean) method.invoke(ane, transport));
 
-        when(configManager.getRatPreference(mApnType)).thenAnswer(pref -> mRatPreference);
+        when(configManager.getRatPreference(mNetCapability)).thenAnswer(pref -> mRatPreference);
 
         // RAT_PREFERENCE_DEFAULT
         mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
@@ -1421,7 +1434,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         AccessNetworkEvaluator aneSos =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -1438,7 +1451,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         AccessNetworkEvaluator aneIms =
                 new AccessNetworkEvaluator(
                         mSlotIndex,
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         sMockContext,
                         restrictManager,
                         configManager,
@@ -1522,7 +1535,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testEventImsRegistrationStateChanged() {
-        when(configManager.getRatPreference(ApnSetting.TYPE_IMS))
+        when(configManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_DEFAULT);
 
         Message.obtain(
@@ -1535,7 +1548,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         verify(mMockImsRegistrationState, never()).getTransportType();
         verify(mMockImsRegistrationState, never()).getEvent();
 
-        when(configManager.getRatPreference(ApnSetting.TYPE_IMS))
+        when(configManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE);
         when(mMockImsRegistrationState.getTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);

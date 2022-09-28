@@ -27,7 +27,7 @@ import static com.android.qns.QnsConstants.MAX_COUNT_INVALID;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.content.Context;
-import android.hardware.radio.V1_5.ApnTypes;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -38,7 +38,6 @@ import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.telephony.ims.ProvisioningManager;
 import android.text.TextUtils;
 import android.util.ArraySet;
@@ -208,42 +207,42 @@ public class QnsCarrierConfigManager {
     public static final String KEY_BLOCK_IPV6_ONLY_WIFI_BOOL = "qns.block_ipv6_only_wifi_bool";
 
     /**
-     * Specifies the Rat Preference for the XCAP apn type. Boolean indicating adding the IMS
-     * Registration condition to the Wi-Fi Rove in condition.
+     * Specifies the Rat Preference for the XCAP network capability. Boolean indicating adding the
+     * IMS Registration condition to the Wi-Fi Rove in condition.
      *
      * <ul>
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi
-     *     when the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
-     *     no cellular
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set ,
-     *     choose Wi-Fi when cellular is available at home network.
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi when
+     *       the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
+     *       no cellular
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set , choose
+     *       Wi-Fi when cellular is available at home network.
      * </ul>
      */
     public static final String KEY_QNS_XCAP_RAT_PREFERENCE_INT = "qns.xcap_rat_preference_int";
 
     /**
-     * Specifies the Rat Preference for the SOS apn type. Boolean indicating adding the IMS
-     * Registration condition to the Wi-Fi Rove in condition.
+     * Specifies the Rat Preference for the SOS network capability. Boolean indicating adding the
+     * IMS Registration condition to the Wi-Fi Rove in condition.
      *
      * <ul>
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi
-     *     when the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
-     *     no cellular
-     *     <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set ,
-     *     choose Wi-Fi when cellular is available at home network.
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default, Follow the system preference.
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE}: If set , choose Wi-Fi when
+     *       the Wi-Fi Calling is available.(when IMS is registered through the Wi-Fi)
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR}: If set , choose Wi-Fi when
+     *       no cellular
+     *   <li>{@code QnsConstants#RAT_PREFERENCE_WIFI_WHEN_HOME_IS_NOT_AVAILABLE}: If set , choose
+     *       Wi-Fi when cellular is available at home network.
      * </ul>
      */
     public static final String KEY_QNS_SOS_RAT_PREFERENCE_INT = "qns.sos_rat_preference_int";
 
     /**
-     * Specifies the Rat Preference for the MMS apn type. Boolean indicating adding the IMS
-     * Registration condition to the Wi-Fi Rove in condition.
+     * Specifies the Rat Preference for the MMS network capability. Boolean indicating adding the
+     * IMS Registration condition to the Wi-Fi Rove in condition.
      *
      * <p>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default value , Follow the system preference.
      * {@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always {@code
@@ -257,8 +256,8 @@ public class QnsCarrierConfigManager {
     public static final String KEY_QNS_MMS_RAT_PREFERENCE_INT = "qns.mms_rat_preference_int";
 
     /**
-     * Specifies the Rat Preference for the CBS apn type. Boolean indicating adding the IMS
-     * Registration condition to the Wi-Fi Rove in condition.
+     * Specifies the Rat Preference for the CBS network capability. Boolean indicating adding the
+     * IMS Registration condition to the Wi-Fi Rove in condition.
      *
      * <p>{@code QnsConstants#RAT_PREFERENCE_DEFAULT}: Default value , Follow the system preference.
      * {@code QnsConstants#RAT_PREFERENCE_WIFI_ONLY}: If set , choose Wi-Fi always {@code
@@ -313,7 +312,7 @@ public class QnsCarrierConfigManager {
             "qns.cellular_ss_thresholdbackhaul_timer_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for IMS APN type. {@link
+     * Specifies the Transport type UE supports with QNS services for IMS network capability. {@link
      * QnsConstants}. The values are set as below:
      *
      * <ul>
@@ -323,16 +322,16 @@ public class QnsCarrierConfigManager {
      * </ul>
      *
      * {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for IMS APN Type. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If this value
-     * set , Transport type UE supports is Wifi for IMS APN Type. {@code
+     * cellular for IMS network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
+     * this value set , Transport type UE supports is Wifi for IMS network capability. {@code
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for IMS APN Type The default value for this key is {@link
+     * both Cellular & Wifi for IMS network capability The default value for this key is {@link
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}
      */
     public static final String KEY_QNS_IMS_TRANSPORT_TYPE_INT = "qns.ims_transport_type_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for SOS APN type. {@link
+     * Specifies the Transport type UE supports with QNS services for SOS network capability. {@link
      * QnsConstants}. The values are set as below:
      *
      * <ul>
@@ -342,16 +341,16 @@ public class QnsCarrierConfigManager {
      * </ul>
      *
      * {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for SOS APN type. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If this value
-     * set , Transport type UE supports is Wifi for SOS APN type. {@code
+     * cellular for SOS network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
+     * this value set , Transport type UE supports is Wifi for SOS network capability. {@code
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for SOS APN type. The default value for this key is {@link
+     * both Cellular & Wifi for SOS network capability. The default value for this key is {@link
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
      */
     public static final String KEY_QNS_SOS_TRANSPORT_TYPE_INT = "qns.sos_transport_type_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for MMS APN Type. {@link
+     * Specifies the Transport type UE supports with QNS services for MMS network capability. {@link
      * QnsConstants}. The values are set as below:
      *
      * <ul>
@@ -361,17 +360,17 @@ public class QnsCarrierConfigManager {
      * </ul>
      *
      * {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for MMS APN Type. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If this value
-     * set , Transport type UE supports is Wifi for MMS APN Type. {@code
+     * cellular for MMS network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
+     * this value set , Transport type UE supports is Wifi for MMS network capability. {@code
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for MMS APN Type. The default value for this key is {@link
+     * both Cellular & Wifi for MMS network capability. The default value for this key is {@link
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
      */
     public static final String KEY_QNS_MMS_TRANSPORT_TYPE_INT = "qns.mms_transport_type_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for XCAP APN type. {@link
-     * QnsConstants}. The values are set as below:
+     * Specifies the Transport type UE supports with QNS services for XCAP network capability.
+     * {@link QnsConstants}. The values are set as below:
      *
      * <ul>
      *   <li>0: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
@@ -380,16 +379,16 @@ public class QnsCarrierConfigManager {
      * </ul>
      *
      * <p>{@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for XCAP APN type. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If this value
-     * set , Transport type UE supports is Wifi for XCAP APN type. {@code
+     * cellular for XCAP network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
+     * this value set , Transport type UE supports is Wifi for XCAP network capability. {@code
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for XCAP APN type. The default value for this key is {@link
+     * both Cellular & Wifi for XCAP network capability. The default value for this key is {@link
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
      */
     public static final String KEY_QNS_XCAP_TRANSPORT_TYPE_INT = "qns.xcap_transport_type_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for CBS APN type. {@link
+     * Specifies the Transport type UE supports with QNS services for CBS network capability. {@link
      * QnsConstants}. The values are set as below:
      *
      * <ul>
@@ -399,10 +398,10 @@ public class QnsCarrierConfigManager {
      * </ul>
      *
      * {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for CBS APN type. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If this value
-     * set , Transport type UE supports is Wifi for CBS APN type. {@code
+     * cellular for CBS network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
+     * this value set , Transport type UE supports is Wifi for CBS network capability. {@code
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for CBS APN type. The default value for this key is {@link
+     * both Cellular & Wifi for CBS network capability. The default value for this key is {@link
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
      */
     public static final String KEY_QNS_CBS_TRANSPORT_TYPE_INT = "qns.cbs_transport_type_int";
@@ -608,13 +607,13 @@ public class QnsCarrierConfigManager {
             "qns.wlan_rtt_backhaul_check_on_icmp_ping_string";
 
     /**
-     * List of Array items indicating APN Types with fallback support based on retry count or retry
-     * timer or either of them with fallback guard timer to be set
+     * List of Array items indicating network capabilities with fallback support based on retry
+     * count or retry timer or either of them with fallback guard timer to be set
      *
      * <p><string-array name="qns.fallback_on_initial_connection_failure_string_array" num="2" <item
-     * value="<apn_type>:<retry_count>:<retry_timer>:<fallback_guard_timer> :<max_fallback_count>"/>
-     * Note: All Timer Values to be in millis Example: <item value="ims:3:60000:10000:2"/> <item
-     * value="mms:1:10000:60000:2"/>
+     * value="<network_capability>:<retry_count>:<retry_timer>:<fallback_guard_timer>
+     * :<max_fallback_count>"/> Note: All Timer Values to be in millis Example: <item
+     * value="ims:3:60000:10000:2"/> <item value="mms:1:10000:60000:2"/>
      *
      * <p>The default value for this key is null indicating not enabled by default for fallback in
      * case of initial connection failure
@@ -623,17 +622,18 @@ public class QnsCarrierConfigManager {
             "qns.fallback_on_initial_connection_failure_string_array";
 
     /**
-     * List of Array items indicating the Access Network Allowed For IMS APN Type. The values are
-     * set as below: "LTE" "NR" "3G" "2G" The default value for this key is {@Code "LTE","NR"}
+     * List of Array items indicating the Access Network Allowed For IMS network capability. The
+     * values are set as below: "LTE" "NR" "3G" "2G" The default value for this key is {@Code
+     * "LTE","NR"}
      */
     public static final String KEY_IMS_CELLULAR_ALLOWED_RAT_STRING_ARRAY =
             "qns.ims_cellular_allowed_rat_string_array";
 
     /**
-     * List of Array items indicating the Access Network Allowed For IMS APN Type. The values are
-     * set as below: Format "<accessNetwork>:<meas_type>:<gap>" "eutran:rsrp:-2" "ngran:ssrsrp:2"
-     * Note: Similar format followed across different accessNetwork & Measurement TYpes The default
-     * value for this key is {@Code ""}
+     * List of Array items indicating the Access Network Allowed For IMS network capability. The
+     * values are set as below: Format "<accessNetwork>:<meas_type>:<gap>" "eutran:rsrp:-2"
+     * "ngran:ssrsrp:2" Note: Similar format followed across different accessNetwork & Measurement
+     * TYpes The default value for this key is {@Code ""}
      */
     public static final String KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY =
             "qns.rove_in_threshold_gap_with_guard_timer_string_array";
@@ -668,13 +668,10 @@ public class QnsCarrierConfigManager {
             "qns.fallback_wwan_ims_ho_reigster_fail_reason_string_array";
 
     /**
-     * String array indicating APN types that they check international roaming condition.
+     * String array indicating network capabilities that they check international roaming condition.
      *
-     * <string-array name="exclude_domestic_roaming_condition_string_array" num="3">
-     *     <item value="ims"/>
-     *     <item value="emergency"/>
-     *     <item value="xcap"/>
-     * </string-array>
+     * <p><string-array name="exclude_domestic_roaming_condition_string_array" num="3"> <item
+     * value="ims"/> <item value="emergency"/> <item value="xcap"/> </string-array>
      */
     public static final String KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY =
             "qns.apn_types_with_international_roaming_condition_string_array";
@@ -1795,18 +1792,17 @@ public class QnsCarrierConfigManager {
      * @return True if handover is allowed by policy, otherwise false.
      */
     public boolean isHandoverAllowedByPolicy(
-            int apnType, int srcAn, int destAn, @QnsConstants.CellularCoverage int coverage) {
+            int netCapability, int srcAn, int destAn, @QnsConstants.CellularCoverage int coverage) {
         Log.d(
                 LOG_TAG,
-                "isHandoverAllowedByPolicy apnType: "
-                        + ApnSetting.getApnTypeString(apnType)
+                "isHandoverAllowedByPolicy netCapability: "
+                        + QnsUtils.getNameOfNetCapability(netCapability)
                         + " srcAccessNetwork:"
                         + QnsConstants.accessNetworkTypeToString(srcAn)
                         + " destAccessNetwork:"
                         + QnsConstants.accessNetworkTypeToString(destAn)
                         + "  "
                         + QnsConstants.coverageToString(coverage));
-        @NetCapability int capability = QnsUtils.apnTypeToNetworkCapability(apnType);
         // check Telephony handover policy.
         // Matching the rules by the configured order. Bail out if find first matching rule.
         for (HandoverRule rule : mHandoverRuleList) {
@@ -1817,7 +1813,7 @@ public class QnsCarrierConfigManager {
                 // if no capability rule specified, data network capability is considered matched.
                 // otherwise, any capabilities overlap is also considered matched.
                 if (rule.networkCapabilities.isEmpty()
-                        || rule.networkCapabilities.contains(capability)) {
+                        || rule.networkCapabilities.contains(netCapability)) {
                     if (rule.type == HandoverRule.RULE_TYPE_DISALLOWED) {
                         Log.d(LOG_TAG, "isHandoverAllowedByPolicy:Not allowed by policy " + rule);
                         return false;
@@ -1830,10 +1826,10 @@ public class QnsCarrierConfigManager {
         }
 
         Log.d(LOG_TAG, "isHandoverAllowedByPolicy: Did not find matching rule. ");
-        // Disallow handover for non-IMS APNs anyway if no rule is found.
-        if (apnType != ApnSetting.TYPE_IMS) return false;
+        // Disallow handover for non-IMS network capability anyway if no rule is found.
+        if (netCapability != NetworkCapabilities.NET_CAPABILITY_IMS) return false;
 
-        // Allow handover for IMS APN anyway if no rule is found.
+        // Allow handover for IMS network capability anyway if no rule is found.
         return true;
     }
 
@@ -1989,27 +1985,25 @@ public class QnsCarrierConfigManager {
     }
 
     /**
-     * This method returns QNS preferred transport type for APN types / Services
+     * This method returns QNS preferred transport type for network capabilities / Services
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
      *     TRANSPORT_TYPE_ALLOWED_WWAN = 0 TRANSPORT_TYPE_ALLOWED_IWLAN = 1
      *     TRANSPORT_TYPE_ALLOWED_BOTH = 2
      */
-    public int getQnsSupportedTransportType(int apnType) {
-
-        if (apnType == ApnTypes.IMS) {
+    public int getQnsSupportedTransportType(int netCapability) {
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             return mQnsImsTransportType;
-        } else if (apnType == ApnTypes.EMERGENCY) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             return mQnsSosTransportType;
-        } else if (apnType == ApnTypes.MMS) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_MMS) {
             return mQnsMmsTransportType;
-        } else if (apnType == ApnTypes.XCAP) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_XCAP) {
             return mQnsXcapTransportType;
-        } else if (apnType == ApnTypes.CBS) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_CBS) {
             return mQnsCbsTransportType;
-        } else {
-            return QnsConstants.INVALID_ID;
         }
+        return QnsConstants.INVALID_ID;
     }
 
     /**
@@ -2017,13 +2011,13 @@ public class QnsCarrierConfigManager {
      *
      * @return : the hysteresis timer
      */
-    public int getWwanHysteresisTimer(int apnType, @QnsConstants.QnsCallType int callType) {
+    public int getWwanHysteresisTimer(int netCapability, @QnsConstants.QnsCallType int callType) {
         if (mQnsProvisioningInfo.hasItem(ProvisioningManager.KEY_LTE_EPDG_TIMER_SEC)) {
             return mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_LTE_EPDG_TIMER_SEC);
         }
-        switch (apnType) {
-            case ApnTypes.IMS:
-            case ApnTypes.EMERGENCY:
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
                 if (callType == QnsConstants.CALL_TYPE_IDLE) {
                     return mWwanHysteresisTimer[0];
                 } else if (callType == QnsConstants.CALL_TYPE_VOICE) {
@@ -2033,9 +2027,9 @@ public class QnsCarrierConfigManager {
                 } else {
                     return QnsConstants.KEY_DEFAULT_VALUE;
                 }
-            case ApnTypes.MMS:
-            case ApnTypes.XCAP:
-            case ApnTypes.CBS:
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
                 if (callType == QnsConstants.CALL_TYPE_IDLE) {
                     return mNonImsWwanHysteresisTimer[0];
                 } else {
@@ -2051,13 +2045,13 @@ public class QnsCarrierConfigManager {
      *
      * @return : the hysteresis timer
      */
-    public int getWlanHysteresisTimer(int apnType, @QnsConstants.QnsCallType int callType) {
+    public int getWlanHysteresisTimer(int netCapability, @QnsConstants.QnsCallType int callType) {
         if (mQnsProvisioningInfo.hasItem(ProvisioningManager.KEY_WIFI_EPDG_TIMER_SEC)) {
             return mQnsProvisioningInfo.getIntegerItem(ProvisioningManager.KEY_WIFI_EPDG_TIMER_SEC);
         }
-        switch (apnType) {
-            case ApnTypes.IMS:
-            case ApnTypes.EMERGENCY:
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
                 if (callType == QnsConstants.CALL_TYPE_IDLE) {
                     return mWlanHysteresisTimer[0];
                 } else if (callType == QnsConstants.CALL_TYPE_VOICE) {
@@ -2067,9 +2061,9 @@ public class QnsCarrierConfigManager {
                 } else {
                     return QnsConstants.KEY_DEFAULT_VALUE;
                 }
-            case ApnTypes.MMS:
-            case ApnTypes.XCAP:
-            case ApnTypes.CBS:
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
                 if (callType == QnsConstants.CALL_TYPE_IDLE) {
                     return mNonImsWlanHysteresisTimer[0];
                 } else {
@@ -2135,7 +2129,7 @@ public class QnsCarrierConfigManager {
     }
 
     /**
-     * This method returns Access Network Selection Policy based on APN type
+     * This method returns Access Network Selection Policy based on network capability
      *
      * @param targetTransportType : WWAN/WLAN
      * @return : Target transport mapped to string
@@ -2410,47 +2404,46 @@ public class QnsCarrierConfigManager {
     }
 
     /**
-     * This method gives the APN types supported based on
-     * KEY_QNS_<apnType></apnType>_TRANSPORT_TYPE_INT
+     * This method gives the network capabilities supported based on
+     * KEY_QNS_<NetworkCapability></NetworkCapability>_TRANSPORT_TYPE_INT
      *
-     * @return : Supported APN types
+     * @return : Supported network capabilities
      */
-    public int getQnsSupportedApnTypes() {
-        int apnTypeMask = ApnSetting.TYPE_NONE;
-
+    public List<Integer> getQnsSupportedNetCapabilities() {
+        List<Integer> netCapabilities = new ArrayList<>();
         if (mQnsImsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsImsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH)
-            apnTypeMask = apnTypeMask | ApnSetting.TYPE_IMS;
-
+                || mQnsImsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+            netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        }
         if (mQnsSosTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsSosTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH)
-            apnTypeMask = apnTypeMask | ApnSetting.TYPE_EMERGENCY;
-
+                || mQnsSosTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+            netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_EIMS);
+        }
         if (mQnsMmsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsMmsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH)
-            apnTypeMask = apnTypeMask | ApnSetting.TYPE_MMS;
-
+                || mQnsMmsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+            netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
+        }
         if (mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH)
-            apnTypeMask = apnTypeMask | ApnSetting.TYPE_XCAP;
-
+                || mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+            netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        }
         if (mQnsCbsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsCbsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH)
-            apnTypeMask = apnTypeMask | ApnSetting.TYPE_CBS;
-
-        return apnTypeMask;
+                || mQnsCbsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+            netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_CBS);
+        }
+        return netCapabilities;
     }
 
     /**
      * This method returns Allowed cellular RAT for IMS
      *
-     * @param accessNetwork , apnType : EUTRAN / NGRAN / UTRAN/ GERAN
+     * @param accessNetwork , netCapability : EUTRAN / NGRAN / UTRAN/ GERAN
      * @return : True or False based on configuration
      */
-    public boolean isAccessNetworkAllowed(int accessNetwork, int apnType) {
+    public boolean isAccessNetworkAllowed(int accessNetwork, int netCapability) {
 
         // cases to be enhanced for different key items when added
-        if (apnType == ApnTypes.IMS) {
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             if (mImsAllowedRats != null) {
                 for (String cellularRatType : mImsAllowedRats) {
                     if ((cellularRatType.contains("LTE")
@@ -2533,44 +2526,43 @@ public class QnsCarrierConfigManager {
 
     /**
      * This method returns whether the IMS Registration state option is added when reporting a
-     * qualified Wi-Fi network for APN types other than ims.
+     * qualified Wi-Fi network for network capabilities other than ims.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
      *     True / False
      */
-    public int getRatPreference(int apnType) {
-        switch (apnType) {
-            case ApnSetting.TYPE_XCAP:
+    public int getRatPreference(int netCapability) {
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
                 return mXcapRatPreference;
-            case ApnSetting.TYPE_EMERGENCY:
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
                 return mSosRatPreference;
-            case ApnSetting.TYPE_MMS:
+            case NetworkCapabilities.NET_CAPABILITY_MMS:
                 return mMmsRatPreference;
-            case ApnSetting.TYPE_CBS:
+            case NetworkCapabilities.NET_CAPABILITY_CBS:
                 return mCbsRatPreference;
         }
         return QnsConstants.RAT_PREFERENCE_DEFAULT;
     }
 
     /**
-     * This method returns whether the APN type check roaming condition with International Roaming
-     * or not.
+     * This method returns whether the network capability check roaming condition with International
+     * Roaming or not.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
      *     True / False
      */
-    public boolean needToCheckInternationalRoaming(int apnType) {
-        if (mApnTypesInternationalRoamingCheck != null
-                && mApnTypesInternationalRoamingCheck.length > 0) {
-            String apnName = ApnSetting.getApnTypeString(apnType);
-            for (String apn : mApnTypesInternationalRoamingCheck) {
-                Log.d(LOG_TAG, apn + " needs International roaming check.");
-                if (apn.equals(apnName)) {
-                    return true;
-                }
-            }
+    public boolean needToCheckInternationalRoaming(int netCapability) {
+        if (mApnTypesInternationalRoamingCheck == null
+                || mApnTypesInternationalRoamingCheck.length == 0) {
+            return false;
         }
-        return false;
+
+        return QnsUtils.getNetworkCapabilitiesFromApnTypesString(
+                        String.join(",", mApnTypesInternationalRoamingCheck))
+                .stream()
+                .mapToInt(netCapabilityFromApn -> netCapabilityFromApn)
+                .anyMatch(netCapabilityFromApn -> netCapabilityFromApn == netCapability);
     }
 
     /**
@@ -2660,22 +2652,23 @@ public class QnsCarrierConfigManager {
     }
 
     /**
-     * If fallback for Initial connection failure for the apn type is met is supported , this method
-     * provides information about the failure retry count or retry timer or both if supported until
-     * fallback to other transport.
+     * If fallback for Initial connection failure for the network capability is met is supported ,
+     * this method provides information about the failure retry count or retry timer or both if
+     * supported until fallback to other transport.
      *
-     * @param apnType : (ims,sos,mms,xcap,cbs)
-     * @return : <APN_SupportforFallback>:<retry_count>:<retry_timer>:<max_fallback_count>
+     * @param netCapability : (ims,sos,mms,xcap,cbs)
+     * @return :
+     *     <NetworkCapability_SupportforFallback>:<retry_count>:<retry_timer>:<max_fallback_count>
      */
-    public int[] getInitialDataConnectionFallbackConfig(int apnType) {
+    public int[] getInitialDataConnectionFallbackConfig(int netCapability) {
 
         int[] fallbackConfigOnDataFail = new int[4];
-        String[] fallback_config = getFallbackConfigForApn(apnType);
+        String[] fallback_config = getFallbackConfigForNetCapability(netCapability);
 
         if (fallback_config != null
                 && fallback_config[0] != null
                 && fallback_config[0].length() > 0) {
-            // APN Availability Status
+            // netCapability Availability Status
             fallbackConfigOnDataFail[0] = 1;
 
             // Retry Count :  && fallback_config[1].length() > 0
@@ -2706,11 +2699,11 @@ public class QnsCarrierConfigManager {
      * This method returns the fall back timer to be starting the restriction , for no. of retries
      * when met with the pdn fail fallback causes
      *
-     * @param apnType : (ims,sos,mms,xcap,cbs)
+     * @param netCapability : (ims,sos,mms,xcap,cbs)
      * @return : Fallback Guard timer to be set on starting the fallback restrict @ RestrictManager
      */
-    public int getFallbackGuardTimerOnInitialConnectionFail(int apnType) {
-        String[] fallback_guard_timer = getFallbackConfigForApn(apnType);
+    public int getFallbackGuardTimerOnInitialConnectionFail(int netCapability) {
+        String[] fallback_guard_timer = getFallbackConfigForNetCapability(netCapability);
 
         if (fallback_guard_timer != null
                 && fallback_guard_timer[0] != null
@@ -2730,15 +2723,18 @@ public class QnsCarrierConfigManager {
         }
     }
 
-    /* To support find the right Initial Pdn connection failure fallback config based on apn type*/
-    private String[] getFallbackConfigForApn(int apnType) {
+    /**
+     * To support find the right Initial Pdn connection failure fallback config based on network
+     * capability
+     */
+    private String[] getFallbackConfigForNetCapability(int netCapability) {
         if (mFallbackOnInitialConnectionFailure != null
                 && mFallbackOnInitialConnectionFailure.length > 0) {
-            String apnName = ApnSetting.getApnTypeString(apnType);
-            for (String apn : mFallbackOnInitialConnectionFailure) {
-                Log.d(LOG_TAG, "Fallback On Initial Failure enabled for" + apn);
-                if (apn.contains(apnName)) {
-                    return apn.split(":");
+            String netCapabilityName = QnsUtils.getNameOfNetCapability(netCapability);
+            for (String config : mFallbackOnInitialConnectionFailure) {
+                Log.d(LOG_TAG, "Fallback On Initial Failure enabled for " + config);
+                if (config.contains(netCapabilityName)) {
+                    return config.split(":");
                 }
             }
         }

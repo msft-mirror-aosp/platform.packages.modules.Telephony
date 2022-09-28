@@ -61,12 +61,25 @@ public class CellularNetworkStatusTracker {
         Log.d(LOG_TAG, s);
     }
 
-    public void registerQnsTelephonyInfoChanged(int apnType, Handler h, int what) {
-        mQnsTelephonyListener.registerQnsTelephonyInfoChanged(apnType, h, what, null, true);
+    /**
+     * Register for QnsTelephonyInfoChanged
+     *
+     * @param netCapability Network Capability
+     * @param h Handler
+     * @param what Event
+     */
+    public void registerQnsTelephonyInfoChanged(int netCapability, Handler h, int what) {
+        mQnsTelephonyListener.registerQnsTelephonyInfoChanged(netCapability, h, what, null, true);
     }
 
-    public void unregisterQnsTelephonyInfoChanged(int apnType, Handler h) {
-        mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(apnType, h);
+    /**
+     * Unregister for QnsTelephonyInfoChanged
+     *
+     * @param netCapability Network Capability
+     * @param h Handler
+     */
+    public void unregisterQnsTelephonyInfoChanged(int netCapability, Handler h) {
+        mQnsTelephonyListener.unregisterQnsTelephonyInfoChanged(netCapability, h);
     }
 
     public boolean isAirplaneModeEnabled() {

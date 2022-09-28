@@ -21,6 +21,7 @@ import static android.telephony.BarringInfo.BARRING_SERVICE_TYPE_MMTEL_VOICE;
 
 import android.annotation.NonNull;
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -35,7 +36,6 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
-import android.telephony.data.ApnSetting;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -68,7 +68,7 @@ public class QnsTelephonyListener {
     public QnsRegistrantList mSubscriptionIdListener = new QnsRegistrantList();
     public QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
     protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
-    protected HashMap<Integer, QnsRegistrantList> mApnTypeRegistrantMap = new HashMap<>();
+    protected HashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
     protected QnsTelephonyInfoIms mLastQnsTelephonyInfoIms = new QnsTelephonyInfoIms();
     protected ServiceState mLastServiceState = new ServiceState();
@@ -145,21 +145,23 @@ public class QnsTelephonyListener {
 
     protected void notifyQnsTelephonyInfo(QnsTelephonyInfo info) {
         QnsAsyncResult ar;
-        for (Integer apnType : mQnsTelephonyInfoRegistrantMap.keySet()) {
-            if (apnType == ApnSetting.TYPE_IMS || apnType == ApnSetting.TYPE_EMERGENCY) {
+        for (Integer netCapability : mQnsTelephonyInfoRegistrantMap.keySet()) {
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                    || netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 ar = new QnsAsyncResult(null, mLastQnsTelephonyInfoIms, null);
             } else {
                 ar = new QnsAsyncResult(null, info, null);
             }
-            mQnsTelephonyInfoRegistrantMap.get(apnType).notifyRegistrants(ar);
+            mQnsTelephonyInfoRegistrantMap.get(netCapability).notifyRegistrants(ar);
         }
     }
 
     protected void notifyQnsTelephonyInfoIms(QnsTelephonyInfoIms info) {
         QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
-        QnsRegistrantList imsRegList = mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_IMS);
+        QnsRegistrantList imsRegList =
+                mQnsTelephonyInfoRegistrantMap.get(NetworkCapabilities.NET_CAPABILITY_IMS);
         QnsRegistrantList sosRegList =
-                mQnsTelephonyInfoRegistrantMap.get(ApnSetting.TYPE_EMERGENCY);
+                mQnsTelephonyInfoRegistrantMap.get(NetworkCapabilities.NET_CAPABILITY_EIMS);
         if (imsRegList != null) {
             imsRegList.notifyRegistrants(ar);
         }
@@ -174,23 +176,26 @@ public class QnsTelephonyListener {
 
     protected void notifyPreciseDataConnectionStateChanged(
             PreciseDataConnectionState connectionState) {
-        int supportedApnTypeBitMask = connectionState.getApnSetting().getApnTypeBitmask();
-        List<Integer> apnTypes = QnsUtils.getApnTypes(supportedApnTypeBitMask);
+        List<Integer> netCapabilities =
+                QnsUtils.getNetCapabilitiesFromApnTypeBitmask(
+                        connectionState.getApnSetting().getApnTypeBitmask());
         QnsAsyncResult ar = new QnsAsyncResult(null, connectionState, null);
-        for (int apnType : apnTypes) {
-            PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(apnType);
+        for (int netCapability : netCapabilities) {
+            PreciseDataConnectionState lastState = getLastPreciseDataConnectionState(netCapability);
             if (lastState == null || !lastState.equals(connectionState)) {
-                mLastPreciseDataConnectionState.put(apnType, connectionState);
+                mLastPreciseDataConnectionState.put(netCapability, connectionState);
                 sArchivingPreciseDataConnectionState.put(
-                        mSubId, connectionState.getTransportType(), apnType, connectionState);
-                QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
-                if (apnTypeRegistrantList != null) {
-                    apnTypeRegistrantList.notifyRegistrants(ar);
+                        mSubId, connectionState.getTransportType(), netCapability, connectionState);
+                QnsRegistrantList netCapabilityRegistrantList =
+                        mNetCapabilityRegistrantMap.get(netCapability);
+                if (netCapabilityRegistrantList != null) {
+                    netCapabilityRegistrantList.notifyRegistrants(ar);
                 }
             } else {
                 log(
-                        "onPreciseDataConnectionStateChanged state received for apn is same:"
-                                + apnType);
+                        "onPreciseDataConnectionStateChanged state received for netCapability is"
+                                + " same:"
+                                + netCapability);
             }
         }
     }
@@ -200,30 +205,31 @@ public class QnsTelephonyListener {
         return mLastQnsTelephonyInfo;
     }
 
-    /** Get a last of the precise data connection state per apn type. */
-    public PreciseDataConnectionState getLastPreciseDataConnectionState(int apnType) {
-        return mLastPreciseDataConnectionState.get(apnType);
+    /** Get a last of the precise data connection state per netCapability. */
+    public PreciseDataConnectionState getLastPreciseDataConnectionState(int netCapability) {
+        return mLastPreciseDataConnectionState.get(netCapability);
     }
 
     /**
      * Register an event for QnsTelephonyInfo changed.
      *
-     * @param apnType the apn type to be notified.
+     * @param netCapability Network Capability to be notified.
      * @param h the Handler to get event.
      * @param what the event.
      * @param userObj user object.
      * @param notifyImmediately set true if want to notify immediately.
      */
     public void registerQnsTelephonyInfoChanged(
-            int apnType, Handler h, int what, Object userObj, boolean notifyImmediately) {
+            int netCapability, Handler h, int what, Object userObj, boolean notifyImmediately) {
         if (h != null) {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
-            QnsRegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
-            if (apnTypeRegistrantList == null) {
-                apnTypeRegistrantList = new QnsRegistrantList();
-                mQnsTelephonyInfoRegistrantMap.put(apnType, apnTypeRegistrantList);
+            QnsRegistrantList netCapabilityRegistrantList =
+                    mQnsTelephonyInfoRegistrantMap.get(netCapability);
+            if (netCapabilityRegistrantList == null) {
+                netCapabilityRegistrantList = new QnsRegistrantList();
+                mQnsTelephonyInfoRegistrantMap.put(netCapability, netCapabilityRegistrantList);
             }
-            apnTypeRegistrantList.add(r);
+            netCapabilityRegistrantList.add(r);
 
             if (notifyImmediately) {
                 r.notifyRegistrant(new QnsAsyncResult(null, getLastQnsTelephonyInfo(), null));
@@ -234,22 +240,23 @@ public class QnsTelephonyListener {
     /**
      * Register an event for Precise Data Connection State Changed.
      *
-     * @param apnType the apn type to be notified.
+     * @param netCapability Network Capability to be notified.
      * @param h the handler to get event.
      * @param what the event.
      */
     public void registerPreciseDataConnectionStateChanged(
-            int apnType, Handler h, int what, Object userObj, boolean notifyImmediately) {
+            int netCapability, Handler h, int what, Object userObj, boolean notifyImmediately) {
         if (h != null) {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
-            QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
-            if (apnTypeRegistrantList == null) {
-                apnTypeRegistrantList = new QnsRegistrantList();
-                mApnTypeRegistrantMap.put(apnType, apnTypeRegistrantList);
+            QnsRegistrantList netCapabilityRegistrantList =
+                    mNetCapabilityRegistrantMap.get(netCapability);
+            if (netCapabilityRegistrantList == null) {
+                netCapabilityRegistrantList = new QnsRegistrantList();
+                mNetCapabilityRegistrantMap.put(netCapability, netCapabilityRegistrantList);
             }
-            apnTypeRegistrantList.add(r);
+            netCapabilityRegistrantList.add(r);
 
-            PreciseDataConnectionState pdcs = getLastPreciseDataConnectionState(apnType);
+            PreciseDataConnectionState pdcs = getLastPreciseDataConnectionState(netCapability);
             if (notifyImmediately && pdcs != null) {
                 r.notifyRegistrant(new QnsAsyncResult(null, pdcs, null));
             }
@@ -333,14 +340,15 @@ public class QnsTelephonyListener {
     /**
      * Unregister an event for QnsTelephonyInfo changed.
      *
-     * @param apnType the apn type to be notified.
+     * @param netCapability Network Capability to be notified.
      * @param h the handler to get event.
      */
-    public void unregisterQnsTelephonyInfoChanged(int apnType, Handler h) {
+    public void unregisterQnsTelephonyInfoChanged(int netCapability, Handler h) {
         if (h != null) {
-            QnsRegistrantList apnTypeRegistrantList = mQnsTelephonyInfoRegistrantMap.get(apnType);
-            if (apnTypeRegistrantList != null) {
-                apnTypeRegistrantList.remove(h);
+            QnsRegistrantList netCapabilityRegistrantList =
+                    mQnsTelephonyInfoRegistrantMap.get(netCapability);
+            if (netCapabilityRegistrantList != null) {
+                netCapabilityRegistrantList.remove(h);
             }
         }
     }
@@ -348,14 +356,15 @@ public class QnsTelephonyListener {
     /**
      * Unregister an event for Precise Data Connectio State Changed.
      *
-     * @param apnType the apn type to be notified.
+     * @param netCapability Network Capability to be notified.
      * @param h the handler to get event.
      */
-    public void unregisterPreciseDataConnectionStateChanged(int apnType, Handler h) {
+    public void unregisterPreciseDataConnectionStateChanged(int netCapability, Handler h) {
         if (h != null) {
-            QnsRegistrantList apnTypeRegistrantList = mApnTypeRegistrantMap.get(apnType);
-            if (apnTypeRegistrantList != null) {
-                apnTypeRegistrantList.remove(h);
+            QnsRegistrantList netCapabilityRegistrantList =
+                    mNetCapabilityRegistrantMap.get(netCapability);
+            if (netCapabilityRegistrantList != null) {
+                netCapabilityRegistrantList.remove(h);
             }
         }
     }
@@ -647,14 +656,15 @@ public class QnsTelephonyListener {
         try {
             if (newState.getState() == TelephonyManager.DATA_CONNECTED
                     || newState.getState() == TelephonyManager.DATA_HANDOVER_IN_PROGRESS) {
-                int supportedApnTypeBitMask = newState.getApnSetting().getApnTypeBitmask();
-                List<Integer> apnTypes = QnsUtils.getApnTypes(supportedApnTypeBitMask);
-                for (int apnType : apnTypes) {
+                List<Integer> netCapabilities =
+                        QnsUtils.getNetCapabilitiesFromApnTypeBitmask(
+                                newState.getApnSetting().getApnTypeBitmask());
+                for (int netCapability : netCapabilities) {
                     PreciseDataConnectionState lastState =
-                            getLastPreciseDataConnectionState(apnType);
+                            getLastPreciseDataConnectionState(netCapability);
                     PreciseDataConnectionState archiveState =
                             sArchivingPreciseDataConnectionState.get(
-                                    mSubId, newState.getTransportType(), apnType);
+                                    mSubId, newState.getTransportType(), netCapability);
                     if (archiveState.equals(newState) && lastState == null) {
                         return false;
                     }
@@ -729,7 +739,7 @@ public class QnsTelephonyListener {
         if (mTelephonyListener != null) {
             mTelephonyListener.unregister(mSubId);
         }
-        mApnTypeRegistrantMap.clear();
+        mNetCapabilityRegistrantMap.clear();
         mQnsTelephonyInfoRegistrantMap.clear();
         mLastPreciseDataConnectionState.clear();
         mIwlanServiceStateListener.removeAll();
@@ -768,16 +778,16 @@ public class QnsTelephonyListener {
 
         public Archiving() {}
 
-        private String getKey(int subId, int transportType, int apnType) {
-            return subId + "_" + transportType + "_" + apnType;
+        private String getKey(int subId, int transportType, int netCapability) {
+            return subId + "_" + transportType + "_" + netCapability;
         }
 
-        public void put(int subId, int transportType, int apnType, V v) {
-            mArchiving.put(getKey(subId, transportType, apnType), v);
+        public void put(int subId, int transportType, int netCapability, V v) {
+            mArchiving.put(getKey(subId, transportType, netCapability), v);
         }
 
-        public V get(int subId, int transportType, int apnType) {
-            return mArchiving.get(getKey(subId, transportType, apnType));
+        public V get(int subId, int transportType, int netCapability) {
+            return mArchiving.get(getKey(subId, transportType, netCapability));
         }
     }
 
@@ -888,16 +898,16 @@ public class QnsTelephonyListener {
         }
 
         public boolean isCellularAvailable(
-                int apnType,
+                int netCapability,
                 boolean checkVops,
                 boolean checkBarring,
                 boolean volteRoamingSupported) {
-            if (apnType == ApnSetting.TYPE_IMS) {
+            if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 return super.isCellularAvailable()
                         && (!checkVops || (checkVops && mVopsSupport))
                         && (!checkBarring || (checkBarring && !mVoiceBarring))
                         && volteRoamingSupported;
-            } else if (apnType == ApnSetting.TYPE_EMERGENCY) {
+            } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 return super.isCellularAvailable()
                         && (!checkVops || (checkVops && mVopsEmergencySupport))
                         && (!checkBarring || (checkBarring && !mEmergencyBarring));

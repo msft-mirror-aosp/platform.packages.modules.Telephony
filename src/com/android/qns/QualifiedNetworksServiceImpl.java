@@ -23,7 +23,6 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
-import android.telephony.data.ApnSetting;
 import android.telephony.data.QualifiedNetworksService;
 import android.telephony.data.ThrottleStatus;
 import android.util.Log;
@@ -32,7 +31,6 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,20 +100,20 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
     }
 
     public static class QualifiedNetworksInfo {
-        int mApnType;
+        int mNetCapability;
         List<Integer> mAccessNetworkTypes;
 
-        public QualifiedNetworksInfo(int apnType, List<Integer> accessNetworkTypes) {
-            mApnType = apnType;
+        public QualifiedNetworksInfo(int netCapability, List<Integer> accessNetworkTypes) {
+            mNetCapability = netCapability;
             mAccessNetworkTypes = accessNetworkTypes;
         }
 
-        public int getApnType() {
-            return mApnType;
+        public int getNetCapability() {
+            return mNetCapability;
         }
 
-        public void setApnType(int apnType) {
-            mApnType = apnType;
+        public void setNetCapability(int netCapability) {
+            mNetCapability = netCapability;
         }
 
         public List<Integer> getAccessNetworkTypes() {
@@ -179,7 +177,6 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     new Handler(mConfigHandlerThread.getLooper()) {
                         @Override
                         public void handleMessage(Message message) {
-                            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
                             switch (message.what) {
                                 case QNS_CONFIGURATION_LOADED:
                                     onConfigurationLoaded();
@@ -210,51 +207,30 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                 isQnsConfigChangeRegistered = true;
             }
 
-            int qnsSupportedApnTypesMask = mConfigManager.getQnsSupportedApnTypes();
-
             HashMap<Integer, AccessNetworkEvaluator> evaluators = new HashMap<>();
-            List<Integer> apnTypes = QnsUtils.getApnTypes(qnsSupportedApnTypesMask);
-            Integer[] types = apnTypes.toArray(new Integer[0]);
-            ArrayList<Integer> prioritisedTypes = new ArrayList<>();
+            List<Integer> netCapabilities = mConfigManager.getQnsSupportedNetCapabilities();
 
-            for (int i = 0; i < types.length; i++) {
-                if (types[i] == ApnSetting.TYPE_IMS) {
-                    prioritisedTypes.add(0, types[i]);
-                    types[i] = -1;
-                    for (int j = 0; j < types.length; j++) {
-                        if (types[j] == ApnSetting.TYPE_EMERGENCY) {
-                            prioritisedTypes.add(1, types[j]);
-                            types[j] = -1;
-                        }
-                    }
-                }
-            }
-            for (int apnType : types) {
-                if (apnType == -1) continue;
-                prioritisedTypes.add(apnType);
-            }
-            for (Integer type : prioritisedTypes) {
-                int apnType = type.intValue();
-                int transportType = mConfigManager.getQnsSupportedTransportType(apnType);
+            for (int netCapability : netCapabilities) {
+                int transportType = mConfigManager.getQnsSupportedTransportType(netCapability);
                 if (transportType < 0
                         || transportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN) {
                     continue;
                 }
-                if (mEvaluators.get(apnType) != null) {
-                    AccessNetworkEvaluator evaluator = mEvaluators.remove(apnType);
-                    evaluators.put(apnType, evaluator);
+                if (mEvaluators.get(netCapability) != null) {
+                    AccessNetworkEvaluator evaluator = mEvaluators.remove(netCapability);
+                    evaluators.put(netCapability, evaluator);
                     // reuse evaluator
                     evaluator.rebuild();
                 } else {
                     AccessNetworkEvaluator evaluator =
-                            new AccessNetworkEvaluator(getSlotIndex(), apnType, mContext);
+                            new AccessNetworkEvaluator(getSlotIndex(), netCapability, mContext);
                     evaluator.registerForQualifiedNetworksChanged(
                             mHandler, QUALIFIED_NETWORKS_CHANGED);
-                    evaluators.put(apnType, evaluator);
+                    evaluators.put(netCapability, evaluator);
                 }
             }
-            for (Integer apnType : mEvaluators.keySet()) {
-                AccessNetworkEvaluator evaluator = mEvaluators.get(apnType);
+            for (Integer capability : mEvaluators.keySet()) {
+                AccessNetworkEvaluator evaluator = mEvaluators.get(capability);
                 evaluator.unregisterForQualifiedNetworksChanged(mHandler);
                 evaluator.close();
             }
@@ -266,23 +242,30 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
 
         private void onQualifiedNetworksChanged(QualifiedNetworksInfo info) {
             log(
-                    "Calling updateQualifiedNetworkTypes for apnTypes["
-                            + QnsUtils.getStringApnTypesFromBitmask(info.getApnType())
+                    "Calling updateQualifiedNetworkTypes for mNetCapability["
+                            + QnsUtils.getNameOfNetCapability(info.getNetCapability())
                             + "], preferred networks "
                             + QnsUtils.getStringAccessNetworkTypes(info.getAccessNetworkTypes()));
 
-            updateQualifiedNetworkTypes(info.getApnType(), info.getAccessNetworkTypes());
+            int apnType = QnsUtils.getApnTypeFromNetCapability(info.getNetCapability());
+            updateQualifiedNetworkTypes(apnType, info.getAccessNetworkTypes());
         }
 
         @Override
         public void reportThrottleStatusChanged(@NonNull List<ThrottleStatus> statuses) {
             log("reportThrottleStatusChanged: statuses size=" + statuses.size());
             for (ThrottleStatus ts : statuses) {
-                log("ThrottleStatus :" + ts.toString());
+                int netCapability;
+                try {
+                    netCapability = QnsUtils.getNetCapabilityFromApnType(ts.getApnType());
+                } catch (IllegalArgumentException e) {
+                    continue;
+                }
+                log("ThrottleStatus:" + ts + ", netCapability" + netCapability);
                 if (ts.getSlotIndex() != getSlotIndex()) {
                     continue;
                 }
-                AccessNetworkEvaluator evaluator = mEvaluators.get(ts.getApnType());
+                AccessNetworkEvaluator evaluator = mEvaluators.get(netCapability);
                 if (evaluator == null) {
                     continue;
                 }
@@ -304,8 +287,8 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                 mConfigManager.unregisterForConfigurationLoaded(mConfigHandler);
                 mConfigManager.unregisterForConfigurationChanged(mConfigHandler);
                 isQnsConfigChangeRegistered = false;
-                for (Integer apnType : mEvaluators.keySet()) {
-                    AccessNetworkEvaluator evaluator = mEvaluators.get(apnType);
+                for (Integer netCapability : mEvaluators.keySet()) {
+                    AccessNetworkEvaluator evaluator = mEvaluators.get(netCapability);
                     evaluator.unregisterForQualifiedNetworksChanged(mHandler);
                     evaluator.close();
                 }

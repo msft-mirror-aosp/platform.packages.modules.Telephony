@@ -59,8 +59,8 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.hardware.radio.V1_5.ApnTypes;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PersistableBundle;
@@ -70,7 +70,6 @@ import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
-import android.telephony.data.ApnSetting;
 import android.telephony.ims.ProvisioningManager;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -89,6 +88,8 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -178,32 +179,38 @@ public class QnsCarrierConfigManagerTest {
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnTypes.IMS);
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertTrue(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.NGRAN, ApnTypes.IMS);
+                        AccessNetworkConstants.AccessNetworkType.NGRAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertTrue(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN, ApnTypes.EMERGENCY);
+                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertFalse(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.NGRAN, ApnTypes.EMERGENCY);
+                        AccessNetworkConstants.AccessNetworkType.NGRAN,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertFalse(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.GERAN, ApnTypes.IMS);
+                        AccessNetworkConstants.AccessNetworkType.GERAN,
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertFalse(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN, ApnTypes.MMS);
+                        AccessNetworkConstants.AccessNetworkType.UTRAN,
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
         Assert.assertFalse(isAccessNetworkAllowedForRat);
     }
 
@@ -491,20 +498,24 @@ public class QnsCarrierConfigManagerTest {
     }
 
     @Test
-    public void testGetQnsSupportedApnTypesWithDefaultValues() {
-        Assert.assertEquals(ApnSetting.TYPE_IMS, mConfigManager.getQnsSupportedApnTypes());
+    public void testGetQnsSupportedNetCapabilitiesWithDefaultValues() {
+        List<Integer> imsNetCapability = new ArrayList<>();
+        imsNetCapability.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        Assert.assertEquals(imsNetCapability, mConfigManager.getQnsSupportedNetCapabilities());
     }
 
     @Test
-    public void testGetQnsSupportedApnTypesWithTestBundle() {
+    public void testGetQnsSupportedNetCapabilitiesWithTestBundle() {
         PersistableBundle bundle = new PersistableBundle();
         bundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_SOS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
         mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        List<Integer> supportedNetCapabilities = new ArrayList<>();
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertEquals(
-                ApnSetting.TYPE_IMS | ApnSetting.TYPE_EMERGENCY,
-                mConfigManager.getQnsSupportedApnTypes());
+                supportedNetCapabilities, mConfigManager.getQnsSupportedNetCapabilities());
         bundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
@@ -515,13 +526,11 @@ public class QnsCarrierConfigManagerTest {
                 QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
         mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_CBS);
         Assert.assertEquals(
-                ApnSetting.TYPE_IMS
-                        | ApnSetting.TYPE_EMERGENCY
-                        | ApnSetting.TYPE_MMS
-                        | ApnSetting.TYPE_XCAP
-                        | ApnSetting.TYPE_CBS,
-                mConfigManager.getQnsSupportedApnTypes());
+                supportedNetCapabilities, mConfigManager.getQnsSupportedNetCapabilities());
     }
 
     @Test
@@ -614,37 +623,49 @@ public class QnsCarrierConfigManagerTest {
     public void testGetRatPreference() {
         int ratPreference;
 
-        ratPreference = mConfigManager.getRatPreference(ApnTypes.IMS);
+        ratPreference = mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertEquals(QnsConstants.RAT_PREFERENCE_DEFAULT, ratPreference);
-        ratPreference = mConfigManager.getRatPreference(ApnTypes.EMERGENCY);
+        ratPreference = mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertEquals(QnsConstants.RAT_PREFERENCE_DEFAULT, ratPreference);
-        ratPreference = mConfigManager.getRatPreference(ApnTypes.MMS);
+        ratPreference = mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_MMS);
         Assert.assertEquals(QnsConstants.RAT_PREFERENCE_DEFAULT, ratPreference);
-        ratPreference = mConfigManager.getRatPreference(ApnTypes.XCAP);
+        ratPreference = mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_XCAP);
         Assert.assertEquals(QnsConstants.RAT_PREFERENCE_DEFAULT, ratPreference);
-        ratPreference = mConfigManager.getRatPreference(ApnTypes.CBS);
+        ratPreference = mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_CBS);
         Assert.assertEquals(QnsConstants.RAT_PREFERENCE_DEFAULT, ratPreference);
     }
 
     @Test
     public void testGetQnsSupportedTransportTypeWithDefaultValues() {
         int qnsTransportType;
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.IMS);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.MMS);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(NetworkCapabilities.NET_CAPABILITY_MMS);
         Assert.assertEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.XCAP);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP);
         Assert.assertEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.EMERGENCY);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.CBS);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(NetworkCapabilities.NET_CAPABILITY_CBS);
         Assert.assertEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN, qnsTransportType);
 
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.NONE);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET);
         Assert.assertEquals(QnsConstants.INVALID_ID, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.IMS);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(NetworkCapabilities.NET_CAPABILITY_IMS);
         Assert.assertNotEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN, qnsTransportType);
-        qnsTransportType = mConfigManager.getQnsSupportedTransportType(ApnTypes.EMERGENCY);
+        qnsTransportType =
+                mConfigManager.getQnsSupportedTransportType(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertNotEquals(QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH, qnsTransportType);
     }
 
@@ -652,48 +673,81 @@ public class QnsCarrierConfigManagerTest {
     public void testGetWwanHysteresisTimerWithDefaultValues() {
         int wwanHysteresisTimer;
 
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_IDLE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
         wwanHysteresisTimer =
-                mConfigManager.getWwanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_IDLE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_VOICE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer =
-                mConfigManager.getWwanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_VOICE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_VIDEO);
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
         wwanHysteresisTimer =
-                mConfigManager.getWwanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_VIDEO);
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.NONE, CALL_TYPE_VIDEO);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_VOICE);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_VIDEO);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_VIDEO);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.IMS, -1);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_IMS, -1);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.EMERGENCY, 3);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_EIMS, 3);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_IDLE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_VOICE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_VIDEO);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_IDLE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_VOICE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_VIDEO);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_IDLE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_VOICE);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_VIDEO);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.MMS, -1);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_MMS, -1);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
-        wwanHysteresisTimer = mConfigManager.getWwanHysteresisTimer(ApnTypes.EMERGENCY, 3);
+        wwanHysteresisTimer =
+                mConfigManager.getWwanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_EIMS, 3);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wwanHysteresisTimer);
     }
 
@@ -710,7 +764,8 @@ public class QnsCarrierConfigManagerTest {
         mConfigManager.setQnsProvisioningInfo(info);
 
         int wwanHysteresisTimer =
-                mConfigManager.getWwanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_IDLE);
+                mConfigManager.getWwanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_IDLE);
         Assert.assertEquals(10000, wwanHysteresisTimer);
     }
 
@@ -727,7 +782,8 @@ public class QnsCarrierConfigManagerTest {
         mConfigManager.setQnsProvisioningInfo(info);
 
         int wlanHysteresisTimer =
-                mConfigManager.getWlanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_IDLE);
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_IDLE);
         Assert.assertEquals(20000, wlanHysteresisTimer);
     }
 
@@ -766,48 +822,81 @@ public class QnsCarrierConfigManagerTest {
     public void testGetWlanHysteresisTimerWithDefaultValues() {
         int wlanHysteresisTimer;
 
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_IDLE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
         wlanHysteresisTimer =
-                mConfigManager.getWlanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_IDLE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_VOICE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer =
-                mConfigManager.getWlanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_VOICE);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.IMS, CALL_TYPE_VIDEO);
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
         wlanHysteresisTimer =
-                mConfigManager.getWlanHysteresisTimer(ApnTypes.EMERGENCY, CALL_TYPE_VIDEO);
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.NONE, CALL_TYPE_VIDEO);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_VOICE);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_IMS, CALL_TYPE_VIDEO);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS, CALL_TYPE_VIDEO);
+        Assert.assertEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.IMS, -1);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_IMS, -1);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.EMERGENCY, 3);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_EIMS, 3);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_HYST_TIMER, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_IDLE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_VOICE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.MMS, CALL_TYPE_VIDEO);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_MMS, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_IDLE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_VOICE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.CBS, CALL_TYPE_VIDEO);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_CBS, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_IDLE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_IDLE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_VOICE);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_VOICE);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.XCAP, CALL_TYPE_VIDEO);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP, CALL_TYPE_VIDEO);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.MMS, -1);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_MMS, -1);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
-        wlanHysteresisTimer = mConfigManager.getWlanHysteresisTimer(ApnTypes.EMERGENCY, 3);
+        wlanHysteresisTimer =
+                mConfigManager.getWlanHysteresisTimer(NetworkCapabilities.NET_CAPABILITY_EIMS, 3);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, wlanHysteresisTimer);
     }
 
@@ -1450,85 +1539,85 @@ public class QnsCarrierConfigManagerTest {
                 bundle, null, CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_CBS,
+                        NetworkCapabilities.NET_CAPABILITY_CBS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_CBS,
+                        NetworkCapabilities.NET_CAPABILITY_CBS,
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.GERAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         QnsConstants.COVERAGE_ROAM));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.UTRAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME));
@@ -1664,37 +1753,37 @@ public class QnsCarrierConfigManagerTest {
         mConfigManager.loadHandoverRules(bundleCurrent, null, key);
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_CBS,
+                        NetworkCapabilities.NET_CAPABILITY_CBS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertTrue(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
@@ -1704,31 +1793,31 @@ public class QnsCarrierConfigManagerTest {
         bundleNew.clear();
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_IMS,
+                        NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_EMERGENCY,
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_MMS,
+                        NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_CBS,
+                        NetworkCapabilities.NET_CAPABILITY_CBS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
         assertFalse(
                 mConfigManager.isHandoverAllowedByPolicy(
-                        ApnSetting.TYPE_XCAP,
+                        NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME));
@@ -1789,10 +1878,44 @@ public class QnsCarrierConfigManagerTest {
                         .KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY,
                 new String[] {"ims", "mms"});
         mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        assertTrue(mConfigManager.needToCheckInternationalRoaming(ApnSetting.TYPE_IMS));
-        assertFalse(mConfigManager.needToCheckInternationalRoaming(ApnSetting.TYPE_EMERGENCY));
-        assertTrue(mConfigManager.needToCheckInternationalRoaming(ApnSetting.TYPE_MMS));
-        assertFalse(mConfigManager.needToCheckInternationalRoaming(ApnSetting.TYPE_XCAP));
+        assertTrue(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertFalse(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS));
+        assertTrue(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_MMS));
+        assertFalse(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP));
+
+        PersistableBundle bundle2 = new PersistableBundle();
+        bundle2.putStringArray(
+                QnsCarrierConfigManager
+                        .KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY,
+                new String[] {"ims", "eims"});
+        mConfigManager.loadQnsAneSupportConfigurations(bundle2, null);
+        assertTrue(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertFalse(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS));
+
+        PersistableBundle bundle3 = new PersistableBundle();
+        bundle3.putStringArray(
+                QnsCarrierConfigManager
+                        .KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY,
+                new String[] {"ims", "emergency"});
+        mConfigManager.loadQnsAneSupportConfigurations(bundle3, null);
+        assertTrue(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_IMS));
+        assertTrue(
+                mConfigManager.needToCheckInternationalRoaming(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS));
     }
 
     @Test
@@ -1860,9 +1983,11 @@ public class QnsCarrierConfigManagerTest {
     public void testFallbackConfigOnInitialDataConnectionFailWithDefaultValue() {
         mConfigManager.loadQnsAneSupportConfigurations(null, null);
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
 
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
@@ -1870,9 +1995,11 @@ public class QnsCarrierConfigManagerTest {
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
 
         int[] mmsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
         int mmsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
 
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[1]);
@@ -1890,9 +2017,11 @@ public class QnsCarrierConfigManagerTest {
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
 
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
@@ -1900,9 +2029,11 @@ public class QnsCarrierConfigManagerTest {
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackGuardTimer);
 
         int[] mmsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
         int mmsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
 
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackConfigs[1]);
@@ -1911,9 +2042,11 @@ public class QnsCarrierConfigManagerTest {
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, mmsFallbackGuardTimer);
 
         int[] xcapFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
         int xcapFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_XCAP);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_XCAP);
 
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, xcapFallbackConfigs[1]);
@@ -1930,9 +2063,11 @@ public class QnsCarrierConfigManagerTest {
                 new String[] {"ims:2:30000:60000:5"});
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
 
         assertEquals(1, imsFallbackConfigs[0]);
         assertEquals(2, imsFallbackConfigs[1]);
@@ -1946,9 +2081,11 @@ public class QnsCarrierConfigManagerTest {
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
 
         int[] mmsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_MMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
         int mmsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_MMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_MMS);
 
         assertEquals(1, mmsFallbackConfigs[0]);
         assertEquals(1, mmsFallbackConfigs[1]);
@@ -1965,9 +2102,11 @@ public class QnsCarrierConfigManagerTest {
                 new String[] {""});
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[2]);
@@ -1979,9 +2118,11 @@ public class QnsCarrierConfigManagerTest {
                 new String[] {"ims:"});
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
         imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
 
         assertEquals(1, imsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
@@ -1998,9 +2139,11 @@ public class QnsCarrierConfigManagerTest {
                 new String[] {"ims:2::30000:3"});
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
 
         assertEquals(1, imsFallbackConfigs[0]);
         assertEquals(2, imsFallbackConfigs[1]);
@@ -2017,9 +2160,11 @@ public class QnsCarrierConfigManagerTest {
                 new String[] {"ims::30000:60000:4"});
         mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
         int[] imsFallbackConfigs =
-                mConfigManager.getInitialDataConnectionFallbackConfig(ApnSetting.TYPE_IMS);
+                mConfigManager.getInitialDataConnectionFallbackConfig(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         int imsFallbackGuardTimer =
-                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(ApnSetting.TYPE_IMS);
+                mConfigManager.getFallbackGuardTimerOnInitialConnectionFail(
+                        NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(1, imsFallbackConfigs[0]);
         assertEquals(QnsConstants.KEY_DEFAULT_VALUE, imsFallbackConfigs[1]);
         assertEquals(30000, imsFallbackConfigs[2]);

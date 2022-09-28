@@ -95,7 +95,7 @@ public class AccessNetworkSelectionPolicyBuilder {
                     if (accessNetwork == IWLAN) {
                         continue;
                     }
-                    if (mConfig.isAccessNetworkAllowed(accessNetwork, mApnType)) {
+                    if (mConfig.isAccessNetworkAllowed(accessNetwork, mNetCapability)) {
                         if (preCondition.getPreference() == QnsConstants.CELL_PREF
                                 && direction == QnsConstants.ROVE_OUT) {
                             String name =
@@ -167,13 +167,13 @@ public class AccessNetworkSelectionPolicyBuilder {
     }
 
     public static synchronized Map<PreCondition, List<AccessNetworkSelectionPolicy>> build(
-            Context context, int slotIndex, int apnType) {
+            Context context, int slotIndex, int netCapability) {
         AccessNetworkSelectionPolicyBuilder builder;
         QnsCarrierConfigManager cm = QnsCarrierConfigManager.getInstance(context, slotIndex);
         if (cm.isOverrideImsPreferenceSupported()) {
-            builder = new AnspImsPreferModePolicyBuilder(context, slotIndex, apnType);
+            builder = new AnspImsPreferModePolicyBuilder(context, slotIndex, netCapability);
         } else {
-            builder = new AccessNetworkSelectionPolicyBuilder(context, slotIndex, apnType);
+            builder = new AccessNetworkSelectionPolicyBuilder(context, slotIndex, netCapability);
         }
         return builder.buildAnsp();
     }
@@ -184,17 +184,18 @@ public class AccessNetworkSelectionPolicyBuilder {
 
     protected String LOG_TAG = "QnsAnspBuilder";
     protected final QnsCarrierConfigManager mConfig;
-    protected final int mApnType;
+    protected final int mNetCapability;
 
-    public AccessNetworkSelectionPolicyBuilder(Context context, int slotIndex, int apnType) {
+    public AccessNetworkSelectionPolicyBuilder(Context context, int slotIndex, int netCapability) {
         mConfig = QnsCarrierConfigManager.getInstance(context, slotIndex);
-        mApnType = apnType;
+        mNetCapability = netCapability;
     }
 
     @VisibleForTesting
-    public AccessNetworkSelectionPolicyBuilder(QnsCarrierConfigManager configManager, int apnType) {
+    public AccessNetworkSelectionPolicyBuilder(
+            QnsCarrierConfigManager configManager, int netCapability) {
         mConfig = configManager;
-        mApnType = apnType;
+        mNetCapability = netCapability;
     }
 
     protected Map<PreCondition, List<AccessNetworkSelectionPolicy>> buildAnsp() {
@@ -247,7 +248,7 @@ public class AccessNetworkSelectionPolicyBuilder {
             @QnsConstants.RoveDirection int direction, PreCondition preCondition) {
         int transportType = direction == ROVE_IN ? WLAN : WWAN;
         return new AccessNetworkSelectionPolicy(
-                mApnType,
+                mNetCapability,
                 transportType,
                 preCondition,
                 makeThresholdGroups(direction, preCondition));
