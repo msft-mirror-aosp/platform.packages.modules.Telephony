@@ -337,8 +337,7 @@ public class CellularQualityMonitor extends QualityMonitor {
                     new SignalThresholdInfo.Builder()
                             .setRadioAccessNetworkType(networkType)
                             .setSignalMeasurementType(measurementType)
-                            .setThresholds(entry.getValue())
-                            .setIsEnabled(true);
+                            .setThresholds(entry.getValue());
             int backhaulTime = mThresholdWaitTimer.getOrDefault(entry.getKey(), -1);
             if (backhaulTime > 0) {
                 builder.setHysteresisMs(backhaulTime);
