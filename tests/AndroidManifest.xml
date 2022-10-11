@@ -20,6 +20,7 @@
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="23" />
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG"/>
+    <uses-permission android:name="android.permission.READ_PRECISE_PHONE_STATE"/>
     <application android:label="QnsUnitTests" android:debuggable="true">
         <uses-library android:name="android.test.runner" />
     </application>

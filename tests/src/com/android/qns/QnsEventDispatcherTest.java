@@ -19,6 +19,8 @@ package com.android.qns;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
 import android.content.ContentResolver;
@@ -44,6 +46,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -691,67 +696,49 @@ public class QnsEventDispatcherTest {
         synchronized (mLock) {
             long now = System.currentTimeMillis();
             long deadline = now + timeout;
-            while (dispatcher.mLastWfcMode != QnsConstants.WIFI_PREF && now < deadline) {
+            while (dispatcher.mLastWfcMode != mode && now < deadline) {
                 mLock.wait(timeout / 10);
                 now = System.currentTimeMillis();
             }
         }
     }
 
+    protected QnsEventDispatcher createQnsEventDispatcher() {
+        Class[] args = new Class[2];
+        args[0] = Context.class;
+        args[1] = int.class;
+
+        Constructor<QnsEventDispatcher> constructor;
+        try {
+            constructor = QnsEventDispatcher.class.getDeclaredConstructor(args);
+            assertTrue(Modifier.isPrivate(constructor.getModifiers()));
+            constructor.setAccessible(true);
+            return constructor.newInstance(mMockContext, DEFAULT_SLOT_INDEX);
+        } catch (InstantiationException
+                | IllegalAccessException
+                | InvocationTargetException
+                | NoSuchMethodException e) {
+            return null;
+        }
+    }
+
     @Test
     public void testLoadWfcSettingsWhenCreate() throws InterruptedException {
-
-        when(mMockContext.getSystemService(eq(WifiManager.class))).thenReturn(mMockWifiManager);
-        when(mMockContext.getSystemService(eq(SubscriptionManager.class)))
-                .thenReturn(mMockSubscriptionManager);
-        when(mMockSubscriptionManager.getActiveSubscriptionInfoForSimSlotIndex(anyInt()))
-                .thenReturn(mMockSubscriptionInfo);
-        when(mMockContext.getContentResolver()).thenReturn(mMockContentResolver);
-        when(mMockContext.getSystemService(eq(TelephonyManager.class)))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockTelephonyManager.createForSubscriptionId(anyInt()))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockContext.getSystemService(eq(ConnectivityManager.class)))
-                .thenReturn(mMockConnectivityManager);
-        lenient()
-                .when(
-                        Settings.Global.getInt(
-                                mMockContentResolver, Settings.Global.AIRPLANE_MODE_ON, 0))
-                .thenReturn(0);
-        lenient().when(QnsUtils.getSubId(mMockContext, 1)).thenReturn(1);
-        lenient().when(QnsUtils.getSubId(mMockContext, 2)).thenReturn(2);
-        lenient()
-                .when(QnsProvisioningListener.getInstance(mMockContext, 1))
-                .thenReturn(mMockQnsProvisioningListener);
-
-        List<Integer> events = new ArrayList<Integer>();
+        List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED);
-        events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_CELLULAR_PREFERRED);
         when(mMockHandler.obtainMessage(
                         eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED)))
                 .thenReturn(mMockMessage1);
-        when(mMockHandler.obtainMessage(
-                        eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_CELLULAR_PREFERRED)))
-                .thenReturn(mMockMessage2);
 
         lenient()
                 .when(QnsUtils.getWfcMode(isA(Context.class), anyInt(), anyBoolean()))
                 .thenReturn(QnsConstants.WIFI_PREF);
-        QnsEventDispatcher dispatcher1 = QnsEventDispatcher.getInstance(mMockContext, 1);
-        waitForWfcModeChange(200, dispatcher1, QnsConstants.WIFI_PREF);
-        assertEquals(dispatcher1.mLastWfcMode, QnsConstants.WIFI_PREF);
-        dispatcher1.registerEvent(events, mMockHandler);
-        dispatcher1.mUserSettingObserver.onChange(true, WFC_MODE_URI);
+        QnsEventDispatcher dispatcher = createQnsEventDispatcher();
+        assertNotNull(dispatcher);
+        waitForWfcModeChange(500, dispatcher, QnsConstants.WIFI_PREF);
+        assertEquals(dispatcher.mLastWfcMode, QnsConstants.WIFI_PREF);
+        dispatcher.registerEvent(events, mMockHandler);
+        dispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         verify(mMockMessage1, times(1)).sendToTarget();
-
-        lenient()
-                .when(QnsUtils.getWfcMode(isA(Context.class), anyInt(), anyBoolean()))
-                .thenReturn(QnsConstants.CELL_PREF);
-        QnsEventDispatcher dispatcher2 = QnsEventDispatcher.getInstance(mMockContext, 2);
-        waitForWfcModeChange(200, dispatcher2, QnsConstants.CELL_PREF);
-        assertEquals(dispatcher2.mLastWfcMode, QnsConstants.CELL_PREF);
-        dispatcher2.registerEvent(events, mMockHandler);
-        dispatcher2.mUserSettingObserver.onChange(true, WFC_MODE_URI);
-        verify(mMockMessage2, times(1)).sendToTarget();
     }
 }
