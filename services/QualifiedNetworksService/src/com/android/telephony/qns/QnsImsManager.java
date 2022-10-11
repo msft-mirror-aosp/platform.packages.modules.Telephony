@@ -23,8 +23,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
-import android.os.Message;
 import android.os.PersistableBundle;
 import android.os.SystemProperties;
 import android.telephony.AccessNetworkConstants;
@@ -45,8 +43,6 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -95,10 +91,33 @@ class QnsImsManager {
     private ImsMmTelManager mImsMmTelManager;
     private QnsImsStateCallback mQnsImsStateCallback;
     private final QnsRegistrantList mQnsImsStateListener;
-    private final QnsImsManagerHandler mQnsImsManagerHandler;
+    private final Handler mHandler;
+    private final HandlerThread mHandlerThread;
     private QnsImsRegistrationCallback mQnsImsRegistrationCallback;
     private final QnsRegistrantList mImsRegistrationStatusListeners;
     private ImsRegistrationState mLastImsRegistrationState;
+    private final SubscriptionManager mSubscriptionManager;
+    private int mSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+
+    @VisibleForTesting
+    final SubscriptionManager.OnSubscriptionsChangedListener mSubscriptionsChangeListener =
+            new SubscriptionManager.OnSubscriptionsChangedListener() {
+                @Override
+                public void onSubscriptionsChanged() {
+                    int newSubId = QnsUtils.getSubId(mContext, mSlotId);
+                    if (newSubId != mSubId) {
+                        mSubId = newSubId;
+                        if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                            clearQnsImsManager();
+                        } else {
+                            clearQnsImsManager();
+                            initQnsImsManager();
+                            registerImsStateCallback();
+                            registerImsRegistrationCallback();
+                        }
+                    }
+                }
+            };
 
     /** QnsImsManager default constructor */
     QnsImsManager(Context context, int slotId) {
@@ -107,50 +126,122 @@ class QnsImsManager {
         mSlotId = slotId;
         mExecutor = new QnsImsManagerExecutor();
 
-        HandlerThread handlerThread = new HandlerThread(mLogTag);
-        handlerThread.start();
-        mQnsImsManagerHandler = new QnsImsManagerHandler(handlerThread.getLooper());
+        mHandlerThread = new HandlerThread(mLogTag);
+        mHandlerThread.start();
+        mHandler = new Handler(mHandlerThread.getLooper());
 
         mQnsImsStateListener = new QnsRegistrantList();
         mImsRegistrationStatusListeners = new QnsRegistrantList();
 
-        initQnsImsManager();
+        if (!mQnsImsManagerInitialized) {
+            initQnsImsManager();
+        }
+        if (mQnsImsStateCallback == null) {
+            registerImsStateCallback();
+        }
+        if (mQnsImsRegistrationCallback == null) {
+            registerImsRegistrationCallback();
+        }
+
+        mSubscriptionManager = mContext.getSystemService(SubscriptionManager.class);
+        if (mSubscriptionManager != null) {
+            mSubscriptionManager.addOnSubscriptionsChangedListener(
+                    new QnsUtils.QnsExecutor(mHandler), mSubscriptionsChangeListener);
+        }
     }
 
     @VisibleForTesting
     protected synchronized void initQnsImsManager() {
+        if (mConfigManager == null) {
+            mConfigManager = mContext.getSystemService(CarrierConfigManager.class);
+            if (mConfigManager == null) {
+                loge("initQnsImsManager: couldn't initialize. failed to get CarrierConfigManager.");
+                clearQnsImsManager();
+                return;
+            }
+        }
+
+        if (mImsManager == null) {
+            mImsManager = mContext.getSystemService(ImsManager.class);
+            if (mImsManager == null) {
+                loge("initQnsImsManager: couldn't initialize. failed to get ImsManager.");
+                clearQnsImsManager();
+                return;
+            }
+        }
+
         int subId = getSubId();
         if (!SubscriptionManager.isValidSubscriptionId(subId)) {
             return;
         }
-        try {
-            mConfigManager = mContext.getSystemService(CarrierConfigManager.class);
-            ImsManager imsManager = mContext.getSystemService(ImsManager.class);
-            if (imsManager == null) {
+
+        mImsMmTelManager = mImsManager.getImsMmTelManager(subId);
+        if (mImsMmTelManager == null) {
+            loge("initQnsImsManager: couldn't initialize. failed to get ImsMmTelManager.");
+            clearQnsImsManager();
+            return;
+        }
+
+        mQnsImsManagerInitialized = true;
+
+        log("initQnsImsManager: initialized.");
+    }
+
+    @VisibleForTesting
+    protected synchronized void registerImsStateCallback() {
+        if (!mQnsImsManagerInitialized) {
+            initQnsImsManager();
+            if (mImsMmTelManager == null) {
                 return;
             }
-            ImsMmTelManager mmTelManager = imsManager.getImsMmTelManager(subId);
+        }
+
+        if (mQnsImsStateCallback != null) {
+            loge("registerImsStateCallback: already registered");
+            return;
+        }
+
+        try {
             QnsImsStateCallback stateCallback = new QnsImsStateCallback();
-            QnsImsRegistrationCallback registrationCallback = new QnsImsRegistrationCallback();
-            mmTelManager.registerImsStateCallback(mExecutor, stateCallback);
-            mmTelManager.registerImsRegistrationCallback(mExecutor, registrationCallback);
-            log("initQnsImsManager: initialized and registered capability callback");
-            mImsManager = imsManager;
-            mImsMmTelManager = mmTelManager;
+            mImsMmTelManager.registerImsStateCallback(mExecutor, stateCallback);
+            log("registerImsStateCallback: registered Ims State Callback.");
             mQnsImsStateCallback = stateCallback;
+        } catch (ImsException e) {
+            loge("registerImsStateCallback: couldn't register callback, " + e);
+        }
+    }
+
+    @VisibleForTesting
+    protected synchronized void registerImsRegistrationCallback() {
+        if (!mQnsImsManagerInitialized) {
+            initQnsImsManager();
+            if (mImsMmTelManager == null) {
+                return;
+            }
+        }
+
+        if (mQnsImsRegistrationCallback != null) {
+            loge("registerImsRegistrationCallback: already registered");
+            return;
+        }
+
+        try {
+            QnsImsRegistrationCallback registrationCallback = new QnsImsRegistrationCallback();
+            mImsMmTelManager.registerImsRegistrationCallback(mExecutor, registrationCallback);
+            log("registerImsRegistrationCallback: registered Ims Registration Callback.");
             mQnsImsRegistrationCallback = registrationCallback;
-            mQnsImsManagerInitialized = true;
-        } catch (IllegalArgumentException | ImsException | NullPointerException e) {
-            loge("initQnsImsManager: couldn't initialize or register ims callbacks, " + e);
-            clearQnsImsManager();
+        } catch (ImsException e) {
+            loge("registerImsRegistrationCallback: couldn't register callback, " + e);
         }
     }
 
     @VisibleForTesting
     protected synchronized void clearQnsImsManager() {
         log("clearQnsImsManager");
-        if (mImsMmTelManager != null) {
+        if (mImsMmTelManager != null && mQnsImsStateCallback != null) {
             mImsMmTelManager.unregisterImsStateCallback(mQnsImsStateCallback);
+        }
+        if (mImsMmTelManager != null && mQnsImsRegistrationCallback != null) {
             mImsMmTelManager.unregisterImsRegistrationCallback(mQnsImsRegistrationCallback);
         }
         mImsManager = null;
@@ -162,37 +253,13 @@ class QnsImsManager {
 
     @VisibleForTesting
     protected synchronized void dispose() {
+        if (mSubscriptionManager != null) {
+            mSubscriptionManager.removeOnSubscriptionsChangedListener(mSubscriptionsChangeListener);
+        }
+        mHandlerThread.quitSafely();
         clearQnsImsManager();
         mImsRegistrationStatusListeners.removeAll();
-        mQnsImsManagerHandler.dispose();
         sQnsImsManagerSparseArray.remove(mSlotId);
-    }
-
-    private class QnsImsManagerHandler extends Handler {
-        QnsImsManagerHandler(Looper looper) {
-            super(looper);
-            List<Integer> events = new ArrayList<>();
-            events.add(QnsEventDispatcher.QNS_EVENT_SIM_LOADED);
-            events.add(QnsEventDispatcher.QNS_EVENT_SIM_ABSENT);
-            QnsEventDispatcher.getInstance(mContext, mSlotId).registerEvent(events, this);
-        }
-
-        void dispose() {
-            QnsEventDispatcher.getInstance(mContext, mSlotId).unregisterEvent(this);
-        }
-
-        @Override
-        public void handleMessage(Message message) {
-            log("handleMessage msg=" + message.what);
-            switch (message.what) {
-                case QnsEventDispatcher.QNS_EVENT_SIM_LOADED:
-                case QnsEventDispatcher.QNS_EVENT_SIM_ABSENT:
-                    clearQnsImsManager();
-                    break;
-                default:
-                    break;
-            }
-        }
     }
 
     private synchronized ImsMmTelManager getImsMmTelManagerOrThrowExceptionIfNotReady()
@@ -200,7 +267,16 @@ class QnsImsManager {
         if (!mQnsImsManagerInitialized) {
             initQnsImsManager();
         }
-        if (mImsManager == null || mImsMmTelManager == null || mQnsImsStateCallback == null) {
+        if (mQnsImsStateCallback == null) {
+            registerImsStateCallback();
+        }
+        if (mQnsImsRegistrationCallback == null) {
+            registerImsRegistrationCallback();
+        }
+        if (mImsManager == null
+                || mImsMmTelManager == null
+                || mQnsImsStateCallback == null
+                || mQnsImsRegistrationCallback == null) {
             throw new ImsException(
                     "IMS service is down.", ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
         }
@@ -397,6 +473,10 @@ class QnsImsManager {
 
     private void onImsStateChanged(boolean imsAvailable) {
         log("onImsStateChanged " + imsAvailable);
+        if (imsAvailable && mQnsImsRegistrationCallback == null) {
+            registerImsRegistrationCallback();
+        }
+
         ImsState imsState = new ImsState(imsAvailable);
         notifyImsStateChanged(imsState);
     }

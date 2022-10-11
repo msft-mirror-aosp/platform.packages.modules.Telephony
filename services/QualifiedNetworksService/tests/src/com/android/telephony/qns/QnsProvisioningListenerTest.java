@@ -56,7 +56,6 @@ public class QnsProvisioningListenerTest extends QnsTest {
     private QnsProvisioningListener mQnsProvisioningListener;
     private final int mSlotIndex = 0;
     private MockitoSession mMockitoSession;
-    @Mock private QnsEventDispatcher mMockQnsEventDispatcher;
     @Mock private ProvisioningManager mMockProvisioningManager;
     @Mock private QnsImsManager mMockIM;
     @Mock private IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
@@ -81,7 +80,6 @@ public class QnsProvisioningListenerTest extends QnsTest {
         super.setUp();
         mMockitoSession =
                 mockitoSession()
-                        .mockStatic(QnsEventDispatcher.class)
                         .mockStatic(IwlanNetworkStatusTracker.class)
                         .mockStatic(QnsUtils.class)
                         .mockStatic(SubscriptionManager.class)
@@ -105,9 +103,6 @@ public class QnsProvisioningListenerTest extends QnsTest {
     }
 
     private void mockStatics() throws Exception {
-        lenient()
-                .when(QnsEventDispatcher.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockQnsEventDispatcher);
         lenient()
                 .when(IwlanNetworkStatusTracker.getInstance(sMockContext))
                 .thenReturn(mMockIwlanNetworkStatusTracker);
@@ -244,8 +239,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_SIM_ABSENT,
-                        null));
+                        11005, // EVENT_IMS_STATE_CHANGED
+                        new QnsAsyncResult(null, new QnsImsManager.ImsState(false), null)));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS));
         assertNull(info.getStringItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_ENTITLEMENT_ID));
@@ -306,29 +301,14 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_SIM_LOADED,
-                        null));
+                        11005, // EVENT_IMS_STATE_CHANGED
+                        new QnsAsyncResult(null, new QnsImsManager.ImsState(true), null)));
 
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
         verify(mMockProvisioningManager).unregisterProvisioningChangedCallback(arg.capture());
 
         captureProvisioningHandler();
-    }
-
-    @Test
-    public void testOnQnsConfigEventChangedEventHandler() throws ImsException {
-        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
-                Message.obtain(
-                        mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED,
-                        null));
-
-        ArgumentCaptor<ProvisioningManager.Callback> arg =
-                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
-        verify(mMockProvisioningManager, times(1))
-                .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
-        mQnsProvisioningCallback = arg.getValue();
     }
 
     @Test
