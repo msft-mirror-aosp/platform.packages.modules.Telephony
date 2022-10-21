@@ -63,6 +63,21 @@ public abstract class QnsTest {
     @Mock protected WifiInfo mMockWifiInfo;
     @Mock protected Resources mMockResources;
 
+    // qns mocks
+    @Mock AlternativeEventListener mMockAltEventListener;
+    @Mock protected IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
+    @Mock protected WifiQualityMonitor mMockWifiQm;
+    @Mock protected CellularNetworkStatusTracker mMockCellNetStatusTracker;
+    @Mock protected CellularQualityMonitor mMockCellularQm;
+    @Mock protected QnsImsManager mMockQnsImsManager;
+    @Mock protected QnsCarrierConfigManager mMockQnsConfigManager;
+    @Mock protected QnsEventDispatcher mMockQnsEventDispatcher;
+    @Mock protected QnsProvisioningListener mMockQnsProvisioningListener;
+    @Mock protected QnsTelephonyListener mMockQnsTelephonyListener;
+    @Mock protected WifiBackhaulMonitor mMockWifiBm;
+
+    protected QnsComponents[] mQnsComponents = new QnsComponents[2];
+
     private boolean mReady = false;
     private final Object mLock = new Object();
 
@@ -71,12 +86,49 @@ public abstract class QnsTest {
         stubContext();
         stubManagers();
         stubOthers();
+        stubQnsComponents();
         addPermissions();
     }
 
+    private void stubQnsComponents() {
+        mQnsComponents[0] =
+                new QnsComponents(
+                        sMockContext,
+                        mMockAltEventListener,
+                        mMockCellNetStatusTracker,
+                        mMockCellularQm,
+                        mMockIwlanNetworkStatusTracker,
+                        mMockQnsImsManager,
+                        mMockQnsConfigManager,
+                        mMockQnsEventDispatcher,
+                        mMockQnsProvisioningListener,
+                        mMockQnsTelephonyListener,
+                        mMockWifiBm,
+                        mMockWifiQm,
+                        0);
+
+        mQnsComponents[1] =
+                new QnsComponents(
+                        sMockContext,
+                        mMockAltEventListener,
+                        mMockCellNetStatusTracker,
+                        mMockCellularQm,
+                        mMockIwlanNetworkStatusTracker,
+                        mMockQnsImsManager,
+                        mMockQnsConfigManager,
+                        mMockQnsEventDispatcher,
+                        mMockQnsProvisioningListener,
+                        mMockQnsTelephonyListener,
+                        mMockWifiBm,
+                        mMockWifiQm,
+                        1);
+    }
+
     private void stubContext() {
-        when(sMockContext
-                .getSystemService(TelephonyManager.class)).thenReturn(mMockTelephonyManager);
+        when(sMockContext.getSystemService(TelephonyManager.class))
+                .thenReturn(mMockTelephonyManager);
+        when(sMockContext.getSystemService(TelephonyManager.class))
+                .thenReturn(mMockTelephonyManager);
         when(sMockContext.getSystemService(SubscriptionManager.class))
                 .thenReturn(mMockSubscriptionManager);
         when(sMockContext.getSystemService(CarrierConfigManager.class))

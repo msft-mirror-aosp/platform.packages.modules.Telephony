@@ -37,8 +37,7 @@ class Threshold {
     private int mMatchType;
     private int mWaitTime;
 
-    Threshold(
-            int accessNetwork, int measurementType, int threshold, int matchType, int waitTime) {
+    Threshold(int accessNetwork, int measurementType, int threshold, int matchType, int waitTime) {
         this.mThresholdId = sTid.getAndIncrement();
         this.mGroupId = QnsConstants.INVALID_ID;
         this.mAccessNetwork = accessNetwork;

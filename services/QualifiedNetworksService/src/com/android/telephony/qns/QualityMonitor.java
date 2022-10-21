@@ -15,12 +15,8 @@
  */
 package com.android.telephony.qns;
 
-import android.annotation.NonNull;
 import android.content.Context;
-import android.telephony.AccessNetworkConstants;
 import android.util.Log;
-
-import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -43,7 +39,6 @@ abstract class QualityMonitor {
 
     protected static final int BACKHAUL_TIMER_DEFAULT = 3000;
 
-    private static final String TAG = "QualityMonitor";
     private final String mTag;
 
     protected Context mContext;
@@ -55,18 +50,6 @@ abstract class QualityMonitor {
     /** To-Do: For future use. */
     protected QualityMonitor(String tag) {
         mTag = tag;
-    }
-
-    /** Get Cellular and Wifi Quality Monitor instance based on Transport Type */
-    static QualityMonitor getInstance(@NonNull Context context, int type, int slotIndex) {
-        if (type == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
-            return CellularQualityMonitor.getInstance(context, slotIndex);
-        } else if (type == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
-            return WifiQualityMonitor.getInstance(context);
-        } else {
-            Log.e(TAG, "Unknown Transport Type = " + type);
-        }
-        return null;
     }
 
     /** Get current Quality based on access network & measurement type */
@@ -128,8 +111,7 @@ abstract class QualityMonitor {
         return netCapability + "_" + slotIndex;
     }
 
-    @VisibleForTesting
-    void dispose() {
+    public void close() {
         mThresholdsList.clear();
         mWaitingThresholds.clear();
         mThresholdCallbackMap.clear();

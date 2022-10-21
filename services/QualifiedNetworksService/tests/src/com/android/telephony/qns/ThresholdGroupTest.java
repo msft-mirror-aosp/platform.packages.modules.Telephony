@@ -140,7 +140,7 @@ public class ThresholdGroupTest {
                         true,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN));
 
-        //no NGRAN condition case:
+        // no NGRAN condition case:
         assertFalse(
                 mThresholdGroup.satisfiedByThreshold(
                         mMockWifiQualityMonitor,

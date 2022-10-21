@@ -61,15 +61,18 @@ class IwlanNetworkStatusTracker {
     private final Map<Integer, QnsRegistrantList> mIwlanNetworkListenersArray =
             new ConcurrentHashMap<>();
     private static final String LAST_KNOWN_COUNTRY_CODE_KEY = "last_known_country_code";
-    private static IwlanNetworkStatusTracker sIwlanNetworkStatusTracker = null;
     private static final int INVALID_SUB_ID = -1;
+    private final SparseArray<QnsCarrierConfigManager> mQnsConfigManagers = new SparseArray<>();
+    private final SparseArray<QnsEventDispatcher> mQnsEventDispatchers = new SparseArray<>();
+    private final SparseArray<QnsImsManager> mQnsImsManagers = new SparseArray<>();
+    private final SparseArray<QnsTelephonyListener> mQnsTelephonyListeners = new SparseArray<>();
     private final Context mContext;
     private DefaultNetworkCallback mDefaultNetworkCallback;
     private final HandlerThread mHandlerThread;
     private final ConnectivityManager mConnectivityManager;
     private final WifiManager mWifiManager;
     private WifiCountryCodeCallback mWifiCountryCodeCallback;
-    private Handler mNetCbHandler = null;
+    private final Handler mNetCbHandler;
     private boolean mWifiAvailable = false;
     private boolean mWifiToggleOn = false;
     private boolean mWifiCountryCodeRegistered = false;
@@ -96,13 +99,14 @@ class IwlanNetworkStatusTracker {
         IwlanEventHandler(int slotId, Looper l) {
             super(l);
             mSlotIndex = slotId;
-            List<Integer> events = new ArrayList<Integer>();
+            List<Integer> events = new ArrayList<>();
             events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED);
             events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_DISABLED);
             events.add(QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING);
             events.add(QnsEventDispatcher.QNS_EVENT_WIFI_ENABLED);
-            QnsEventDispatcher.getInstance(mContext, mSlotIndex).registerEvent(events, this);
-            QnsTelephonyListener.getInstance(mContext, mSlotIndex)
+            mQnsEventDispatchers.get(mSlotIndex).registerEvent(events, this);
+            mQnsTelephonyListeners
+                    .get(mSlotIndex)
                     .registerIwlanServiceStateListener(
                             this, EVENT_IWLAN_SERVICE_STATE_CHANGED, null);
         }
@@ -135,7 +139,7 @@ class IwlanNetworkStatusTracker {
         }
     }
 
-    private IwlanNetworkStatusTracker(@NonNull Context context) {
+    IwlanNetworkStatusTracker(@NonNull Context context) {
         mContext = context;
         mHandlerThread = new HandlerThread(IwlanNetworkStatusTracker.class.getSimpleName());
         mHandlerThread.start();
@@ -147,6 +151,31 @@ class IwlanNetworkStatusTracker {
         mLastIwlanAvailabilityInfo.clear();
         registerDefaultNetworkCb();
         Log.d(sLogTag, "Registered with Connectivity Service");
+    }
+
+    void initBySlotIndex(
+            @NonNull QnsCarrierConfigManager configManager,
+            @NonNull QnsEventDispatcher dispatcher,
+            @NonNull QnsImsManager imsManager,
+            @NonNull QnsTelephonyListener telephonyListener,
+            int slotId) {
+        mQnsConfigManagers.put(slotId, configManager);
+        mQnsEventDispatchers.put(slotId, dispatcher);
+        mQnsImsManagers.put(slotId, imsManager);
+        mQnsTelephonyListeners.put(slotId, telephonyListener);
+        mHandlerSparseArray.put(slotId, new IwlanEventHandler(slotId, mHandlerThread.getLooper()));
+    }
+
+    void closeBySlotIndex(int slotId) {
+        IwlanEventHandler handler = mHandlerSparseArray.get(slotId);
+        mQnsEventDispatchers.get(slotId).unregisterEvent(handler);
+        mQnsTelephonyListeners.get(slotId).unregisterIwlanServiceStateChanged(handler);
+        mIwlanNetworkListenersArray.remove(slotId);
+        mQnsConfigManagers.remove(slotId);
+        mQnsEventDispatchers.remove(slotId);
+        mQnsImsManagers.remove(slotId);
+        mQnsTelephonyListeners.remove(slotId);
+        mHandlerSparseArray.remove(slotId);
     }
 
     private class WifiCountryCodeCallback implements WifiManager.ActiveCountryCodeChangedCallback {
@@ -191,13 +220,6 @@ class IwlanNetworkStatusTracker {
         }
     }
 
-    static IwlanNetworkStatusTracker getInstance(@NonNull Context context) {
-        if (sIwlanNetworkStatusTracker == null) {
-            sIwlanNetworkStatusTracker = new IwlanNetworkStatusTracker(context);
-        }
-        return sIwlanNetworkStatusTracker;
-    }
-
     @VisibleForTesting
     void onCrossSimEnabledEvent(boolean enabled, int slotId) {
         Log.d(sLogTag, "onCrossSimEnabledEvent enabled:" + enabled + " slotIndex:" + slotId);
@@ -211,10 +233,9 @@ class IwlanNetworkStatusTracker {
                 if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                     specifier = nc.getNetworkSpecifier();
                     TransportInfo transportInfo = nc.getTransportInfo();
-                    if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                    if (transportInfo instanceof VcnTransportInfo) {
                         activeDataSub = ((VcnTransportInfo) transportInfo).getSubId();
-                    } else if (specifier != null
-                            && specifier instanceof TelephonyNetworkSpecifier) {
+                    } else if (specifier instanceof TelephonyNetworkSpecifier) {
                         activeDataSub = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
                     if (activeDataSub != INVALID_SUB_ID && activeDataSub != mConnectedDataSub) {
@@ -287,38 +308,31 @@ class IwlanNetworkStatusTracker {
     }
 
     protected void close() {
-        if (mDefaultNetworkCallback != null) {
-            unregisterDefaultNetworkCb();
-        }
-        unregisterWifiCountryCode();
+        mNetCbHandler.post(this::onClose);
+        mHandlerThread.quitSafely();
+    }
 
-        for (int i = 0; i < mHandlerSparseArray.size(); i++) {
-            int slotIndex = mHandlerSparseArray.keyAt(i);
-            QnsEventDispatcher.getInstance(mContext, slotIndex)
-                    .unregisterEvent(mHandlerSparseArray.get(slotIndex));
-        }
-        mHandlerThread.quit();
+    private void onClose() {
+        unregisterDefaultNetworkCb();
+        unregisterWifiCountryCode();
         mHandlerSparseArray.clear();
         mLastIwlanAvailabilityInfo.clear();
         mIwlanNetworkListenersArray.clear();
         mIwlanRegistered.clear();
-        sIwlanNetworkStatusTracker = null;
+        Log.d(sLogTag, "closed IwlanNetworkStatusTracker");
     }
 
-    void registerIwlanNetworksChanged(int slotId, Handler h, int what) {
-        if (h != null) {
+    public void registerIwlanNetworksChanged(int slotId, Handler h, int what) {
+        if (h != null && mHandlerThread.isAlive()) {
             QnsRegistrant r = new QnsRegistrant(h, what, null);
             if (mIwlanNetworkListenersArray.get(slotId) == null) {
                 mIwlanNetworkListenersArray.put(slotId, new QnsRegistrantList());
             }
             mIwlanNetworkListenersArray.get(slotId).add(r);
-            IwlanEventHandler iwlanEventHandler = mHandlerSparseArray.get(slotId);
-            if (iwlanEventHandler == null) {
-                iwlanEventHandler = new IwlanEventHandler(slotId, mHandlerThread.getLooper());
-                mHandlerSparseArray.put(slotId, iwlanEventHandler);
-                Log.d(sLogTag, "make IwlanEventHandler for slot:" + slotId);
+            IwlanEventHandler handler = mHandlerSparseArray.get(slotId);
+            if (handler != null) {
+                handler.post(() -> notifyIwlanNetworkStatusToRegister(slotId, r));
             }
-            iwlanEventHandler.post(() -> notifyIwlanNetworkStatusToRegister(slotId, r));
         }
     }
 
@@ -332,8 +346,10 @@ class IwlanNetworkStatusTracker {
         boolean iwlanEnable = false;
         boolean isCrossWfc = false;
         boolean isRegistered = false;
-        boolean isBlockIpv6OnlyWifi =
-                QnsCarrierConfigManager.getInstance(mContext, slotId).blockIpv6OnlyWifi();
+        boolean isBlockIpv6OnlyWifi = false;
+        if (mQnsImsManagers.contains(slotId)) {
+            isBlockIpv6OnlyWifi = mQnsConfigManagers.get(slotId).blockIpv6OnlyWifi();
+        }
         LinkProtocolType linkProtocolType = sLinkProtocolType;
 
         if (mIwlanRegistered.containsKey(slotId)) {
@@ -341,20 +357,18 @@ class IwlanNetworkStatusTracker {
         }
 
         if (mWifiAvailable) {
-            boolean blockWifi = false;
-            if (isBlockIpv6OnlyWifi
-                    && ((linkProtocolType == LinkProtocolType.UNKNOWN)
-                            || (linkProtocolType == LinkProtocolType.IPV6))) {
-                blockWifi = true;
-            }
-            iwlanEnable = mWifiAvailable && !blockWifi && isRegistered;
+            boolean blockWifi =
+                    isBlockIpv6OnlyWifi
+                            && ((linkProtocolType == LinkProtocolType.UNKNOWN)
+                                    || (linkProtocolType == LinkProtocolType.IPV6));
+            iwlanEnable = !blockWifi && isRegistered;
             isCrossWfc = false;
         } else if (isCrossSimCallingCondition(slotId) && isRegistered) {
             iwlanEnable = true;
             isCrossWfc = true;
         }
         if (DBG) {
-            if (QnsUtils.isCrossSimCallingEnabled(mContext, slotId)) {
+            if (QnsUtils.isCrossSimCallingEnabled(mQnsImsManagers.get(slotId))) {
                 Log.d(
                         sLogTag,
                         "makeIwlanAvailabilityInfo(slot:"
@@ -398,7 +412,7 @@ class IwlanNetworkStatusTracker {
     }
 
     private boolean isCrossSimCallingCondition(int slotId) {
-        return QnsUtils.isCrossSimCallingEnabled(mContext, slotId)
+        return QnsUtils.isCrossSimCallingEnabled(mQnsImsManagers.get(slotId))
                 && QnsUtils.getSubId(mContext, slotId) != mConnectedDataSub
                 && mConnectedDataSub != INVALID_SUB_ID;
     }
@@ -498,10 +512,9 @@ class IwlanNetworkStatusTracker {
                     } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                         NetworkSpecifier specifier = nc.getNetworkSpecifier();
                         TransportInfo transportInfo = nc.getTransportInfo();
-                        if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                        if (transportInfo instanceof VcnTransportInfo) {
                             mConnectedDataSub = ((VcnTransportInfo) transportInfo).getSubId();
-                        } else if (specifier != null
-                                && specifier instanceof TelephonyNetworkSpecifier) {
+                        } else if (specifier instanceof TelephonyNetworkSpecifier) {
                             mConnectedDataSub =
                                     ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                         }
@@ -514,10 +527,11 @@ class IwlanNetworkStatusTracker {
 
         /**
          * Called when the network is about to be lost, typically because there are no outstanding
-         * requests left for it. This may be paired with a {@link NetworkCallback#onAvailable} call
-         * with the new replacement network for graceful handover. This method is not guaranteed to
-         * be called before {@link NetworkCallback#onLost} is called, for example in case a network
-         * is suddenly disconnected.
+         * requests left for it. This may be paired with a {@link
+         * android.net.ConnectivityManager.NetworkCallback#onAvailable} call with the new
+         * replacement network for graceful handover. This method is not guaranteed to be called
+         * before {@link android.net.ConnectivityManager.NetworkCallback#onLost} is called, for
+         * example in case a network is suddenly disconnected.
          */
         @Override
         public void onLosing(Network network, int maxMsToLive) {
@@ -585,10 +599,9 @@ class IwlanNetworkStatusTracker {
                     mWifiAvailable = false;
                     NetworkSpecifier specifier = nc.getNetworkSpecifier();
                     TransportInfo transportInfo = nc.getTransportInfo();
-                    if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                    if (transportInfo instanceof VcnTransportInfo) {
                         activeDataSub = ((VcnTransportInfo) transportInfo).getSubId();
-                    } else if (specifier != null
-                            && specifier instanceof TelephonyNetworkSpecifier) {
+                    } else if (specifier instanceof TelephonyNetworkSpecifier) {
                         activeDataSub = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
                     if (activeDataSub != INVALID_SUB_ID && activeDataSub != mConnectedDataSub) {

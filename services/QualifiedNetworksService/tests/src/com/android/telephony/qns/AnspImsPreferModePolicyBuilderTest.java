@@ -29,7 +29,6 @@ import static com.android.telephony.qns.QnsConstants.WIFI_PREF;
 import android.net.NetworkCapabilities;
 import android.telephony.AccessNetworkConstants;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -50,11 +49,8 @@ public class AnspImsPreferModePolicyBuilderTest extends QnsTest {
         super.setUp();
         mBuilder =
                 new AnspImsPreferModePolicyBuilder(
-                        sMockContext, 0, NetworkCapabilities.NET_CAPABILITY_IMS);
+                        mMockQnsConfigManager, NetworkCapabilities.NET_CAPABILITY_IMS);
     }
-
-    @After
-    public void tearDown() {}
 
     @Test
     public void testGetPolicyInMap_rove_in() {

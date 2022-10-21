@@ -45,6 +45,7 @@ class AlternativeEventListener {
     private final String mLogTag;
     private Context mContext;
     private int mSlotIndex;
+    private QnsTelephonyListener mQnsTelephonyListener;
     private QnsRegistrant mCallTypeChangedEventListener;
     private QnsRegistrant mEmergencyCallTypeChangedEventListener;
     private QnsRegistrant mEmergencyPreferredTransportTypeChanged;
@@ -187,33 +188,22 @@ class AlternativeEventListener {
         }
     }
 
-    private AlternativeEventListener(@NonNull Context context, int slotIndex) {
+    /**
+     * AlternativeEventListener constructor.
+     */
+    AlternativeEventListener(
+            Context context, QnsTelephonyListener qnsTelephonyListener, int slotId) {
+        mSlotIndex = slotId;
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + AlternativeEventListener.class.getSimpleName()
                         + "_"
-                        + slotIndex;
+                        + mSlotIndex;
         mContext = context;
-        mSlotIndex = slotIndex;
+        mQnsTelephonyListener = qnsTelephonyListener;
         mHandler = new AlternativeEventListener.MessageHandler(mContext.getMainLooper());
         mEventCb = new AlternativeEventCb();
-    }
-
-    /**
-     * getter of AlternativeEventListener instance.
-     *
-     * @param context application context
-     * @param slotIndex slot id
-     */
-    static AlternativeEventListener getInstance(@NonNull Context context, int slotIndex) {
-        AlternativeEventListener altIntMngr = sAlternativeInterfaceManager.get(slotIndex);
-        if (altIntMngr == null) {
-            altIntMngr = new AlternativeEventListener(context, slotIndex);
-            slog("getInstance create new instance slotId" + slotIndex);
-            sAlternativeInterfaceManager.put(slotIndex, altIntMngr);
-        }
-        return altIntMngr;
     }
 
     /**
@@ -240,8 +230,7 @@ class AlternativeEventListener {
      * @param what event Id to receive
      * @param userObj user object
      */
-    void registerTryWfcConnectionStateListener(
-            @NonNull Handler h, int what, Object userObj) {
+    void registerTryWfcConnectionStateListener(@NonNull Handler h, int what, Object userObj) {
         mTryWfcConnectionState = new QnsRegistrant(h, what, userObj);
     }
 
@@ -306,8 +295,8 @@ class AlternativeEventListener {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
             if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 mCallTypeChangedEventListener = r;
-                QnsTelephonyListener.getInstance(mContext, mSlotIndex)
-                        .registerSrvccStateListener(mHandler, EVENT_SRVCC_STATE_CHANGED, null);
+                mQnsTelephonyListener.registerSrvccStateListener(
+                        mHandler, EVENT_SRVCC_STATE_CHANGED, null);
             } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 mEmergencyCallTypeChangedEventListener = r;
             }
@@ -331,8 +320,7 @@ class AlternativeEventListener {
         if (h != null) {
             if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 mCallTypeChangedEventListener = null;
-                QnsTelephonyListener.getInstance(mContext, mSlotIndex)
-                        .unregisterSrvccStateChanged(mHandler);
+                mQnsTelephonyListener.unregisterSrvccStateChanged(mHandler);
             } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 mEmergencyCallTypeChangedEventListener = null;
             }
@@ -487,8 +475,8 @@ class AlternativeEventListener {
 
     private boolean isDataNetworkConnected(int netCapability) {
         PreciseDataConnectionState preciseDataStatus =
-                QnsTelephonyListener.getInstance(mContext, mSlotIndex)
-                        .getLastPreciseDataConnectionState(netCapability);
+                mQnsTelephonyListener.getLastPreciseDataConnectionState(netCapability);
+
         if (preciseDataStatus == null) return false;
         int state = preciseDataStatus.getState();
         return (state == TelephonyManager.DATA_CONNECTED
@@ -509,9 +497,5 @@ class AlternativeEventListener {
 
     protected void log(String s) {
         Log.d(mLogTag, s);
-    }
-
-    protected static void slog(String s) {
-        Log.d("AlternativeEventListener", s);
     }
 }

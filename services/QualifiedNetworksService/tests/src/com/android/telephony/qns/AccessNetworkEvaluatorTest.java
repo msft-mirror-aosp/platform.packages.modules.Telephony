@@ -16,17 +16,18 @@
 
 package com.android.telephony.qns;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +46,7 @@ import android.telephony.ims.ProvisioningManager;
 
 import com.android.telephony.qns.AccessNetworkSelectionPolicy.PreCondition;
 import com.android.telephony.qns.QnsProvisioningListener.QnsProvisioningInfo;
+import com.android.telephony.qns.QnsTelephonyListener.QnsTelephonyInfoIms;
 
 import org.junit.After;
 import org.junit.Before;
@@ -53,9 +55,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.MockitoSession;
-import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Field;
@@ -85,18 +86,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
 
     @Mock private RestrictManager mRestrictManager;
-    @Mock private QnsCarrierConfigManager mConfigManager;
-    @Mock private QualityMonitor mWifiQualityMonitor;
-    @Mock private QualityMonitor mCellularQualityMonitor;
-    @Mock private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
-    @Mock private IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     @Mock private DataConnectionStatusTracker mDataConnectionStatusTracker;
-    @Mock private QnsEventDispatcher mQnsEventDispatcher;
-    @Mock private AlternativeEventListener mAltEventListener;
-    @Mock private QnsProvisioningListener mQnsProvisioningListener;
-    @Mock private QnsTelephonyListener mQnsTelephonyListener;
-    @Mock private QnsImsManager mQnsImsManager;
-    @Mock private WifiBackhaulMonitor mMockWifiBackhaulMonitor;
     @Mock private QnsImsManager.ImsRegistrationState mMockImsRegistrationState;
     private AccessNetworkEvaluator mAne;
     private Handler mHandler;
@@ -107,8 +97,16 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private int mSlotIndex = 0;
     private int mNetCapability = NetworkCapabilities.NET_CAPABILITY_IMS;
     private HandlerThread mHandlerThread;
-    private MockitoSession mMockitoSession;
     private int mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
+
+    private boolean mWfcEnabledByUser = true;
+    private boolean mWfcRoamingEnabledByUser = false;
+    private boolean mWfcEnabledByPlatform = true;
+    private boolean mWfcProvisioned = true;
+    private boolean mCrossSimEnabled = false;
+    private boolean mWfcRoamingEnabled = true;
+    private int mWfcMode = QnsConstants.WIFI_PREF;
+    private int mWfcModeRoaming = QnsConstants.WIFI_PREF;
 
     private class AneHandler extends Handler {
         AneHandler() {
@@ -137,109 +135,43 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         super.setUp();
         mHandlerThread = new HandlerThread("");
         mLatch = new CountDownLatch(1);
-        mMockitoSession = null;
+        stubQnsDefaultWfcSettings();
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         mNetCapability,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
+                        mSlotIndex);
         mHandlerThread.start();
         mHandler = new AneHandler();
-        ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
-        verify(mIwlanNetworkStatusTracker)
-                .registerIwlanNetworksChanged(anyInt(), capture.capture(), anyInt());
-        mEvaluatorHandler = capture.getValue();
-        stubQnsDefaultWfcSettings();
+        mEvaluatorHandler = mAne.mHandler;
     }
-
-    @Mock QnsImsManager mWfcSettingQnsImsManager;
-    @Mock QnsProvisioningListener mWfcSettingQnsProvListener;
 
     private void stubQnsDefaultWfcSettings() {
-        mMockitoSession =
-                mockitoSession()
-                        .strictness(Strictness.LENIENT)
-                        .mockStatic(QnsImsManager.class)
-                        .mockStatic(QnsProvisioningListener.class)
-                        .startMocking();
-        when(QnsImsManager.getInstance(any(), anyInt()))
-                .thenReturn(mWfcSettingQnsImsManager);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(true);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
-        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(true);
-        when(mWfcSettingQnsImsManager.isWfcProvisionedOnDevice()).thenReturn(true);
-        when(mWfcSettingQnsImsManager.isCrossSimCallingEnabled()).thenReturn(false);
-        when(mWfcSettingQnsImsManager.getWfcMode(true)).thenReturn(QnsConstants.WIFI_PREF);
-        when(mWfcSettingQnsImsManager.getWfcMode(false)).thenReturn(QnsConstants.CELL_PREF);
-        when(QnsProvisioningListener.getInstance(any(), anyInt()))
-                .thenReturn(mWfcSettingQnsProvListener);
-        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
-                .thenReturn(true);
+        when(mMockQnsImsManager.isWfcEnabledByPlatform()).thenAnswer(i -> mWfcEnabledByPlatform);
+        when(mMockQnsImsManager.isWfcEnabledByUser()).thenAnswer(i -> mWfcEnabledByUser);
+        when(mMockQnsImsManager.isWfcRoamingEnabledByUser())
+                .thenAnswer(i -> mWfcRoamingEnabledByUser);
+        when(mMockQnsImsManager.isWfcProvisionedOnDevice()).thenAnswer(i -> mWfcProvisioned);
+        when(mMockQnsImsManager.isCrossSimCallingEnabled()).thenAnswer(i -> mCrossSimEnabled);
+        when(mMockQnsProvisioningListener.getLastProvisioningWfcRoamingEnabledInfo())
+                .thenAnswer(i -> mWfcRoamingEnabled);
+        when(mMockQnsImsManager.getWfcMode(anyBoolean()))
+                .thenAnswer(i -> (boolean) i.getArguments()[0] ? mWfcModeRoaming : mWfcMode);
 
-        try {
-            Method method = AccessNetworkEvaluator.class.getDeclaredMethod("initSettings");
-            method.setAccessible(true);
-            method.invoke(mAne);
-        } catch (Exception e) {
-        }
-    }
-
-    private void stubQnsStatics(
-            int settingWfcMode,
-            int settingWfcRoamingMode,
-            boolean wfcPlatformEnabled,
-            boolean settingWfcEnabled,
-            boolean settingWfcRoamingEnabled) {
-
-        when(QnsImsManager.getInstance(any(), anyInt()))
-                .thenReturn(mWfcSettingQnsImsManager);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(wfcPlatformEnabled);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(settingWfcEnabled);
-        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser())
-                .thenReturn(settingWfcRoamingEnabled);
-        when(mWfcSettingQnsImsManager.getWfcMode(true)).thenReturn(settingWfcRoamingMode);
-        when(mWfcSettingQnsImsManager.getWfcMode(false)).thenReturn(settingWfcMode);
-        when(QnsProvisioningListener.getInstance(any(), anyInt()))
-                .thenReturn(mWfcSettingQnsProvListener);
-        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
-                .thenReturn(settingWfcRoamingEnabled);
-
-        try {
-            Method method = AccessNetworkEvaluator.class.getDeclaredMethod("initSettings");
-            method.setAccessible(true);
-            method.invoke(mAne);
-        } catch (Exception e) {
-        }
+        when(mMockQnsTelephonyListener.getLastQnsTelephonyInfo())
+                .thenReturn(mMockQnsTelephonyListener.new QnsTelephonyInfo());
     }
 
     @After
-    public void tearDown() throws Exception {
-        if (mMockitoSession != null) {
-            mMockitoSession.finishMocking();
-            mMockitoSession = null;
-        }
+    public void tearDown() {
         if (mAne != null) {
             mAne.close();
         }
         if (mHandlerThread != null) {
             mHandlerThread.quit();
         }
-        QnsCarrierConfigManager.getInstance(sMockContext, 0).close();
-        QnsCarrierConfigManager.getInstance(sMockContext, 1).close();
-        IwlanNetworkStatusTracker.getInstance(sMockContext).close();
-        WifiQualityMonitor.getInstance(sMockContext).dispose();
     }
 
     @Test
@@ -331,56 +263,58 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testMoveTransportTypeAllowed() {
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        waitFor(1000);
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         QnsConstants.COVERAGE_ROAM))
                 .thenReturn(false);
-        when(mConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
+        when(mMockQnsConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
         when(mDataConnectionStatusTracker.isActiveState()).thenReturn(true);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(false);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_UNKNOWN);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_UNKNOWN);
         info.setDataRegState(ServiceState.STATE_OUT_OF_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         assertFalse(mAne.needHandoverPolicyCheck());
         assertTrue(mAne.moveTransportTypeAllowed());
 
-        info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        info = mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(true);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        infoIms = mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, true, true);
+        infoIms = mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, true, true);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         assertTrue(mAne.needHandoverPolicyCheck());
         assertTrue(mAne.moveTransportTypeAllowed());
 
-        info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        info = mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_NR);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_NR);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        infoIms = mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, true, true);
+        infoIms = mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, true, true);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         assertTrue(mAne.needHandoverPolicyCheck());
@@ -389,51 +323,53 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testMoveTransportTypeAllowedEmergencyOverIms() {
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        waitFor(1000);
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
-        when(mConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
+        when(mMockQnsConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
         when(mDataConnectionStatusTracker.isActiveState()).thenReturn(true);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         mAne.onSetCallType(QnsConstants.CALL_TYPE_EMERGENCY);
         assertTrue(mAne.needHandoverPolicyCheck());
         assertTrue(mAne.moveTransportTypeAllowed());
 
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_IMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.UTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(false);
-        info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        info = mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_UMTS);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_UMTS);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        infoIms = mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        infoIms = mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         mAne.onSetCallType(QnsConstants.CALL_TYPE_VOICE);
@@ -451,15 +387,18 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testVopsCheckRequired() {
+        waitFor(500);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
-        when(mConfigManager.isHandoverAllowedByPolicy(anyInt(), anyInt(), anyInt(), anyInt()))
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
+                        anyInt(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(true);
-        when(mConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_HOME))
+        when(mMockQnsConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_HOME))
                 .thenReturn(true);
-        when(mConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_ROAM))
+        when(mMockQnsConfigManager.isMmtelCapabilityRequired(QnsConstants.COVERAGE_ROAM))
                 .thenReturn(false);
-        when(mConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition()).thenReturn(false);
+        when(mMockQnsConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition())
+                .thenReturn(false);
         assertTrue(
                 mAne.vopsCheckRequired(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -470,7 +409,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_ROAM,
                         QnsConstants.CALL_TYPE_IDLE));
-        when(mConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition()).thenReturn(true);
+        when(mMockQnsConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition())
+                .thenReturn(true);
         assertFalse(
                 mAne.vopsCheckRequired(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -509,16 +449,18 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
 
-        when(mConfigManager.isMmtelCapabilityRequired(anyInt())).thenReturn(true);
-        when(mConfigManager.isServiceBarringCheckSupported()).thenReturn(true);
-        when(mConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition()).thenReturn(false);
-        when(mConfigManager.isHandoverAllowedByPolicy(anyInt(), anyInt(), anyInt(), anyInt()))
+        when(mMockQnsConfigManager.isMmtelCapabilityRequired(anyInt())).thenReturn(true);
+        when(mMockQnsConfigManager.isServiceBarringCheckSupported()).thenReturn(true);
+        when(mMockQnsConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition())
+                .thenReturn(false);
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
+                        anyInt(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(true);
-        when(mConfigManager.allowWFCOnAirplaneModeOn()).thenReturn(true);
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(true);
-        when(mConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
-        when(mConfigManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(false);
-        when(mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
+        when(mMockQnsConfigManager.allowWFCOnAirplaneModeOn()).thenReturn(true);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(true);
+        when(mMockQnsConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
+        when(mMockQnsConfigManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(false);
+        when(mMockQnsConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_DEFAULT);
 
         when(mDataConnectionStatusTracker.isActiveState()).thenReturn(true);
@@ -528,21 +470,20 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(mRestrictManager.isRestricted(anyInt())).thenReturn(true);
         when(mRestrictManager.isAllowedOnSingleTransport(anyInt())).thenReturn(true);
 
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(true);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_QNS_TELEPHONY_INFO_CHANGED,
                         new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
-        // ane.onQnsTelephonyInfoChanged(infoIms);
+        // mAne.onQnsTelephonyInfoChanged(infoIms);
 
         assertTrue(mLatch.await(3, TimeUnit.SECONDS));
         ArrayList<Integer> expected = new ArrayList<>();
@@ -552,6 +493,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnIwlanNetworkStatusChanged() {
+        // ANE takes time to build ANSP.
+        waitFor(200);
         when(mRestrictManager.isRestricted(anyInt())).thenReturn(false);
         when(mRestrictManager.isAllowedOnSingleTransport(anyInt())).thenReturn(true);
         Message.obtain(
@@ -559,7 +502,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false),
+                                mMockIwlanNetworkStatusTracker
+                                .new IwlanAvailabilityInfo(true, false),
                                 null))
                 .sendToTarget();
         waitFor(50);
@@ -569,7 +513,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(false, false),
+                                mMockIwlanNetworkStatusTracker
+                                .new IwlanAvailabilityInfo(false, false),
                                 null))
                 .sendToTarget();
         waitFor(50);
@@ -578,8 +523,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnTryWfcConnectionStateChanged() {
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, false, false, false);
-        waitFor(100);
+        mWfcMode = QnsConstants.CELL_PREF;
+        mWfcModeRoaming = QnsConstants.CELL_PREF;
+
+        // ANE takes time to build ANSP.
+        waitFor(200);
+
         mAne.onTryWfcConnectionStateChanged(true);
         Message.obtain(
                         mEvaluatorHandler,
@@ -589,6 +538,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         waitFor(50);
         assertTrue(mAne.isWfcEnabled());
         assertEquals(QnsConstants.WIFI_PREF, mAne.getPreferredMode());
+        mWfcEnabledByPlatform = false;
         Message.obtain(
                         mEvaluatorHandler,
                         EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED,
@@ -669,8 +619,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testReportQualifiedNetwork_WithoutListAndCellularLimtedCaseSet() {
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false, true);
-        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt()))
+                .thenReturn(false, true);
+        when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
         List<Integer> accessNetworks2 = new ArrayList<>();
         accessNetworks2.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks2);
@@ -684,8 +635,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testReportQualifiedNetwork_WithListAndCellularLimtedCaseSet() {
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false, true);
-        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt()))
+                .thenReturn(false, true);
+        when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
         List<Integer> accessNetworks1 = new ArrayList<>();
         List<Integer> accessNetworks2 = new ArrayList<>();
         accessNetworks1.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
@@ -705,24 +657,14 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     public void testReportQualifiedNetwork_WithListAndCellularLimtedCaseSet_NonIms() {
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_MMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
-
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false);
-        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
+                        mSlotIndex);
+        waitFor(1000);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false);
+        when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(true);
         List<Integer> accessNetworks1 = new ArrayList<>();
         List<Integer> accessNetworks2 = new ArrayList<>();
         accessNetworks1.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
@@ -735,8 +677,9 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testReportQualifiedNetwork_WithoutList() {
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false, true);
-        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt()))
+                .thenReturn(false, true);
+        when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         List<Integer> accessNetworks2 = new ArrayList<>();
         accessNetworks2.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks2);
@@ -747,8 +690,10 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testReportQualifiedNetwork_WithList() {
-        when(mConfigManager.isAccessNetworkAllowed(anyInt(), anyInt())).thenReturn(false, true);
-        when(mConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
+        waitFor(1000);
+        when(mMockQnsConfigManager.isAccessNetworkAllowed(anyInt(), anyInt()))
+                .thenReturn(false, true);
+        when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
         List<Integer> accessNetworks1 = new ArrayList<>();
         List<Integer> accessNetworks2 = new ArrayList<>();
         accessNetworks1.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
@@ -761,22 +706,31 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testCellularUnavailableWhenVolteRoamingNotSupported() {
-        when(mConfigManager.isMmtelCapabilityRequired(anyInt())).thenReturn(true);
-        when(mConfigManager.isServiceBarringCheckSupported()).thenReturn(false);
-        when(mConfigManager.isInCallHoDecisionWlanToWwanWithoutVopsCondition()).thenReturn(false);
-        when(mConfigManager.isHandoverAllowedByPolicy(anyInt(), anyInt(), anyInt(), anyInt()))
-                .thenReturn(true);
-        when(mConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(false);
-        when(mDataConnectionStatusTracker.getLastTransportType())
-                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        waitFor(500);
+        doReturn(true).when(mMockQnsConfigManager).isMmtelCapabilityRequired(anyInt());
+        doReturn(false).when(mMockQnsConfigManager).isServiceBarringCheckSupported();
+        doReturn(false)
+                .when(mMockQnsConfigManager)
+                .isInCallHoDecisionWlanToWwanWithoutVopsCondition();
+        doReturn(true)
+                .when(mMockQnsConfigManager)
+                .isHandoverAllowedByPolicy(anyInt(), anyInt(), anyInt(), anyInt());
+        doReturn(false).when(mMockQnsConfigManager).isVolteRoamingSupported(anyInt());
+        doReturn(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                .when(mDataConnectionStatusTracker)
+                .getLastTransportType();
+        doReturn(null)
+                .when(mMockQnsConfigManager)
+                .getThresholdByPref(anyInt(), anyInt(), anyInt(), anyInt());
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(true);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         assertFalse(mAne.mCellularAvailable);
     }
@@ -790,52 +744,49 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testGetCoverage() {
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         infoIms.setCoverage(true);
         infoIms.setRoamingType(ServiceState.ROAMING_TYPE_INTERNATIONAL);
         infoIms.setRegisteredPlmn(TEST_PLMN);
-        when(mConfigManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
-                .thenReturn(true);
-        when(mConfigManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(false);
+
+        setGetCoverageStubs(true, false);
         assertEquals(QnsConstants.COVERAGE_ROAM, mAne.getCoverage(infoIms, mNetCapability));
-        when(mConfigManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(true);
+        setGetCoverageStubs(true, true);
         assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
         infoIms.setCoverage(false);
-        when(mConfigManager.isDefinedDomesticRoamingPlmn(TEST_PLMN)).thenReturn(false);
+        setGetCoverageStubs(true, false);
         assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
-        when(mConfigManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
-                .thenReturn(false);
+        setGetCoverageStubs(false, false);
         assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
         infoIms.setCoverage(true);
         infoIms.setRoamingType(ServiceState.ROAMING_TYPE_DOMESTIC);
-        when(mConfigManager.needToCheckInternationalRoaming(NetworkCapabilities.NET_CAPABILITY_IMS))
-                .thenReturn(true);
+        setGetCoverageStubs(true, false);
         assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
-        when(mConfigManager.isDefinedInternationalRoamingPlmn(TEST_PLMN)).thenReturn(true);
+        when(mMockQnsConfigManager.isDefinedInternationalRoamingPlmn(TEST_PLMN)).thenReturn(true);
         assertEquals(QnsConstants.COVERAGE_ROAM, mAne.getCoverage(infoIms, mNetCapability));
+    }
+
+    private void setGetCoverageStubs(boolean checkIntRoaming, boolean isDefDomPlmn) {
+        Mockito.clearInvocations(mMockQnsConfigManager);
+        when(mMockQnsConfigManager.needToCheckInternationalRoaming(
+                NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(checkIntRoaming);
+        when(mMockQnsConfigManager.isDefinedDomesticRoamingPlmn(TEST_PLMN))
+                .thenReturn(isDefDomPlmn);
     }
 
     @Test
     public void testUseDifferentApnOverIwlan() {
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_MMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
+                        mSlotIndex);
 
         ApnSetting apnSettingForCellular =
                 new ApnSetting.Builder()
@@ -850,7 +801,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                                 (int) TelephonyManager.NETWORK_STANDARDS_FAMILY_BITMASK_3GPP)
                         .setCarrierEnabled(true)
                         .build();
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_MMS,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
@@ -868,35 +819,27 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     public void testRatPreferenceWifiWhenNoCellularHandoverDisallowedButMoveToCellular() {
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_XCAP,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+                        mSlotIndex);
+        waitFor(500);
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
 
-        when(mConfigManager.isHandoverAllowedByPolicy(
+        when(mMockQnsConfigManager.isHandoverAllowedByPolicy(
                         NetworkCapabilities.NET_CAPABILITY_XCAP,
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         QnsConstants.COVERAGE_HOME))
                 .thenReturn(false);
-        when(mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_XCAP))
+        when(mMockQnsConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_XCAP))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_NO_CELLULAR);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
@@ -912,15 +855,17 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Home() throws InterruptedException {
-        stubQnsStatics(QnsConstants.WIFI_PREF, QnsConstants.WIFI_PREF, true, false, false);
+        mWfcEnabledByUser = false;
         mAne.onIwlanNetworkStatusChanged(
-                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+
+        // ANE takes time to build ANSP.
         waitFor(200);
 
         // Enabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
+        mWfcEnabledByUser = true;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -930,7 +875,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(false);
+        mWfcEnabledByUser = false;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_DISABLED);
         assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
         assertFalse(
@@ -941,25 +886,26 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcEnabledChanged_Roaming() throws InterruptedException {
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        mWfcMode = QnsConstants.CELL_PREF;
+        mWfcEnabledByUser = true;
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         infoIms.setCoverage(true);
         infoIms.setRoamingType(ServiceState.ROAMING_TYPE_INTERNATIONAL);
         infoIms.setRegisteredPlmn(TEST_PLMN);
         mAne.onQnsTelephonyInfoChanged(infoIms);
 
         mAne.onIwlanNetworkStatusChanged(
-                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
-        waitFor(200);
+        waitFor(500);
 
         // Enabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(true);
-        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
-                .thenReturn(true);
+        mWfcRoamingEnabled = true;
+        mWfcRoamingEnabledByUser = true;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
         assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -969,9 +915,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(false);
-        when(mWfcSettingQnsProvListener.getLastProvisioningWfcRoamingEnagledInfo())
-                .thenReturn(false);
+        mWfcRoamingEnabled = false;
+        mWfcRoamingEnabledByUser = false;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_DISABLED);
         assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
         assertFalse(
@@ -982,16 +927,17 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcPlatformChanged() throws InterruptedException {
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, false, true, false);
+        mWfcMode = QnsConstants.CELL_PREF;
+        mWfcEnabledByUser = true;
+        mWfcEnabledByPlatform = false;
         mAne.onIwlanNetworkStatusChanged(
-                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
         waitFor(200);
 
         // Enabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(true);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
+        mWfcEnabledByPlatform = true;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
@@ -1007,7 +953,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // Disabled
         mLatch = new CountDownLatch(1);
-        when(mWfcSettingQnsImsManager.isWfcEnabledByPlatform()).thenReturn(false);
+        mWfcEnabledByPlatform = false;
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_DISABLED);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
@@ -1015,30 +961,34 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testOnWfcModeChanged_Home() throws Exception {
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.WIFI_PREF, true, true, false);
-        waitFor(300);
+        mWfcMode = QnsConstants.CELL_PREF;
+        mWfcEnabledByUser = true;
+        waitFor(1000);
+        mEvaluatorHandler.sendEmptyMessage(
+                QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_CELLULAR_PREFERRED);
         generateAnspPolicyMap();
         mockCurrentQuality(-60, -90);
         mAne.onIwlanNetworkStatusChanged(
-                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
 
-        when(mConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        when(mMockQnsConfigManager.isVolteRoamingSupported(anyInt())).thenReturn(true);
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
         waitFor(200);
 
-        // Cellular Preferred
+        // Wifi Preferred
         mLatch = new CountDownLatch(1);
         mEvaluatorHandler.sendEmptyMessage(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED);
-        assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
+        assertTrue(mLatch.await(2000, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
                         .getAccessNetworkTypes()
@@ -1054,31 +1004,20 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
                         new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
                 .sendToTarget();
-        assertFalse(
-                mLatch.await(
-                        100, TimeUnit.MILLISECONDS)); // no report since ANE is for IMS capability.
+        // no report since ANE is for IMS apn.
+        assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
+
         when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_EIMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
-
+                        mSlotIndex);
         waitFor(100);
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
-        verify(mIwlanNetworkStatusTracker, atLeastOnce())
+        verify(mMockIwlanNetworkStatusTracker, atLeastOnce())
                 .registerIwlanNetworksChanged(anyInt(), capture.capture(), anyInt());
         mEvaluatorHandler = capture.getValue();
 
@@ -1090,7 +1029,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
                         new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
                 .sendToTarget();
-        assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(mLatch.await(500, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
                         .getAccessNetworkTypes()
@@ -1107,14 +1046,15 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
 
         // EUTRAN
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(false);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
         waitFor(100);
 
@@ -1134,6 +1074,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     @Test
     public void testReportSatisfiedAccessNetworkTypesByState()
             throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        waitFor(1000);
         doNothing().when(mRestrictManager).setQnsCallType(anyInt());
         Message.obtain(
                         mEvaluatorHandler,
@@ -1145,7 +1086,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_IWLAN_NETWORK_STATUS_CHANGED,
                         new QnsAsyncResult(
                                 null,
-                                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false),
+                                mMockIwlanNetworkStatusTracker
+                                .new IwlanAvailabilityInfo(true, false),
                                 null))
                 .sendToTarget();
 
@@ -1165,8 +1107,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                 mQualifiedNetworksInfo
                         .getAccessNetworkTypes()
                         .contains(AccessNetworkConstants.AccessNetworkType.EUTRAN));
-        verify(mWifiQualityMonitor)
-                .updateThresholdsForNetCapability(anyInt(), anyInt(), isNotNull());
+        verify(mMockWifiQm).updateThresholdsForNetCapability(anyInt(), anyInt(), isNotNull());
     }
 
     private void generateAnspPolicyMap() throws NoSuchFieldException, IllegalAccessException {
@@ -1222,21 +1163,19 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     }
 
     private void mockCurrentQuality(int wifi, int cellular) {
-        when(mWifiQualityMonitor.getCurrentQuality(anyInt(), anyInt()))
-                .thenAnswer(
-                        (Answer<Integer>)
-                    invocation -> {
-                        int quality = -255;
-                        switch ((int) invocation.getArgument(0)) {
-                            case AccessNetworkConstants.AccessNetworkType.EUTRAN:
-                                quality = cellular;
-                                break;
-                            case AccessNetworkConstants.AccessNetworkType.IWLAN:
-                                quality = wifi;
-                                break;
-                        }
-                        return quality;
-                    });
+        when(mMockWifiQm.getCurrentQuality(anyInt(), anyInt()))
+                .thenAnswer((Answer<Integer>) invocation -> {
+                    int quality = -255;
+                    switch ((int) invocation.getArgument(0)) {
+                        case AccessNetworkConstants.AccessNetworkType.EUTRAN:
+                            quality = cellular;
+                            break;
+                        case AccessNetworkConstants.AccessNetworkType.IWLAN:
+                            quality = wifi;
+                            break;
+                    }
+                    return quality;
+                });
     }
 
     private List<ThresholdGroup> generateTestThresholdGroups(
@@ -1275,8 +1214,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_PROVISIONING_INFO_CHANGED,
                         new QnsAsyncResult(null, info, null))
                 .sendToTarget();
-        waitFor(100);
-        verify(mConfigManager, times(3)).setQnsProvisioningInfo(info);
+        waitFor(1000);
+        verify(mMockQnsConfigManager, timeout(500).times(3)).setQnsProvisioningInfo(info);
     }
 
     @Test
@@ -1297,12 +1236,13 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_PROVISIONING_INFO_CHANGED,
                         new QnsAsyncResult(null, info, null))
                 .sendToTarget();
-        waitFor(100);
-        verify(mConfigManager, times(2)).setQnsProvisioningInfo(info);
+        waitFor(1000);
+        verify(mMockQnsConfigManager, timeout(500).times(2)).setQnsProvisioningInfo(info);
     }
 
     @Test
     public void testOnProvisioningInfoChanged_ePDG() throws Exception {
+        waitFor(1000);
         QnsProvisioningInfo lastInfo = getQnsProvisioningInfo();
         setObject(AccessNetworkEvaluator.class, "mLastProvisioningInfo", mAne, lastInfo);
 
@@ -1319,7 +1259,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         new QnsAsyncResult(null, info, null))
                 .sendToTarget();
         waitFor(100);
-        verify(mConfigManager, times(2)).setQnsProvisioningInfo(info);
+        verify(mMockQnsConfigManager, times(2)).setQnsProvisioningInfo(info);
     }
 
     private QnsProvisioningInfo getQnsProvisioningInfo() throws Exception {
@@ -1343,20 +1283,23 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testIsAllowed_WLAN() throws Exception {
+        waitFor(500);
         int transport = AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
         mAne.onTryWfcConnectionStateChanged(true);
-        when(mQnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true);
-        when(mConfigManager.allowWFCOnAirplaneModeOn()).thenReturn(false, true);
+        when(mMockQnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true);
+        when(mMockQnsConfigManager.allowWFCOnAirplaneModeOn()).thenReturn(false, true);
         Method method = AccessNetworkEvaluator.class.getDeclaredMethod("isAllowed", int.class);
         method.setAccessible(true);
         assertFalse((Boolean) method.invoke(mAne, transport));
 
-        when(mIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, mSlotIndex))
+        when(mMockIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, mSlotIndex))
                 .thenReturn(true);
-        when(mConfigManager.blockIwlanInInternationalRoamWithoutWwan()).thenReturn(true, false);
+        when(mMockQnsConfigManager.blockIwlanInInternationalRoamWithoutWwan())
+                .thenReturn(true, false);
         assertFalse((Boolean) method.invoke(mAne, transport));
 
-        when(mConfigManager.getRatPreference(mNetCapability)).thenAnswer(pref -> mRatPreference);
+        when(mMockQnsConfigManager.getRatPreference(mNetCapability))
+                .thenAnswer(pref -> mRatPreference);
 
         // RAT_PREFERENCE_DEFAULT
         mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
@@ -1367,7 +1310,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertTrue((Boolean) method.invoke(mAne, transport));
 
         mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
-        when(mQnsImsManager.isImsRegistered(transport)).thenReturn(false, true);
+        when(mMockQnsImsManager.isImsRegistered(transport)).thenReturn(false, true);
 
         // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE - ims not registered over WLAN
         assertFalse((Boolean) method.invoke(mAne, transport));
@@ -1388,14 +1331,14 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testIsAllowed_WWAN() throws Exception {
+        waitFor(1000);
         int transport = AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
-        when(mQnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true, false);
+        when(mMockQnsEventDispatcher.isAirplaneModeToggleOn()).thenReturn(true, false);
         Method method = AccessNetworkEvaluator.class.getDeclaredMethod("isAllowed", int.class);
         method.setAccessible(true);
-
         assertFalse((Boolean) method.invoke(mAne, transport));
-
-        when(mConfigManager.getRatPreference(mNetCapability)).thenAnswer(pref -> mRatPreference);
+        when(mMockQnsConfigManager.getRatPreference(mNetCapability))
+                .thenAnswer(pref -> mRatPreference);
 
         // RAT_PREFERENCE_DEFAULT
         mRatPreference = QnsConstants.RAT_PREFERENCE_DEFAULT;
@@ -1407,7 +1350,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE
         mRatPreference = QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE;
-        when(mQnsImsManager.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+        when(mMockQnsImsManager.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 .thenReturn(true, false);
         assertFalse((Boolean) method.invoke(mAne, transport));
         assertTrue((Boolean) method.invoke(mAne, transport));
@@ -1434,53 +1377,32 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testGetMatchingPreconditionForEmergency() {
-        AccessNetworkEvaluator aneSos =
+        AccessNetworkEvaluator mAneSos =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_EIMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
-        AccessNetworkEvaluator aneIms =
+                        mSlotIndex);
+        AccessNetworkEvaluator mAneIms =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_IMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
-
+                        mSlotIndex);
         List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
         satisfiedAccessNetworkTypes.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
         when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
         try {
             Field field = AccessNetworkEvaluator.class.getDeclaredField("mCallType");
             field.setAccessible(true);
-            field.set(aneSos, QnsConstants.CALL_TYPE_VOICE);
-            field.set(aneIms, QnsConstants.CALL_TYPE_VOICE);
+            field.set(mAneSos, QnsConstants.CALL_TYPE_VOICE);
+            field.set(mAneIms, QnsConstants.CALL_TYPE_VOICE);
         } catch (Exception e) {
         }
-        aneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
-        aneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
         ArrayList<AccessNetworkSelectionPolicy> matchedAnspSos = null;
         ArrayList<AccessNetworkSelectionPolicy> matchedAnspIms = null;
         try {
@@ -1488,57 +1410,59 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                     AccessNetworkEvaluator.class.getDeclaredField(
                             "mAccessNetworkSelectionPolicies");
             field.setAccessible(true);
-            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneSos);
-            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneIms);
+            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAneSos);
+            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAneIms);
         } catch (Exception e) {
-            assertTrue(matchedAnspSos != null);
-            assertTrue(matchedAnspIms != null);
+            assertNotNull(matchedAnspSos);
+            assertNotNull(matchedAnspIms);
         }
 
-        assertTrue(matchedAnspSos != null);
-        assertTrue(matchedAnspIms != null);
+        assertNotNull(matchedAnspSos);
+        assertNotNull(matchedAnspIms);
         assertTrue(matchedAnspSos.size() > 0);
         assertTrue(matchedAnspIms.size() > 0);
-        assertTrue(
-                matchedAnspSos.get(0).getPreCondition().getCallType()
-                        == QnsConstants.CALL_TYPE_VOICE);
-        assertTrue(
-                matchedAnspIms.get(0).getPreCondition().getCallType()
-                        == QnsConstants.CALL_TYPE_VOICE);
+        assertEquals(
+                QnsConstants.CALL_TYPE_VOICE,
+                matchedAnspSos.get(0).getPreCondition().getCallType());
+        assertEquals(
+                QnsConstants.CALL_TYPE_VOICE,
+                matchedAnspIms.get(0).getPreCondition().getCallType());
 
         try {
             Field field = AccessNetworkEvaluator.class.getDeclaredField("mCallType");
             field.setAccessible(true);
-            field.set(aneSos, QnsConstants.CALL_TYPE_EMERGENCY);
-            field.set(aneIms, QnsConstants.CALL_TYPE_EMERGENCY);
+            field.set(mAneSos, QnsConstants.CALL_TYPE_EMERGENCY);
+            field.set(mAneIms, QnsConstants.CALL_TYPE_EMERGENCY);
         } catch (Exception e) {
         }
-        aneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
-        aneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAneSos.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAneIms.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
         try {
             Field field =
                     AccessNetworkEvaluator.class.getDeclaredField(
                             "mAccessNetworkSelectionPolicies");
             field.setAccessible(true);
-            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneSos);
-            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(aneIms);
+            matchedAnspSos = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAneSos);
+            matchedAnspIms = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAneIms);
         } catch (Exception e) {
-            assertTrue(matchedAnspSos != null);
-            assertTrue(matchedAnspIms != null);
+            assertNotNull(matchedAnspSos);
+            assertNotNull(matchedAnspIms);
         }
 
-        assertTrue(matchedAnspSos != null);
-        assertTrue(matchedAnspIms != null);
+        assertNotNull(matchedAnspSos);
+        assertNotNull(matchedAnspIms);
         assertTrue(matchedAnspSos.size() > 0);
         assertTrue(matchedAnspIms.size() > 0);
-        assertTrue(
-                matchedAnspSos.get(0).getPreCondition().getCallType()
-                        == QnsConstants.CALL_TYPE_VOICE);
+        assertEquals(
+                QnsConstants.CALL_TYPE_VOICE,
+                matchedAnspSos.get(0).getPreCondition().getCallType());
     }
 
     @Test
     public void testEventImsRegistrationStateChanged() {
-        when(mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
+        waitFor(1000);
+        when(mMockQnsConfigManager.isTransportTypeSelWithoutSSInRoamSupported()).thenReturn(false);
+        when(mMockQnsConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_DEFAULT);
 
         Message.obtain(
@@ -1551,7 +1475,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         verify(mMockImsRegistrationState, never()).getTransportType();
         verify(mMockImsRegistrationState, never()).getEvent();
 
-        when(mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
+        when(mMockQnsConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE);
         when(mMockImsRegistrationState.getTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
@@ -1571,40 +1495,44 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
     @Test
     public void testValidateWfcSettingsAndUpdate() {
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, false, false);
+        mWfcMode = QnsConstants.CELL_PREF;
+        mWfcModeRoaming = QnsConstants.CELL_PREF;
+        mWfcEnabledByUser = false;
         assertFalse(mAne.isWfcEnabled());
 
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
+        mWfcEnabledByUser = true;
+        mWfcRoamingEnabled = true;
         assertTrue(mAne.isWfcEnabled());
 
-        QnsTelephonyListener.QnsTelephonyInfo info = mQnsTelephonyListener.new QnsTelephonyInfo();
+        QnsTelephonyListener.QnsTelephonyInfo info =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
         info.setCellularAvailable(true);
         info.setCoverage(true);
         info.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
         info.setDataRegState(ServiceState.STATE_IN_SERVICE);
-        QnsTelephonyListener.QnsTelephonyInfoIms infoIms =
-                mQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
+        QnsTelephonyInfoIms infoIms =
+                mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
 
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, false, false);
+        mWfcEnabledByPlatform = false;
         assertFalse(mAne.isWfcEnabled());
 
-        stubQnsStatics(QnsConstants.CELL_PREF, QnsConstants.CELL_PREF, true, true, true);
+        mWfcEnabledByPlatform = true;
+        mWfcRoamingEnabled = true;
+        mWfcRoamingEnabledByUser = true;
         assertTrue(mAne.isWfcEnabled());
     }
 
     @Test
-    public void testEvaluateAgainWhenRebuild()
-            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+    public void testEvaluateAgainWhenRebuild() throws InterruptedException {
         mLatch = new CountDownLatch(3);
 
         // #1 evaluate
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
 
-        Field iwlanAvailable = AccessNetworkEvaluator.class.getDeclaredField("mIwlanAvailable");
-        iwlanAvailable.setAccessible(true);
-        iwlanAvailable.set(mAne, true);
+        mAne.mIwlanAvailable = true;
+        mWfcEnabledByUser = true;
 
         waitFor(500);
 
@@ -1622,33 +1550,23 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     public void testEvaluationOnCst_MmsRatPreferenceWifiWhenWfcAvailable() throws Exception {
         mAne =
                 new AccessNetworkEvaluator(
-                        mSlotIndex,
+                        mQnsComponents[mSlotIndex],
                         NetworkCapabilities.NET_CAPABILITY_MMS,
-                        sMockContext,
                         mRestrictManager,
-                        mConfigManager,
-                        mWifiQualityMonitor,
-                        mCellularQualityMonitor,
-                        mCellularNetworkStatusTracker,
-                        mIwlanNetworkStatusTracker,
                         mDataConnectionStatusTracker,
-                        mQnsEventDispatcher,
-                        mAltEventListener,
-                        mQnsProvisioningListener,
-                        mQnsImsManager,
-                        mMockWifiBackhaulMonitor);
+                        mSlotIndex);
         mAne.onIwlanNetworkStatusChanged(
-                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, true));
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, true));
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
-        waitFor(200);
+        waitFor(400);
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
-        verify(mIwlanNetworkStatusTracker, atLeastOnce())
+        verify(mMockIwlanNetworkStatusTracker, atLeastOnce())
                 .registerIwlanNetworksChanged(anyInt(), capture.capture(), anyInt());
         mEvaluatorHandler = capture.getValue();
 
-        when(mConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_MMS))
+        when(mMockQnsConfigManager.getRatPreference(NetworkCapabilities.NET_CAPABILITY_MMS))
                 .thenReturn(QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE);
-        when(mQnsImsManager.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+        when(mMockQnsImsManager.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 .thenReturn(true);
         setObject(AccessNetworkEvaluator.class, "mCellularAvailable", mAne, true);
         setObject(
@@ -1666,7 +1584,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                         EVENT_IMS_REGISTRATION_STATE_CHANGED,
                         new QnsAsyncResult(null, mMockImsRegistrationState, null))
                 .sendToTarget();
-        waitFor(100);
+        assertTrue(mLatch.await(400, TimeUnit.MILLISECONDS));
 
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);

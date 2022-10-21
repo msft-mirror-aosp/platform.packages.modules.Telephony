@@ -27,13 +27,10 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import android.annotation.NonNull;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Handler;
@@ -43,16 +40,11 @@ import android.os.PersistableBundle;
 import android.os.SystemProperties;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CarrierConfigManager;
-import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsException;
-import android.telephony.ims.ImsManager;
-import android.telephony.ims.ImsMmTelManager;
 import android.telephony.ims.ImsStateCallback;
 import android.telephony.ims.ProvisioningManager;
-
-import androidx.test.core.app.ApplicationProvider;
 
 import org.junit.After;
 import org.junit.Before;
@@ -60,6 +52,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 import org.mockito.quality.Strictness;
@@ -71,57 +64,37 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
-public class QnsImsManagerTest {
+public class QnsImsManagerTest extends QnsTest {
 
-    @Mock Context mContext;
-    @Mock ImsManager mImsManager;
-    @Mock ImsMmTelManager mImsMmTelManager;
-    @Mock CarrierConfigManager mCarrierConfigManager;
-    @Mock SubscriptionInfo mSubscriptionInfo;
-    @Mock SubscriptionManager mSubscriptionManager;
     @Mock Resources mResources;
     @Mock PersistableBundle mBundle;
     @Mock ProvisioningManager mProvisioningManager;
-    @Mock QnsEventDispatcher mQnsEventDispatcher;
     @Mock PackageManager mPackageManager;
-    @Mock TelephonyManager mTelephonyManager;
     private MockitoSession mMockitoSession;
     private QnsImsManager mQnsImsMgr;
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        super.setUp();
+        when(sMockContext.getResources()).thenReturn(mResources);
+        when(mMockCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         mMockitoSession =
                 mockitoSession()
                         .strictness(Strictness.LENIENT)
                         .mockStatic(SystemProperties.class)
                         .mockStatic(ProvisioningManager.class)
-                        .mockStatic(QnsEventDispatcher.class)
                         .mockStatic(SubscriptionManager.class)
                         .startMocking();
-        MockitoAnnotations.initMocks(this);
-        mContext = spy(ApplicationProvider.getApplicationContext());
-        doReturn(mImsManager).when(mContext).getSystemService(ImsManager.class);
-        doReturn(mImsMmTelManager).when(mImsManager).getImsMmTelManager(anyInt());
-        doReturn(mCarrierConfigManager).when(mContext).getSystemService(CarrierConfigManager.class);
-        doReturn(mSubscriptionManager).when(mContext).getSystemService(SubscriptionManager.class);
-        doReturn(mTelephonyManager).when(mContext).getSystemService(TelephonyManager.class);
-        doReturn(mTelephonyManager).when(mTelephonyManager).createForSubscriptionId(anyInt());
-        doReturn(mSubscriptionInfo, mSubscriptionInfo, null)
-                .when(mSubscriptionManager)
-                .getActiveSubscriptionInfoForSimSlotIndex(anyInt());
-        doReturn(1).when(mSubscriptionInfo).getSubscriptionId();
-        when(mContext.getResources()).thenReturn(mResources);
-        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         when(ProvisioningManager.createForSubscriptionId(anyInt()))
                 .thenReturn(mProvisioningManager);
-        when(QnsEventDispatcher.getInstance(any(), anyInt())).thenReturn(mQnsEventDispatcher);
         when(SubscriptionManager.isValidSubscriptionId(anyInt())).thenReturn(true);
 
-        mQnsImsMgr = new QnsImsManager(mContext, 0);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         if (mMockitoSession != null) {
             mMockitoSession.finishMocking();
             mMockitoSession = null;
@@ -146,7 +119,7 @@ public class QnsImsManagerTest {
 
         when(mResources.getBoolean(com.android.internal.R.bool.config_device_wfc_ims_available))
                 .thenReturn(true);
-        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
+        when(mMockCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_WFC_IMS_AVAILABLE_BOOL)))
                 .thenReturn(true);
         when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_IMS_GBA_REQUIRED_BOOL)))
@@ -156,19 +129,19 @@ public class QnsImsManagerTest {
 
     @Test
     public void testQnsImsManagerIsWfcEnabledByUser() {
-        when(mImsMmTelManager.isVoWiFiSettingEnabled()).thenReturn(true);
+        when(mMockImsMmTelManager.isVoWiFiSettingEnabled()).thenReturn(true);
         assertTrue(mQnsImsMgr.isWfcEnabledByUser());
 
-        when(mImsMmTelManager.isVoWiFiSettingEnabled()).thenReturn(false);
+        when(mMockImsMmTelManager.isVoWiFiSettingEnabled()).thenReturn(false);
         assertFalse(mQnsImsMgr.isWfcEnabledByUser());
     }
 
     @Test
     public void testQnsImsManagerIsWfcRoamingEnabledByUser() {
-        when(mImsMmTelManager.isVoWiFiRoamingSettingEnabled()).thenReturn(true);
+        when(mMockImsMmTelManager.isVoWiFiRoamingSettingEnabled()).thenReturn(true);
         assertTrue(mQnsImsMgr.isWfcRoamingEnabledByUser());
 
-        when(mImsMmTelManager.isVoWiFiRoamingSettingEnabled()).thenReturn(false);
+        when(mMockImsMmTelManager.isVoWiFiRoamingSettingEnabled()).thenReturn(false);
         assertFalse(mQnsImsMgr.isWfcRoamingEnabledByUser());
     }
 
@@ -223,13 +196,13 @@ public class QnsImsManagerTest {
 
     @Test
     public void testQnsImsManagerIsCrossSimCallingEnabled() throws ImsException {
-        when(mImsMmTelManager.isCrossSimCallingEnabled()).thenReturn(false);
+        when(mMockImsMmTelManager.isCrossSimCallingEnabled()).thenReturn(false);
         assertFalse(mQnsImsMgr.isCrossSimCallingEnabled());
 
-        when(mImsMmTelManager.isCrossSimCallingEnabled()).thenReturn(true);
+        when(mMockImsMmTelManager.isCrossSimCallingEnabled()).thenReturn(true);
         when(mResources.getBoolean(com.android.internal.R.bool.config_device_wfc_ims_available))
                 .thenReturn(true);
-        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
+        when(mMockCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_WFC_IMS_AVAILABLE_BOOL)))
                 .thenReturn(true);
         when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_IMS_GBA_REQUIRED_BOOL)))
@@ -271,37 +244,36 @@ public class QnsImsManagerTest {
 
     @Test
     public void testQnsImsManagerGetWfcMode() {
-        when(mImsMmTelManager.getVoWiFiModeSetting()).thenReturn(0);
+        when(mMockImsMmTelManager.getVoWiFiModeSetting()).thenReturn(0);
         assertEquals(0, mQnsImsMgr.getWfcMode(false));
 
-        when(mImsMmTelManager.getVoWiFiModeSetting()).thenReturn(1);
+        when(mMockImsMmTelManager.getVoWiFiModeSetting()).thenReturn(1);
         assertEquals(1, mQnsImsMgr.getWfcMode(false));
 
-        when(mImsMmTelManager.getVoWiFiModeSetting()).thenReturn(2);
+        when(mMockImsMmTelManager.getVoWiFiModeSetting()).thenReturn(2);
         assertEquals(2, mQnsImsMgr.getWfcMode(false));
     }
 
     @Test
     public void testQnsImsManagerGetWfcRoamingMode() {
-        when(mImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(0);
+        when(mMockImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(0);
         assertEquals(0, mQnsImsMgr.getWfcMode(true));
 
-        when(mImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(1);
+        when(mMockImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(1);
         assertEquals(1, mQnsImsMgr.getWfcMode(true));
 
-        when(mImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(2);
+        when(mMockImsMmTelManager.getVoWiFiRoamingModeSetting()).thenReturn(2);
         assertEquals(2, mQnsImsMgr.getWfcMode(true));
     }
 
     @Test
     public void testQnsImsManagerGetWfcModeFromCarrierConfig() throws ImsException {
-        mQnsImsMgr.dispose();
         doThrow(new ImsException("Test Exception"))
-                .when(mImsMmTelManager)
+                .when(mMockImsMmTelManager)
                 .registerImsStateCallback(any(), any());
-        mQnsImsMgr = new QnsImsManager(mContext, 0);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
 
-        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
+        when(mMockCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         when(mBundle.getInt(eq(CarrierConfigManager.KEY_CARRIER_DEFAULT_WFC_IMS_MODE_INT)))
                 .thenReturn(0);
         assertEquals(0, mQnsImsMgr.getWfcMode(false));
@@ -317,13 +289,12 @@ public class QnsImsManagerTest {
 
     @Test
     public void testQnsImsManagerGetWfcRoamingModeFromCarrierConfig() throws ImsException {
-        mQnsImsMgr.dispose();
         doThrow(new ImsException("Test Exception"))
-                .when(mImsMmTelManager)
+                .when(mMockImsMmTelManager)
                 .registerImsStateCallback(any(), any());
-        mQnsImsMgr = new QnsImsManager(mContext, 0);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
 
-        when(mCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
+        when(mMockCarrierConfigManager.getConfigForSubId(anyInt())).thenReturn(mBundle);
         when(mBundle.getInt(eq(CarrierConfigManager.KEY_CARRIER_DEFAULT_WFC_IMS_ROAMING_MODE_INT)))
                 .thenReturn(0);
         assertEquals(0, mQnsImsMgr.getWfcMode(true));
@@ -339,7 +310,7 @@ public class QnsImsManagerTest {
 
     @Test
     public void testQnsImsManagerGetImsServiceState() throws InterruptedException {
-        when(mContext.getPackageManager()).thenReturn(mPackageManager);
+        when(sMockContext.getPackageManager()).thenReturn(mPackageManager);
         when(mPackageManager.hasSystemFeature(any())).thenReturn(false);
         boolean bException = false;
         try {
@@ -366,8 +337,9 @@ public class QnsImsManagerTest {
         boolean qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
         assertTrue(qnsImsManagerInitialized);
 
-        when(mImsManager.getImsMmTelManager(anyInt())).thenReturn(null);
-        mQnsImsMgr = new QnsImsManager(mContext, 1);
+        Mockito.clearInvocations(mMockImsManager);
+        when(mMockImsManager.getImsMmTelManager(anyInt())).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 1);
         qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
         assertFalse(qnsImsManagerInitialized);
     }
@@ -382,18 +354,16 @@ public class QnsImsManagerTest {
         when(mBundle.getBoolean(eq(CarrierConfigManager.KEY_CARRIER_IMS_GBA_REQUIRED_BOOL)))
                 .thenReturn(true);
 
-        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(null);
+        when(mMockTelephonyManager.getIsimIst()).thenReturn(null);
+        assertTrue((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mMockTelephonyManager.getIsimIst()).thenReturn("22");
+        assertTrue((Boolean) method.invoke(mQnsImsMgr));
+
+        when(mMockTelephonyManager.getIsimIst()).thenReturn("21");
         assertFalse((Boolean) method.invoke(mQnsImsMgr));
 
-        when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mTelephonyManager);
-        when(mTelephonyManager.createForSubscriptionId(anyInt())).thenReturn(mTelephonyManager);
-        when(mTelephonyManager.getIsimIst()).thenReturn(null);
-        assertTrue((Boolean) method.invoke(mQnsImsMgr));
-
-        when(mTelephonyManager.getIsimIst()).thenReturn("22");
-        assertTrue((Boolean) method.invoke(mQnsImsMgr));
-
-        when(mTelephonyManager.getIsimIst()).thenReturn("21");
+        when(sMockContext.getSystemService(TelephonyManager.class)).thenReturn(null);
         assertFalse((Boolean) method.invoke(mQnsImsMgr));
     }
 

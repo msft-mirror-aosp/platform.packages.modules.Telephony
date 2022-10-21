@@ -20,7 +20,6 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSess
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
 import android.content.ContentResolver;
@@ -46,14 +45,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public class QnsEventDispatcherTest {
-    private static final String TAG = "QnsEventDispatcherTest";
+public class QnsEventDispatcherTest extends QnsTest {
 
     @Mock private Context mMockContext;
     @Mock private Handler mMockHandler;
@@ -69,7 +64,6 @@ public class QnsEventDispatcherTest {
     @Mock private ContentResolver mMockContentResolver;
     @Mock private TelephonyManager mMockTelephonyManager;
     @Mock private ConnectivityManager mMockConnectivityManager;
-    @Mock private QnsProvisioningListener mMockQnsProvisioningListener;
 
     private static final int DEFAULT_SLOT_INDEX = 0;
     private static final int DEFAULT_CARRIER_INDEX = 0;
@@ -79,7 +73,7 @@ public class QnsEventDispatcherTest {
     private static final Uri WFC_MODE_URI = Uri.parse("content://telephony/siminfo/wfc_mode/0");
     private static final Uri WFC_ROAMING_ENABLED_URI =
             Uri.parse("content://telephony/siminfo/wfc_roaming_enabled/0");
-    private static final Uri WFC_ROAMIN_MODE_URI =
+    private static final Uri WFC_ROAMING_MODE_URI =
             Uri.parse("content://telephony/siminfo/wfc_roaming_mode/0");
     private QnsEventDispatcher mQnsEventDispatcher;
 
@@ -88,12 +82,12 @@ public class QnsEventDispatcherTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        super.setUp();
 
         mStaticMockSession =
                 mockitoSession()
                         .mockStatic(QnsUtils.class)
                         .mockStatic(SubscriptionManager.class)
-                        .mockStatic(QnsProvisioningListener.class)
                         .mockStatic(Settings.Global.class)
                         .startMocking();
 
@@ -117,20 +111,19 @@ public class QnsEventDispatcherTest {
                 .thenReturn(0);
 
         lenient().when(QnsUtils.getSubId(mMockContext, 0)).thenReturn(0);
-        lenient()
-                .when(QnsProvisioningListener.getInstance(mMockContext, 0))
-                .thenReturn(mMockQnsProvisioningListener);
 
-        mQnsEventDispatcher = QnsEventDispatcher.getInstance(mMockContext, DEFAULT_SLOT_INDEX);
+        mQnsEventDispatcher =
+                new QnsEventDispatcher(
+                        sMockContext, mMockQnsProvisioningListener, mMockQnsImsManager, 0);
     }
 
     @After
-    public void cleanUp() throws Exception {
+    public void cleanUp() {
         mStaticMockSession.finishMocking();
     }
 
     @Test
-    public void testOnReceivedCarrierConfigChangedIntent() throws Exception {
+    public void testOnReceivedCarrierConfigChangedIntent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(
@@ -143,25 +136,25 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, times(1)).sendToTarget();
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with invalid Carrier id
-        final Intent invalidCarrierIdintent =
+        final Intent invalidCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        invalidCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        invalidCarrierIdintent.putExtra(
+        invalidCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        invalidCarrierIdIntent.putExtra(
                 TelephonyManager.EXTRA_CARRIER_ID, TelephonyManager.UNKNOWN_CARRIER_ID);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdintent);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdIntent);
         verify(mMockMessage2, times(1)).sendToTarget();
     }
 
     @Test
-    public void testOnReceivedCarrierConfigChangedIntentWithInvalidSlot() throws Exception {
+    public void testOnReceivedCarrierConfigChangedIntentWithInvalidSlot() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(
@@ -174,25 +167,25 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id to be not received
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, 1);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, 1);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, never()).sendToTarget();
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with invalid Carrier id to be not received
-        final Intent invalidCarrierIdintent =
+        final Intent invalidCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        invalidCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, 1);
-        invalidCarrierIdintent.putExtra(
+        invalidCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, 1);
+        invalidCarrierIdIntent.putExtra(
                 TelephonyManager.EXTRA_CARRIER_ID, TelephonyManager.UNKNOWN_CARRIER_ID);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdintent);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdIntent);
         verify(mMockMessage2, never()).sendToTarget();
     }
 
     @Test
-    public void testOnSimLoadedStateEvent() throws Exception {
+    public void testOnSimLoadedStateEvent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_SIM_LOADED)))
                 .thenReturn(mMockMessage);
 
@@ -221,7 +214,7 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testOnSimUnknownStateEvent() throws Exception {
+    public void testOnSimUnknownStateEvent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_SIM_ABSENT)))
                 .thenReturn(mMockMessage);
 
@@ -250,7 +243,7 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testOnSimStateEventWithInvalidSlot() throws Exception {
+    public void testOnSimStateEventWithInvalidSlot() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_SIM_LOADED)))
                 .thenReturn(mMockMessage);
 
@@ -278,7 +271,7 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testOnAirplaneModeEvent() throws Exception {
+    public void testOnAirplaneModeEvent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_APM_ENABLED)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_APM_DISABLED)))
@@ -290,32 +283,32 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_AIRPLANE_MODE_CHANGED intent with On
-        final Intent validCarrierIdintent = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
-        validCarrierIdintent.putExtra("state", true);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        final Intent validCarrierIdIntent = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        validCarrierIdIntent.putExtra("state", true);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, times(1)).sendToTarget();
 
         // Check for Duplicate Event Scenario On Case : ACTION_AIRPLANE_MODE_CHANGED
-        final Intent validCarrierIdintent1 = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
-        validCarrierIdintent.putExtra("state", true);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent1);
+        final Intent validCarrierIdIntent1 = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        validCarrierIdIntent.putExtra("state", true);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent1);
         verify(mMockMessage, times(1)).sendToTarget();
 
         // Send ACTION_AIRPLANE_MODE_CHANGED intent with Off
-        final Intent invalidCarrierIdintent = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
-        invalidCarrierIdintent.putExtra("state", false);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdintent);
+        final Intent invalidCarrierIdIntent = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        invalidCarrierIdIntent.putExtra("state", false);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdIntent);
         verify(mMockMessage2, times(1)).sendToTarget();
 
         // Check for Duplicate Event Scenario Off Case:ACTION_AIRPLANE_MODE_CHANGED
-        final Intent invalidCarrierIdintent1 = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
-        invalidCarrierIdintent.putExtra("state", false);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdintent1);
+        final Intent invalidCarrierIdIntent1 = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
+        invalidCarrierIdIntent.putExtra("state", false);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, invalidCarrierIdIntent1);
         verify(mMockMessage2, times(1)).sendToTarget();
     }
 
     @Test
-    public void testOnWifiStateChangedEvent() throws Exception {
+    public void testOnWifiStateChangedEvent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING)))
                 .thenReturn(mMockMessage);
 
@@ -324,24 +317,24 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send WIFI_STATE_CHANGED_ACTION intent with WIFI_STATE_DISABLING
-        final Intent validWifiStateintent = new Intent(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        validWifiStateintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validWifiStateintent.putExtra(
+        final Intent validWifiStateIntent = new Intent(WifiManager.WIFI_STATE_CHANGED_ACTION);
+        validWifiStateIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validWifiStateIntent.putExtra(
                 WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_DISABLING);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validWifiStateintent);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validWifiStateIntent);
         verify(mMockMessage, times(1)).sendToTarget();
 
         // Check for Duplicate Event Scenario :WIFI_STATE_CHANGED_ACTION
-        final Intent validWifiStateintent1 = new Intent(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        validWifiStateintent1.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validWifiStateintent1.putExtra(
+        final Intent validWifiStateIntent1 = new Intent(WifiManager.WIFI_STATE_CHANGED_ACTION);
+        validWifiStateIntent1.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validWifiStateIntent1.putExtra(
                 WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_DISABLING);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validWifiStateintent1);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validWifiStateIntent1);
         verify(mMockMessage, times(1)).sendToTarget();
     }
 
     @Test
-    public void testOnEmergencyCallbackModeChanged() throws Exception {
+    public void testOnEmergencyCallbackModeChanged() {
         when(mMockHandler.obtainMessage(
                         eq(QnsEventDispatcher.QNS_EVENT_EMERGENCY_CALLBACK_MODE_ON)))
                 .thenReturn(mMockMessage);
@@ -355,17 +348,17 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_EMERGENCY_CALLBACK_MODE_CHANGED  intent with On
-        final Intent validEcbmintent =
+        final Intent validEcbmIntent =
                 new Intent(TelephonyIntents.ACTION_EMERGENCY_CALLBACK_MODE_CHANGED);
-        validEcbmintent.putExtra(TelephonyManager.EXTRA_PHONE_IN_ECM_STATE, true);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validEcbmintent);
+        validEcbmIntent.putExtra(TelephonyManager.EXTRA_PHONE_IN_ECM_STATE, true);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validEcbmIntent);
         verify(mMockMessage, times(1)).sendToTarget();
 
         // Send ACTION_EMERGENCY_CALLBACK_MODE_CHANGED intent with Off
-        final Intent validEcbmintent1 =
+        final Intent validEcbmIntent1 =
                 new Intent(TelephonyIntents.ACTION_EMERGENCY_CALLBACK_MODE_CHANGED);
-        validEcbmintent1.putExtra(TelephonyManager.EXTRA_PHONE_IN_ECM_STATE, false);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validEcbmintent1);
+        validEcbmIntent1.putExtra(TelephonyManager.EXTRA_PHONE_IN_ECM_STATE, false);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validEcbmIntent1);
         verify(mMockMessage2, times(1)).sendToTarget();
     }
 
@@ -391,7 +384,7 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testNotifyImmeditatelyWfcSettingsWithEnabledStatus() {
+    public void testNotifyImmediatelyWfcSettingsWithEnabledStatus() {
         setEnabledStatusForWfcSettingsCrossSimSettings();
 
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED)))
@@ -414,10 +407,10 @@ public class QnsEventDispatcherTest {
     }
 
     @Test
-    public void testNotifyImmeditatelyDifferentWfcModes() {
+    public void testNotifyImmediatelyDifferentWfcModes() {
         setEnabledStatusForWfcSettingsCrossSimSettings();
         lenient()
-                .when(QnsUtils.getWfcMode(isA(Context.class), anyInt(), anyBoolean()))
+                .when(QnsUtils.getWfcMode(mQnsComponents[0].getQnsImsManager(0), false))
                 .thenReturn(1)
                 .thenReturn(2);
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY)))
@@ -471,11 +464,11 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
         verify(mMockMessage4, times(2)).sendToTarget();
@@ -512,11 +505,11 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
         verify(mMockMessage4, times(2)).sendToTarget();
@@ -527,40 +520,50 @@ public class QnsEventDispatcherTest {
 
     private void setEnabledStatusForWfcSettingsCrossSimSettings() {
         lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(isA(Context.class), anyInt()))
+                .when(QnsUtils.isCrossSimCallingEnabled(mQnsComponents[0].getQnsImsManager(0)))
                 .thenReturn(true);
         lenient()
-                .when(QnsUtils.isWfcEnabledByPlatform(isA(Context.class), anyInt()))
+                .when(QnsUtils.isWfcEnabledByPlatform(mQnsComponents[0].getQnsImsManager(0)))
                 .thenReturn(true);
         lenient()
-                .when(QnsUtils.isWfcEnabled(isA(Context.class), anyInt(), anyBoolean()))
+                .when(
+                        QnsUtils.isWfcEnabled(
+                                mMockQnsImsManager, mMockQnsProvisioningListener, false))
+                .thenReturn(true);
+        lenient()
+                .when(QnsUtils.isWfcEnabled(mMockQnsImsManager, mMockQnsProvisioningListener, true))
                 .thenReturn(true);
 
         // Initialise stubbed variables in QnsUtils:
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
     }
 
     private void setDisabledStatusForWfcSettingsCrossSimSettings() {
         lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(isA(Context.class), anyInt()))
+                .when(QnsUtils.isCrossSimCallingEnabled(mQnsComponents[0].getQnsImsManager(0)))
                 .thenReturn(false);
         lenient()
-                .when(QnsUtils.isWfcEnabledByPlatform(isA(Context.class), anyInt()))
+                .when(QnsUtils.isWfcEnabledByPlatform(mQnsComponents[0].getQnsImsManager(0)))
                 .thenReturn(false);
         lenient()
-                .when(QnsUtils.isWfcEnabled(isA(Context.class), anyInt(), anyBoolean()))
+                .when(
+                        QnsUtils.isWfcEnabled(
+                                mMockQnsImsManager, mMockQnsProvisioningListener, false))
+                .thenReturn(false);
+        lenient()
+                .when(QnsUtils.isWfcEnabled(mMockQnsImsManager, mMockQnsProvisioningListener, true))
                 .thenReturn(false);
 
         // Initialise stubbed variables in QnsUtils:
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
     }
 
     @Test
@@ -573,11 +576,11 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
         verify(mMockMessage, times(1)).sendToTarget();
 
         mQnsEventDispatcher.unregisterEvent(mMockHandler);
@@ -610,11 +613,11 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
@@ -627,7 +630,7 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ENABLED_URI);
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_ENABLED_URI);
-        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMIN_MODE_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_MODE_URI);
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
@@ -663,11 +666,11 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.registerEvent(events, mMockHandler);
 
         // Send ACTION_CARRIER_CONFIG_CHANGED intent with valid Carrier id
-        final Intent validCarrierIdintent =
+        final Intent validCarrierIdIntent =
                 new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
-        validCarrierIdintent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
-        validCarrierIdintent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
-        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdintent);
+        validCarrierIdIntent.putExtra(CarrierConfigManager.EXTRA_SLOT_INDEX, DEFAULT_SLOT_INDEX);
+        validCarrierIdIntent.putExtra(TelephonyManager.EXTRA_CARRIER_ID, DEFAULT_CARRIER_INDEX);
+        mQnsEventDispatcher.mIntentReceiver.onReceive(mMockContext, validCarrierIdIntent);
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
@@ -680,7 +683,7 @@ public class QnsEventDispatcherTest {
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ENABLED_URI);
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_ENABLED_URI);
-        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMIN_MODE_URI);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_ROAMING_MODE_URI);
 
         verify(mMockMessage, times(2)).sendToTarget();
         verify(mMockMessage1, times(2)).sendToTarget();
@@ -703,25 +706,6 @@ public class QnsEventDispatcherTest {
         }
     }
 
-    protected QnsEventDispatcher createQnsEventDispatcher() {
-        Class[] args = new Class[2];
-        args[0] = Context.class;
-        args[1] = int.class;
-
-        Constructor<QnsEventDispatcher> constructor;
-        try {
-            constructor = QnsEventDispatcher.class.getDeclaredConstructor(args);
-            assertTrue(Modifier.isPrivate(constructor.getModifiers()));
-            constructor.setAccessible(true);
-            return constructor.newInstance(mMockContext, DEFAULT_SLOT_INDEX);
-        } catch (InstantiationException
-                | IllegalAccessException
-                | InvocationTargetException
-                | NoSuchMethodException e) {
-            return null;
-        }
-    }
-
     @Test
     public void testLoadWfcSettingsWhenCreate() throws InterruptedException {
         List<Integer> events = new ArrayList<>();
@@ -731,9 +715,11 @@ public class QnsEventDispatcherTest {
                 .thenReturn(mMockMessage1);
 
         lenient()
-                .when(QnsUtils.getWfcMode(isA(Context.class), anyInt(), anyBoolean()))
+                .when(QnsUtils.getWfcMode(mQnsComponents[0].getQnsImsManager(0), false))
                 .thenReturn(QnsConstants.WIFI_PREF);
-        QnsEventDispatcher dispatcher = createQnsEventDispatcher();
+        QnsEventDispatcher dispatcher =
+                new QnsEventDispatcher(
+                        sMockContext, mMockQnsProvisioningListener, mMockQnsImsManager, 0);
         assertNotNull(dispatcher);
         waitForWfcModeChange(500, dispatcher, QnsConstants.WIFI_PREF);
         assertEquals(dispatcher.mLastWfcMode, QnsConstants.WIFI_PREF);

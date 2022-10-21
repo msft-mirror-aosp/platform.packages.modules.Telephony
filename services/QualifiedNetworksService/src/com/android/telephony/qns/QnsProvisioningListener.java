@@ -29,13 +29,10 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 class QnsProvisioningListener {
 
-    private static final Map<Integer, QnsProvisioningListener> sInstances =
-            new ConcurrentHashMap<>();
     private static final long REG_CALLBACK_DELAY = 2000L; // 3sec
     private static final int REG_CALLBACK_RETRY = 10; // 10 times
     private static final int EVENT_BASE = 11000;
@@ -55,11 +52,11 @@ class QnsProvisioningListener {
     private ProvisioningManager mProvisioningManager;
     private boolean mIsProvisioningCallbackRegistered;
 
-    private QnsProvisioningListener(Context context, int slotIndex) {
-        mLogTag = QnsProvisioningListener.class.getSimpleName() + "_" + slotIndex;
-
-        mContext = context;
+    QnsProvisioningListener(Context context, QnsImsManager imsManager, int slotIndex) {
         mSlotIndex = slotIndex;
+        mLogTag = QnsProvisioningListener.class.getSimpleName() + "_" + mSlotIndex;
+        mContext = context;
+        mQnsImsManager = imsManager;
         mProvisioningInfo = new QnsProvisioningInfo();
         mQnsProvisioningCallback = new QnsProvisioningCallback();
         mIsProvisioningCallbackRegistered = false;
@@ -70,14 +67,7 @@ class QnsProvisioningListener {
         mQnsProvisioningHandler = new QnsProvisioningHandler(handlerThread.getLooper());
 
         registerProvisioningCallback();
-
-        mQnsImsManager = QnsImsManager.getInstance(mContext, mSlotIndex);
         mQnsImsManager.registerImsStateChanged(mQnsProvisioningHandler, EVENT_IMS_STATE_CHANGED);
-    }
-
-    static QnsProvisioningListener getInstance(@NonNull Context context, int slotIndex) {
-        return sInstances.computeIfAbsent(
-                slotIndex, k -> new QnsProvisioningListener(context, slotIndex));
     }
 
     void close() {
@@ -85,7 +75,6 @@ class QnsProvisioningListener {
         mRegistrantList.removeAll();
         mProvisioningInfo.clear();
         unregisterProvisioningCallback();
-        sInstances.remove(mSlotIndex);
     }
 
     private void registerProvisioningCallback() {
@@ -106,8 +95,7 @@ class QnsProvisioningListener {
 
         try {
             // checks ImsException for ims not supported or unavailable.
-            if (QnsUtils.getImsManager(mContext, mSlotIndex).getImsServiceState()
-                    != 2) { // STATE_READY
+            if (mQnsImsManager.getImsServiceState() != 2) { // STATE_READY
                 throw new Exception();
             }
 
@@ -189,7 +177,7 @@ class QnsProvisioningListener {
         }
     }
 
-    boolean getLastProvisioningWfcRoamingEnagledInfo() {
+    boolean getLastProvisioningWfcRoamingEnabledInfo() {
         try {
             return mProvisioningInfo.getIntegerItem(
                             ProvisioningManager.KEY_VOICE_OVER_WIFI_ROAMING_ENABLED_OVERRIDE)

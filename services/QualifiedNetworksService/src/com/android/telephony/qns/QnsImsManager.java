@@ -39,7 +39,6 @@ import android.telephony.ims.ProvisioningManager;
 import android.telephony.ims.RegistrationManager;
 import android.telephony.ims.compat.feature.ImsFeature;
 import android.util.Log;
-import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -60,26 +59,6 @@ class QnsImsManager {
     static final String PROP_DBG_WFC_AVAIL_OVERRIDE = "persist.dbg.wfc_avail_ovr";
 
     private static final int SYS_PROP_NOT_SET = -1;
-
-    private static final SparseArray<QnsImsManager> sQnsImsManagerSparseArray = new SparseArray<>();
-
-    /**
-     * Gets a QnsImsManager instance
-     *
-     * @param context application context for creating the manager object
-     * @param slotId subscription ID
-     * @return the QnsImsManager instance corresponding to the subId
-     */
-    static QnsImsManager getInstance(Context context, int slotId) {
-        synchronized (sQnsImsManagerSparseArray) {
-            QnsImsManager qnsImsManager = sQnsImsManagerSparseArray.get(slotId);
-            if (qnsImsManager == null) {
-                qnsImsManager = new QnsImsManager(context, slotId);
-                sQnsImsManagerSparseArray.put(slotId, qnsImsManager);
-            }
-            return qnsImsManager;
-        }
-    }
 
     private final String mLogTag;
     private final Context mContext;
@@ -121,9 +100,9 @@ class QnsImsManager {
 
     /** QnsImsManager default constructor */
     QnsImsManager(Context context, int slotId) {
-        mLogTag = QnsImsManager.class.getSimpleName() + "_" + slotId;
-        mContext = context;
         mSlotId = slotId;
+        mLogTag = QnsImsManager.class.getSimpleName() + "_" + mSlotId;
+        mContext = context;
         mExecutor = new QnsImsManagerExecutor();
 
         mHandlerThread = new HandlerThread(mLogTag);
@@ -242,7 +221,11 @@ class QnsImsManager {
             mImsMmTelManager.unregisterImsStateCallback(mQnsImsStateCallback);
         }
         if (mImsMmTelManager != null && mQnsImsRegistrationCallback != null) {
-            mImsMmTelManager.unregisterImsRegistrationCallback(mQnsImsRegistrationCallback);
+            try {
+                mImsMmTelManager.unregisterImsRegistrationCallback(mQnsImsRegistrationCallback);
+            } catch (RuntimeException e) {
+                loge(e.getMessage());
+            }
         }
         mImsManager = null;
         mImsMmTelManager = null;
@@ -252,14 +235,17 @@ class QnsImsManager {
     }
 
     @VisibleForTesting
-    protected synchronized void dispose() {
+    protected synchronized void close() {
         if (mSubscriptionManager != null) {
             mSubscriptionManager.removeOnSubscriptionsChangedListener(mSubscriptionsChangeListener);
         }
         mHandlerThread.quitSafely();
         clearQnsImsManager();
         mImsRegistrationStatusListeners.removeAll();
-        sQnsImsManagerSparseArray.remove(mSlotId);
+    }
+
+    int getSlotIndex() {
+        return mSlotId;
     }
 
     private synchronized ImsMmTelManager getImsMmTelManagerOrThrowExceptionIfNotReady()

@@ -45,14 +45,12 @@ import java.util.Map;
 
 /**
  * This class manages threshold information registered from AccessNetworkEvaluator It is intended to
- * monitor WiFi qualities(WiFi RSSI, WIFI PER) & report event if the network quality changes over
+ * monitor Wi-Fi qualities(Wi-Fi RSSI, WIFI PER) & report event if the network quality changes over
  * the threshold value.
  */
-class WifiQualityMonitor extends QualityMonitor {
-    private static final String TAG = WifiQualityMonitor.class.getSimpleName();
+public class WifiQualityMonitor extends QualityMonitor {
     private final String mTag;
     private final Context mContext;
-    private static WifiQualityMonitor sWiFiQualityMonitor;
     private final WifiManager mWifiManager;
     private final ConnectivityManager mConnectivityManager;
     private final WiFiThresholdCallback mWiFiThresholdCallback;
@@ -66,14 +64,6 @@ class WifiQualityMonitor extends QualityMonitor {
     private boolean mIsRegistered = false;
     private boolean mWifiStateIntentEnabled = false;
     private boolean mIsBackhaulRunning;
-
-    /** Get instance for Wifi Quality Monitor */
-    static QualityMonitor getInstance(Context context) {
-        if (sWiFiQualityMonitor == null) {
-            sWiFiQualityMonitor = new WifiQualityMonitor(context);
-        }
-        return sWiFiQualityMonitor;
-    }
 
     private class WiFiThresholdCallback extends ConnectivityManager.NetworkCallback {
         /** Callback Received based on meeting Wifi RSSI Threshold Registered or Wifi Lost */
@@ -114,7 +104,7 @@ class WifiQualityMonitor extends QualityMonitor {
                     mIsWifiConnected = true;
                     mHandler.sendEmptyMessage(EVENT_WIFI_STATE_CHANGED);
                 } else {
-                    Log.d(TAG, "mIsWifiConnected is already true");
+                    Log.d(mTag, "mIsWifiConnected is already true");
                 }
             }
         }
@@ -141,10 +131,10 @@ class WifiQualityMonitor extends QualityMonitor {
             };
 
     /**
-     * Create Wifi Quality monitor Object for Accessing WIFI Manager , Connectivity manager to
-     * monitor RSSI, build parameters for registering Threshold & Callback Listening
+     * Create WifiQualityMonitor object for accessing WifiManager, ConnectivityManager to monitor
+     * RSSI, build parameters for registering threshold & callback listening.
      */
-    private WifiQualityMonitor(Context context) {
+    WifiQualityMonitor(Context context) {
         super(QualityMonitor.class.getSimpleName() + "-I");
         mTag = WifiQualityMonitor.class.getSimpleName() + "-I";
         mContext = context;
@@ -169,6 +159,7 @@ class WifiQualityMonitor extends QualityMonitor {
 
         /* Network Callback for Threshold Register. */
         mWiFiStatusCallback = new WiFiStatusCallback();
+        Log.d(mTag, "created WifiQualityMonitor");
     }
 
     /** Returns current Wifi RSSI information */
@@ -184,7 +175,7 @@ class WifiQualityMonitor extends QualityMonitor {
     }
 
     /**
-     * Register for Threshold to receive Callback based on criteria met,thru WiFiThresholdCallback
+     * Register for threshold to receive callback based on criteria met, using WiFiThresholdCallback
      */
     @Override
     synchronized void registerThresholdChange(
@@ -319,11 +310,7 @@ class WifiQualityMonitor extends QualityMonitor {
         if (!register) {
             unregisterCallback();
             if (mThresholdsList.isEmpty()) {
-                if (mWifiStateIntentEnabled) {
-                    Log.d(mTag, "unregisterReceiver for RSSI_CHANGED");
-                    mContext.unregisterReceiver(mWifiStateIntentReceiver);
-                    mWifiStateIntentEnabled = false;
-                }
+                registerWiFiReceiver(false);
                 if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
                     Log.d(mTag, "Stop all active backhaul timers");
                     mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
@@ -334,15 +321,7 @@ class WifiQualityMonitor extends QualityMonitor {
             Log.d(mTag, "Listening to threshold = " + mRegisteredThreshold);
             mBuilder.setSignalStrength(mRegisteredThreshold);
             registerCallback();
-            if (!mWifiStateIntentEnabled) {
-                Log.d(mTag, "registerReceiver for RSSI_CHANGED");
-                IntentFilter filter = new IntentFilter();
-                filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
-                mContext.registerReceiver(mWifiStateIntentReceiver, filter);
-                mWifiStateIntentEnabled = true;
-            } else {
-                Log.d(mTag, "Wifi State is not enabled ");
-            }
+            registerWiFiReceiver(true);
         }
     }
 
@@ -371,21 +350,21 @@ class WifiQualityMonitor extends QualityMonitor {
         }
     }
 
-    private void registerWiFiReceiver(boolean wifiConnected) {
-        if (!wifiConnected) {
+    private synchronized void registerWiFiReceiver(boolean register) {
+        if (register) {
             if (!mWifiStateIntentEnabled) {
-                Log.d(mTag, "OnLost: unregisterReceiver RSSI_CHANGED");
-                mContext.unregisterReceiver(mWifiStateIntentReceiver);
-                mWifiStateIntentEnabled = false;
-            }
-        } else {
-            if (mWifiStateIntentEnabled) {
                 // Register for RSSI Changed Action intent.
-                Log.d(mTag, "OnAvailable: registerReceiver for RSSI_CHANGED");
+                Log.d(mTag, "registerReceiver for RSSI_CHANGED");
                 IntentFilter filter = new IntentFilter();
                 filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
                 mContext.registerReceiver(mWifiStateIntentReceiver, filter);
                 mWifiStateIntentEnabled = true;
+            }
+        } else {
+            if (mWifiStateIntentEnabled) {
+                Log.d(mTag, "unregisterReceiver RSSI_CHANGED");
+                mContext.unregisterReceiver(mWifiStateIntentReceiver);
+                mWifiStateIntentEnabled = false;
             }
         }
     }
@@ -427,16 +406,13 @@ class WifiQualityMonitor extends QualityMonitor {
 
     @VisibleForTesting
     @Override
-    void dispose() {
-        if (mWifiStateIntentEnabled) {
-            mContext.unregisterReceiver(mWifiStateIntentReceiver);
-            mWifiStateIntentEnabled = false;
-        }
+    public void close() {
+        registerWiFiReceiver(false);
         unregisterCallback();
         mWifiRssi = SIGNAL_STRENGTH_UNSPECIFIED;
         mIsRegistered = false;
         mRegisteredThreshold = SIGNAL_STRENGTH_UNSPECIFIED;
-        sWiFiQualityMonitor = null;
+        Log.d(mTag, "closed WifiQualityMonitor");
     }
 
     @Override

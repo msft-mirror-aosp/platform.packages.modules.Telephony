@@ -35,7 +35,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
@@ -52,8 +51,6 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                     QnsConstants.COVERAGE_HOME);
     List<Threshold> mThresholds = new ArrayList<>();
     List<ThresholdGroup> mThresholdGroups = new ArrayList<>();
-    @Mock private WifiQualityMonitor mMockWifiQualityMonitor;
-    @Mock private CellularQualityMonitor mMockCellularQualityMonitor;
 
     @Before
     public void setUp() throws Exception {
@@ -108,7 +105,7 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
     }
 
     @Test
-    public void testSatisfiedByThreshold_thresholdgroup() {
+    public void testSatisfiedByThreshold_thresholdGroup() {
         List<Threshold> ths = new ArrayList<>();
         ths.add(
                 new Threshold(
@@ -126,11 +123,11 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER));
         mThresholdGroups.add(new ThresholdGroup(ths));
 
-        when(mMockCellularQualityMonitor.getCurrentQuality(
+        when(mMockCellularQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP))
                 .thenReturn(-120);
-        when(mMockCellularQualityMonitor.getCurrentQuality(
+        when(mMockCellularQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ))
                 .thenReturn(-15)
@@ -146,8 +143,8 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
 
         boolean result =
                 ansp.satisfiedByThreshold(
-                        mMockWifiQualityMonitor,
-                        mMockCellularQualityMonitor,
+                        mMockWifiQm,
+                        mMockCellularQm,
                         false,
                         true,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN);
@@ -155,8 +152,8 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
 
         result =
                 ansp.satisfiedByThreshold(
-                        mMockWifiQualityMonitor,
-                        mMockCellularQualityMonitor,
+                        mMockWifiQm,
+                        mMockCellularQm,
                         false,
                         true,
                         AccessNetworkConstants.AccessNetworkType.EUTRAN);
@@ -168,19 +165,19 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
         mTargetTransportType = AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
         int expected = 3;
         mThresholdGroups = generateTestThresholdGroups();
-        when(mMockCellularQualityMonitor.getCurrentQuality(
+        when(mMockCellularQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP))
                 .thenReturn(-90);
-        when(mMockCellularQualityMonitor.getCurrentQuality(
+        when(mMockCellularQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ))
                 .thenReturn(-15);
-        when(mMockCellularQualityMonitor.getCurrentQuality(
+        when(mMockCellularQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR))
                 .thenReturn(-5);
-        when(mMockWifiQualityMonitor.getCurrentQuality(
+        when(mMockWifiQm.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI))
                 .thenReturn(-80);
@@ -188,11 +185,10 @@ public class AccessNetworkSelectionPolicyTest extends QnsTest {
                 new AccessNetworkSelectionPolicy(
                         mNetCapability, mTargetTransportType, mPreCondition, mThresholdGroups);
 
-        assertNull(ansp.findUnmatchedThresholds(null, mMockCellularQualityMonitor));
-        assertNull(ansp.findUnmatchedThresholds(mMockWifiQualityMonitor, null));
+        assertNull(ansp.findUnmatchedThresholds(null, mMockCellularQm));
+        assertNull(ansp.findUnmatchedThresholds(mMockWifiQm, null));
 
-        List<Threshold> unmatched =
-                ansp.findUnmatchedThresholds(mMockWifiQualityMonitor, mMockCellularQualityMonitor);
+        List<Threshold> unmatched = ansp.findUnmatchedThresholds(mMockWifiQm, mMockCellularQm);
         assertEquals(expected, unmatched.size());
     }
 

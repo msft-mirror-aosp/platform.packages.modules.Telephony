@@ -28,7 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.SubscriptionManager;
@@ -57,19 +56,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
     private final int mSlotIndex = 0;
     private MockitoSession mMockitoSession;
     @Mock private ProvisioningManager mMockProvisioningManager;
-    @Mock private QnsImsManager mMockIM;
-    @Mock private IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
 
-    HandlerThread mHandlerThread =
-            new HandlerThread("") {
-                @Override
-                protected void onLooperPrepared() {
-                    super.onLooperPrepared();
-                    mQnsProvisioningListener =
-                            QnsProvisioningListener.getInstance(sMockContext, mSlotIndex);
-                    setReady(true);
-                }
-            };
     private Handler mHandler;
     TestLooper mTestLooper;
     private ProvisioningManager.Callback mQnsProvisioningCallback;
@@ -88,8 +75,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mTestLooper = new TestLooper();
         mHandler = new Handler(mTestLooper.getLooper());
         mockStatics();
-        mHandlerThread.start();
-        waitUntilReady();
+        mQnsProvisioningListener =
+                new QnsProvisioningListener(sMockContext, mMockQnsImsManager, mSlotIndex);
         captureProvisioningHandler();
     }
 
@@ -104,25 +91,17 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
     private void mockStatics() throws Exception {
         lenient()
-                .when(IwlanNetworkStatusTracker.getInstance(sMockContext))
-                .thenReturn(mMockIwlanNetworkStatusTracker);
-        lenient()
                 .when(ProvisioningManager.createForSubscriptionId(mSlotIndex))
                 .thenReturn(mMockProvisioningManager);
         lenient().when(QnsUtils.getSubId(sMockContext, mSlotIndex)).thenReturn(mSlotIndex);
         lenient().when(SubscriptionManager.isValidSubscriptionId(mSlotIndex)).thenReturn(true);
-        lenient().when(QnsUtils.getImsManager(sMockContext, mSlotIndex)).thenReturn(mMockIM);
-        when(mMockIM.getImsServiceState()).thenReturn(ImsFeature.STATE_READY);
+        when(mMockQnsImsManager.getImsServiceState()).thenReturn(ImsFeature.STATE_READY);
         when(mMockProvisioningManager.getProvisioningIntValue(anyInt())).thenReturn(0);
         when(mMockProvisioningManager.getProvisioningStringValue(anyInt())).thenReturn("");
     }
 
     @After
     public void tearDown() {
-        if (mHandlerThread != null) {
-            mQnsProvisioningListener.close();
-            mHandlerThread.quit();
-        }
         mMockitoSession.finishMocking();
     }
 

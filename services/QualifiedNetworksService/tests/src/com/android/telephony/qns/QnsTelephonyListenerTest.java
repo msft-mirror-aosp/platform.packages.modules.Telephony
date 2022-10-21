@@ -30,7 +30,6 @@ import android.content.Context;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
@@ -72,14 +71,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Mock private Handler mMockHandler;
 
     Handler mHandler;
-    HandlerThread mHandlerThread =
-            new HandlerThread("") {
-                @Override
-                protected void onLooperPrepared() {
-                    mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
-                    setReady(true);
-                }
-            };
     TestLooper mTestLooper;
 
     @Before
@@ -94,8 +85,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         any(SubscriptionManager.OnSubscriptionsChangedListener.class));
         mTestLooper = new TestLooper();
         mHandler = new Handler(mTestLooper.getLooper());
-        mHandlerThread.start();
-        waitUntilReady();
+        mQtListener = new QnsTelephonyListener(sMockContext, 0);
     }
 
     @After
@@ -103,10 +93,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         mStaticMockSession.finishMocking();
 
         if (mQtListener != null) mQtListener.close();
-
-        if (mHandlerThread != null) {
-            mHandlerThread.quit();
-        }
     }
 
     @Test
@@ -123,8 +109,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         QnsTelephonyListener.QnsTelephonyInfo output =
                 (QnsTelephonyListener.QnsTelephonyInfo) ((QnsAsyncResult) msg.obj).mResult;
         assertEquals(qtInfo, output);
-        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_MMS,
-                mHandler);
+        mQtListener.unregisterQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_MMS, mHandler);
 
         mQtListener.registerQnsTelephonyInfoChanged(
                 NetworkCapabilities.NET_CAPABILITY_IMS, mHandler, 1, null, false);
@@ -278,7 +264,7 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
         mQtListener.close();
 
-        mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
+        mQtListener = new QnsTelephonyListener(sMockContext, 0);
 
         mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(handoverStateIms);
         output =
@@ -381,8 +367,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testUnregisterQnsTelephonyInfoChanged() {
         testRegisterQnsTelephonyInfoChanged();
-        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_IMS,
-                mHandler);
+        mQtListener.unregisterQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_IMS, mHandler);
 
         assertNotNull(
                 mQtListener.mQnsTelephonyInfoRegistrantMap.get(
@@ -406,8 +392,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                         .size());
         assertEquals(0, mTestLooper.dispatchAll());
 
-        mQtListener.unregisterQnsTelephonyInfoChanged(NetworkCapabilities.NET_CAPABILITY_XCAP,
-                mHandler);
+        mQtListener.unregisterQnsTelephonyInfoChanged(
+                NetworkCapabilities.NET_CAPABILITY_XCAP, mHandler);
         assertEquals(
                 0,
                 mQtListener
@@ -1008,24 +994,13 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @Test
     public void testNullTelephonyListener() {
         mQtListener.close();
-        mHandlerThread.quit();
         setReady(false);
         Mockito.clearInvocations(mMockTelephonyManager);
         when(mMockSubscriptionInfo.getSubscriptionId()).thenReturn(-1);
-        HandlerThread ht =
-                new HandlerThread("") {
-                    @Override
-                    protected void onLooperPrepared() {
-                        mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
-                        setReady(true);
-                    }
-                };
-        ht.start();
-        waitUntilReady();
+        mQtListener = new QnsTelephonyListener(sMockContext, 0);
         mQtListener.startTelephonyListener(-1);
         verify(mMockTelephonyManager, never())
                 .registerTelephonyCallback(isA(Executor.class), isA(TelephonyCallback.class));
-        ht.quit();
     }
 
     @Test

@@ -16,13 +16,11 @@
 
 package com.android.telephony.qns;
 
-import android.content.Context;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.SignalThresholdInfo;
 import android.util.Log;
 
-import com.android.internal.annotations.VisibleForTesting;
 import com.android.telephony.qns.AccessNetworkSelectionPolicy.PreCondition;
 import com.android.telephony.qns.QnsCarrierConfigManager.QnsConfigArray;
 
@@ -166,14 +164,13 @@ class AccessNetworkSelectionPolicyBuilder {
                 AccessNetworkType.IWLAN);
     }
 
-    static synchronized Map<PreCondition, List<AccessNetworkSelectionPolicy>> build(
-            Context context, int slotIndex, int netCapability) {
+    public static synchronized Map<PreCondition, List<AccessNetworkSelectionPolicy>> build(
+            QnsCarrierConfigManager configManager, int netCapability) {
         AccessNetworkSelectionPolicyBuilder builder;
-        QnsCarrierConfigManager cm = QnsCarrierConfigManager.getInstance(context, slotIndex);
-        if (cm.isOverrideImsPreferenceSupported()) {
-            builder = new AnspImsPreferModePolicyBuilder(context, slotIndex, netCapability);
+        if (configManager.isOverrideImsPreferenceSupported()) {
+            builder = new AnspImsPreferModePolicyBuilder(configManager, netCapability);
         } else {
-            builder = new AccessNetworkSelectionPolicyBuilder(context, slotIndex, netCapability);
+            builder = new AccessNetworkSelectionPolicyBuilder(configManager, netCapability);
         }
         return builder.buildAnsp();
     }
@@ -186,14 +183,7 @@ class AccessNetworkSelectionPolicyBuilder {
     protected final QnsCarrierConfigManager mConfig;
     protected final int mNetCapability;
 
-    AccessNetworkSelectionPolicyBuilder(Context context, int slotIndex, int netCapability) {
-        mConfig = QnsCarrierConfigManager.getInstance(context, slotIndex);
-        mNetCapability = netCapability;
-    }
-
-    @VisibleForTesting
-    AccessNetworkSelectionPolicyBuilder(
-            QnsCarrierConfigManager configManager, int netCapability) {
+    AccessNetworkSelectionPolicyBuilder(QnsCarrierConfigManager configManager, int netCapability) {
         mConfig = configManager;
         mNetCapability = netCapability;
     }
