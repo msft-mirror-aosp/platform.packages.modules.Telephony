@@ -508,19 +508,16 @@ public class QnsUtils {
     /**
      * Get the network capability from the string.
      *
-     * @param apnTypes comma(,) delimited list of APN types.
-     * @return The network capability. -1 if not found.
+     * @param types string array of APN types.
+     * @return list of Network Capabilities
      */
     @NetCapability
-    public static List<Integer> getNetworkCapabilitiesFromApnTypesString(@NonNull String apnTypes) {
-        List<Integer> apnTypeList =
-                QnsUtils.getApnTypes(ApnSetting.getApnTypesBitmaskFromString(apnTypes));
-        List<Integer> netCapabilities =
-                apnTypeList.stream()
-                        .mapToInt(apnType -> apnType)
-                        .mapToObj(QnsUtils::getNetCapabilityFromApnType)
-                        .collect(Collectors.toList());
-        return netCapabilities;
+    public static List<Integer> getNetCapabilitiesFromApnTypesString(@NonNull String[] types) {
+        int apnTypesBitmask = 0;
+        for (String str : types) {
+            apnTypesBitmask |= ApnSetting.getApnTypeInt(str);
+        }
+        return getNetCapabilitiesFromApnTypeBitmask(apnTypesBitmask);
     }
 
     /**

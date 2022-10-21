@@ -1181,6 +1181,24 @@ public class QnsUtilsTest {
         }
     }
 
+    @Test
+    public void testGetNetCapabilitiesFromApnTypesString() {
+        int[] netCapabilities =
+                new int[] {
+                    NetworkCapabilities.NET_CAPABILITY_IMS,
+                    NetworkCapabilities.NET_CAPABILITY_EIMS,
+                    NetworkCapabilities.NET_CAPABILITY_MMS,
+                    NetworkCapabilities.NET_CAPABILITY_XCAP,
+                    NetworkCapabilities.NET_CAPABILITY_CBS
+                };
+        String[] apnTypes = new String[] {"ims", "emergency", "mms", "xcap", "cbs"};
+
+        List<Integer> result = QnsUtils.getNetCapabilitiesFromApnTypesString(apnTypes);
+        for (int netCapability : netCapabilities) {
+            assertTrue(result.contains(netCapability));
+        }
+    }
+
     @After
     public void tearDown() {}
 }

@@ -2558,8 +2558,7 @@ public class QnsCarrierConfigManager {
             return false;
         }
 
-        return QnsUtils.getNetworkCapabilitiesFromApnTypesString(
-                        String.join(",", mApnTypesInternationalRoamingCheck))
+        return QnsUtils.getNetCapabilitiesFromApnTypesString(mApnTypesInternationalRoamingCheck)
                 .stream()
                 .mapToInt(netCapabilityFromApn -> netCapabilityFromApn)
                 .anyMatch(netCapabilityFromApn -> netCapabilityFromApn == netCapability);
