@@ -480,9 +480,9 @@ public class QnsTelephonyListener {
                         NetworkRegistrationInfo.DOMAIN_PS,
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
 
-        if ((newIwlanNrs != null)
-                && (oldIwlanNrs != null)
-                && (newIwlanNrs.isRegistered() != oldIwlanNrs.isRegistered())) {
+        if (newIwlanNrs != null
+                && (oldIwlanNrs == null
+                        || newIwlanNrs.isRegistered() != oldIwlanNrs.isRegistered())) {
             log("Iwlan is in service: " + newIwlanNrs.isRegistered());
             notifyIwlanServiceStateInfo(newIwlanNrs.isRegistered());
         }

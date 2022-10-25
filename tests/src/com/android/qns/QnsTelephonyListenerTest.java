@@ -51,6 +51,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
@@ -66,6 +67,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     private static final int CONDITIONAL_BARRING_TIME = 20;
     QnsTelephonyListener mQtListener;
     MockitoSession mStaticMockSession;
+
+    @Mock private Handler mMockHandler;
 
     Handler h;
     HandlerThread mHandlerThread =
@@ -1019,5 +1022,40 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         verify(mockTelephonyManager, never())
                 .registerTelephonyCallback(isA(Executor.class), isA(TelephonyCallback.class));
         ht.quit();
+    }
+
+    @Test
+    public void testIwlanServiceState() {
+        int iwlanServiceStateEventId = 1000;
+
+        mQtListener.registerIwlanServiceStateListener(mMockHandler, iwlanServiceStateEventId, null);
+        assertTrue(mQtListener.mIwlanServiceStateListener.size() > 0);
+        verify(mMockHandler, never()).sendMessage(any());
+
+        // Send Service State for IWLAN
+        ServiceState ss = new ServiceState();
+        NetworkRegistrationInfo nri =
+                new NetworkRegistrationInfo(
+                        NetworkRegistrationInfo.DOMAIN_PS,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        NetworkRegistrationInfo.REGISTRATION_STATE_HOME,
+                        TelephonyManager.NETWORK_TYPE_LTE,
+                        0,
+                        false,
+                        null,
+                        null,
+                        "00101",
+                        10,
+                        false,
+                        true,
+                        true,
+                        null);
+        ss.addNetworkRegistrationInfo(nri);
+        ss.setRilVoiceRadioTechnology(ServiceState.RIL_RADIO_TECHNOLOGY_LTE);
+        ss.setVoiceRegState(ServiceState.STATE_IN_SERVICE);
+        mQtListener.onServiceStateChanged(ss);
+        assertEquals(ss, mQtListener.mLastServiceState);
+
+        verify(mMockHandler, times(1)).sendMessage(any());
     }
 }
