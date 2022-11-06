@@ -25,6 +25,8 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkSpecifier;
 import android.net.TelephonyNetworkSpecifier;
+import android.net.TransportInfo;
+import android.net.vcn.VcnTransportInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -206,7 +208,11 @@ class IwlanNetworkStatusTracker {
                         mConnectivityManager.getNetworkCapabilities(activeNetwork);
                 if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                     specifier = nc.getNetworkSpecifier();
-                    if (specifier instanceof TelephonyNetworkSpecifier) {
+                    TransportInfo transportInfo = nc.getTransportInfo();
+                    if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                        dds = ((VcnTransportInfo) transportInfo).getSubId();
+                    } else if (specifier != null
+                            && specifier instanceof TelephonyNetworkSpecifier) {
                         dds = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
                     if (dds != INVALID_SUB_ID && dds != mConnectedDds) {
@@ -490,7 +496,11 @@ class IwlanNetworkStatusTracker {
                         notifyIwlanNetworkStatus();
                     } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                         NetworkSpecifier specifier = nc.getNetworkSpecifier();
-                        if (specifier instanceof TelephonyNetworkSpecifier) {
+                        TransportInfo transportInfo = nc.getTransportInfo();
+                        if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                            mConnectedDds = ((VcnTransportInfo) transportInfo).getSubId();
+                        } else if (specifier != null
+                                && specifier instanceof TelephonyNetworkSpecifier) {
                             mConnectedDds =
                                     ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                         }
@@ -570,13 +580,16 @@ class IwlanNetworkStatusTracker {
                         Log.d(sLogTag, "OnCapability : Wifi Available already true");
                     }
                 } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                    NetworkSpecifier specifier = nc.getNetworkSpecifier();
                     int dds = INVALID_SUB_ID;
                     mWifiAvailable = false;
-                    if (specifier instanceof TelephonyNetworkSpecifier) {
+                    NetworkSpecifier specifier = nc.getNetworkSpecifier();
+                    TransportInfo transportInfo = nc.getTransportInfo();
+                    if (transportInfo != null && transportInfo instanceof VcnTransportInfo) {
+                        dds = ((VcnTransportInfo) transportInfo).getSubId();
+                    } else if (specifier != null
+                            && specifier instanceof TelephonyNetworkSpecifier) {
                         dds = ((TelephonyNetworkSpecifier) specifier).getSubscriptionId();
                     }
-
                     if (dds != INVALID_SUB_ID && dds != mConnectedDds) {
                         mConnectedDds = dds;
                         notifyIwlanNetworkStatus();
