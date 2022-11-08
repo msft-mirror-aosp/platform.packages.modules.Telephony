@@ -1104,8 +1104,8 @@ class AccessNetworkEvaluator {
             return false;
         } else if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                 && mIsCrossWfc
-                && !isCrossWfcAllowed(mCellularAvailable)) {
-            sb.append(" CrossWfc is not allowed. mCellularAvailable:").append(mCellularAvailable);
+                && mCellularAvailable) {
+            sb.append(" CrossWfc is not allowed at Cellular available case.");
             log(sb.toString());
             return false;
         }
@@ -1831,16 +1831,6 @@ class AccessNetworkEvaluator {
             return "EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE";
         }
         return "UNKNOWN";
-    }
-
-    private boolean isCrossWfcAllowed(boolean cellularAvailable) {
-        if (mConfigManager.getRatPreference(mNetCapability)
-                == QnsConstants.RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE) {
-            // Should follow RAT_PREFERENCE_WIFI_WHEN_WFC_AVAILABLE and do not block CST when IMS
-            // connected to CST
-            return true;
-        }
-        return !cellularAvailable;
     }
 
     private class EvaluatorEventHandler extends Handler {
