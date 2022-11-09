@@ -1269,7 +1269,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         method.setAccessible(true);
         assertFalse((Boolean) method.invoke(mAne, transport));
 
-        when(mMockIwlanNetworkStatusTracker.isInternationalRoaming(sMockContext, mSlotIndex))
+        when(mMockIwlanNetworkStatusTracker.isInternationalRoaming(mSlotIndex))
                 .thenReturn(true);
         when(mMockQnsConfigManager.blockIwlanInInternationalRoamWithoutWwan())
                 .thenReturn(true, false);
