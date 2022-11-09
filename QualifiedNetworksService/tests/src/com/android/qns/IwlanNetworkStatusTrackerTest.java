@@ -26,6 +26,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.TelephonyNetworkSpecifier;
+import android.net.vcn.VcnTransportInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -147,7 +148,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
         // If sim is invalid, no event is notified because of already info was notified.
         mHandlers[0].mLatch = new CountDownLatch(1);
-        studSubIdToNetworkCapabilities(INVALID_SUB_ID);
+        prepareNetworkCapabilitiesForTest(INVALID_SUB_ID, false /* isVcn */);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, 0);
         assertFalse(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNotNull(mIwlanAvailabilityInfo);
@@ -165,7 +166,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(currentSlot, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
-        studSubIdToNetworkCapabilities(dds);
+        prepareNetworkCapabilitiesForTest(dds, false /* isVcn */);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, currentSlot);
         mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(currentSlot, true);
         waitFor(100);
@@ -173,13 +174,35 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
     }
 
-    private void studSubIdToNetworkCapabilities(int subId) {
-        TelephonyNetworkSpecifier tns = new TelephonyNetworkSpecifier(subId);
-        mNetworkCapabilities =
+    @Test
+    public void testHandleMessage_VcnWithValidSubID() throws InterruptedException {
+        int dds = 1, currentSlot = 0;
+        mHandlers[0].mLatch = new CountDownLatch(1);
+        lenient().when(QnsUtils.getSubId(sMockContext, currentSlot)).thenReturn(0);
+        lenient()
+                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, currentSlot))
+                .thenReturn(true);
+        lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(currentSlot, mHandlers[0], 1);
+        assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
+        prepareNetworkCapabilitiesForTest(dds, true /* isVcn */);
+        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, currentSlot);
+        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(currentSlot, true);
+        waitFor(100);
+        assertNotNull(mIwlanAvailabilityInfo);
+        assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
+    }
+
+    private void prepareNetworkCapabilitiesForTest(int subId, boolean isVcn) {
+        NetworkCapabilities.Builder builder =
                 new NetworkCapabilities.Builder()
-                        .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-                        .setNetworkSpecifier(tns)
-                        .build();
+                        .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR);
+        if (isVcn) {
+            builder.setTransportInfo(new VcnTransportInfo(subId));
+        } else {
+            builder.setNetworkSpecifier(new TelephonyNetworkSpecifier(subId));
+        }
+        mNetworkCapabilities = builder.build();
         when(mMockConnectivityManager.getActiveNetwork()).thenReturn(mMockNetwork);
         when(mMockConnectivityManager.getNetworkCapabilities(mMockNetwork))
                 .thenReturn(mNetworkCapabilities);
