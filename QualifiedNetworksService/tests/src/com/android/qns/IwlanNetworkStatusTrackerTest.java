@@ -50,6 +50,9 @@ import java.util.concurrent.TimeUnit;
 public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     private static final int INVALID_SUB_ID = -1;
+    private static final int CURRENT_SLOT_ID = 0;
+    private static final int CURRENT_SUB_ID = 0;
+    private static final int ACTIVE_DATA_SUB_ID = 1;
     private IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     private IwlanNetworkStatusTracker.IwlanAvailabilityInfo mIwlanAvailabilityInfo;
     private final TestHandler[] mHandlers = new TestHandler[2];
@@ -157,18 +160,37 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testHandleMessage_ValidSubID() throws InterruptedException {
-        int dds = 1, currentSlot = 0;
         mHandlers[0].mLatch = new CountDownLatch(1);
-        lenient().when(QnsUtils.getSubId(sMockContext, currentSlot)).thenReturn(0);
+        lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
         lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, currentSlot))
+                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
                 .thenReturn(true);
-        lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
-        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(currentSlot, mHandlers[0], 1);
+        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
-        prepareNetworkCapabilitiesForTest(dds, false /* isVcn */);
-        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, currentSlot);
-        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(currentSlot, true);
+        prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, false /* isVcn */);
+        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
+        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
+        waitFor(100);
+        assertNotNull(mIwlanAvailabilityInfo);
+        assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
+    }
+
+    @Test
+    public void testHandleMessage_ValidSubID_DDS_over_nDDS() throws InterruptedException {
+        // Verifies that DDS can also establish cross-sim over nDDS, as long as nDDS is the current
+        // active data sub.
+        mHandlers[0].mLatch = new CountDownLatch(1);
+        lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
+        lenient()
+                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
+                .thenReturn(true);
+        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(true);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
+        prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, false /* isVcn */);
+        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
+        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
         waitFor(100);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
@@ -176,18 +198,17 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testHandleMessage_VcnWithValidSubID() throws InterruptedException {
-        int dds = 1, currentSlot = 0;
         mHandlers[0].mLatch = new CountDownLatch(1);
-        lenient().when(QnsUtils.getSubId(sMockContext, currentSlot)).thenReturn(0);
+        lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
         lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, currentSlot))
+                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
                 .thenReturn(true);
-        lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
-        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(currentSlot, mHandlers[0], 1);
+        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
-        prepareNetworkCapabilitiesForTest(dds, true /* isVcn */);
-        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, currentSlot);
-        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(currentSlot, true);
+        prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, true /* isVcn */);
+        mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
+        mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
         waitFor(100);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
@@ -210,13 +231,12 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testHandleMessage_DisableCrossSim() throws InterruptedException {
-        int currentSlot = 0;
         testHandleMessage_ValidSubID();
         mHandlers[0].mLatch = new CountDownLatch(1);
         lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, currentSlot))
+                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
                 .thenReturn(false);
-        lenient().when(QnsUtils.isDefaultDataSubs(currentSlot)).thenReturn(false);
+        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(false, 0);
         assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNotNull(mIwlanAvailabilityInfo);
