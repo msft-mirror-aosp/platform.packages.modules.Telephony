@@ -27,6 +27,11 @@ android_app {
         "src/**/I*.aidl",
     ],
 
+    static_libs: [
+        "androidx.appcompat_appcompat",
+        "androidx.browser_browser",
+    ],
+
     libs: [
         "telephony-common",
         "ims-common",
