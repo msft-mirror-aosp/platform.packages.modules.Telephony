@@ -162,7 +162,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                         new CellSignalStrengthWcdma(-94, 4, -102, -5),
                         new CellSignalStrengthTdscdma(-95, 2, -103), // not using Tdscdma
                         new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
-                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4, 1));
         when(mMockTelephonyManager.getSignalStrength()).thenReturn(ss);
         int quality =
                 mCellularQualityMonitor.getCurrentQuality(
@@ -558,7 +558,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                         new CellSignalStrengthWcdma(-94, 4, -102, -5),
                         new CellSignalStrengthTdscdma(-95, 2, -103), // not using Tdscdma
                         new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
-                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4, 1));
 
         mLatch = new CountDownLatch(1);
         mOutputThs = null;
@@ -649,7 +649,7 @@ public final class CellularQualityMonitorTest extends QnsTest {
                         new CellSignalStrengthWcdma(-94, 4, -102, -5),
                         new CellSignalStrengthTdscdma(-95, 2, -103), // not using Tdscdma
                         new CellSignalStrengthLte(-85, -91, -6, -10, 1, 12, 1),
-                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4));
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4, 1));
 
         mLatch = new CountDownLatch(1);
         mOutputThs = null;
