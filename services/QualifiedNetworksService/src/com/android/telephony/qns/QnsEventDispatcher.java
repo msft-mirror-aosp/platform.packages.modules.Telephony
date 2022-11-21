@@ -21,6 +21,11 @@ import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_ONLY;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
+import static com.android.telephony.qns.wfc.WfcActivationHelper.ACTION_TRY_WFC_CONNECTION;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.EXTRA_SUB_ID;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.EXTRA_TRY_STATUS;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.STATUS_START;
+
 import android.annotation.IntDef;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
@@ -110,6 +115,8 @@ class QnsEventDispatcher {
     static final int QNS_EVENT_SIM_ABSENT = QNS_EVENT_BASE + 23;
     static final int QNS_EVENT_SIM_LOADED = QNS_EVENT_BASE + 24;
     static final int QNS_EVENT_WIFI_ENABLED = QNS_EVENT_BASE + 25;
+    static final int QNS_EVENT_TRY_WFC_ACTIVATION = QNS_EVENT_BASE + 100;
+    static final int QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION = QNS_EVENT_BASE + 101;
     private static final int EVENT_PROVISIONING_INFO_CHANGED = QNS_EVENT_BASE + 200;
     private static Boolean sIsAirplaneModeOn;
     private static int sWiFiState = WifiManager.WIFI_STATE_UNKNOWN;
@@ -222,6 +229,32 @@ class QnsEventDispatcher {
                 }
             };
 
+    final BroadcastReceiver mWfcActivationIntentReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent.getAction();
+                    int event;
+                    Log.d(mLogTag, "mWfcActivationIntentReceiver onReceive: " + action);
+                    switch (action) {
+                        case ACTION_TRY_WFC_CONNECTION:
+                            int subId = intent.getIntExtra(EXTRA_SUB_ID, -1);
+                            if (subId != mSubId) {
+                                Log.d(mLogTag, "Intent subId: " + subId + ", mSubId: " + mSubId);
+                                break;
+                            }
+                            int request =
+                                    intent.getIntExtra(EXTRA_TRY_STATUS, 0);
+                            event =
+                                    request == STATUS_START
+                                            ? QNS_EVENT_TRY_WFC_ACTIVATION
+                                            : QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION;
+                            updateHandlers(event);
+                            break;
+                    }
+                }
+            };
+
     /**
      * QnsEventDispatcher constructor
      */
@@ -247,6 +280,11 @@ class QnsEventDispatcher {
         intentFilter.addAction(TelephonyManager.ACTION_SIM_CARD_STATE_CHANGED);
         intentFilter.addAction(TelephonyManager.ACTION_SIM_APPLICATION_STATE_CHANGED);
         mContext.registerReceiver(mIntentReceiver, intentFilter);
+
+        IntentFilter wfcIntentFilter = new IntentFilter();
+        wfcIntentFilter.addAction(ACTION_TRY_WFC_CONNECTION);
+        mContext.registerReceiver(
+                mWfcActivationIntentReceiver, wfcIntentFilter, Context.RECEIVER_NOT_EXPORTED);
 
         HandlerThread handlerThread = new HandlerThread(mLogTag);
         handlerThread.start();

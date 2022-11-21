@@ -390,6 +390,8 @@ class AccessNetworkEvaluator {
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_DISABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_SIM_ABSENT);
+        events.add(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION);
+        events.add(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION);
         mQnsEventDispatcher.registerEvent(events, mHandler);
         mRestrictManager.registerRestrictInfoChanged(mHandler, EVENT_RESTRICT_INFO_CHANGED);
     }
@@ -656,8 +658,17 @@ class AccessNetworkEvaluator {
     @VisibleForTesting
     void onTryWfcConnectionStateChanged(boolean isEnabled) {
         log("onTryWfcConnectionStateChanged enabled:" + isEnabled);
+        int timeout = mConfigManager.getVowifiRegistrationTimerForVowifiActivation();
+
         if (mAllowIwlanForWfcActivation == isEnabled) {
             return;
+        }
+        if (isEnabled) {
+            mHandler.sendEmptyMessageDelayed(
+                    QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION,
+                    timeout + /* milliseconds */3000);
+        } else {
+            mHandler.removeMessages(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION);
         }
         mAllowIwlanForWfcActivation = isEnabled;
         evaluate();
@@ -1919,6 +1930,12 @@ class AccessNetworkEvaluator {
                     break;
                 case EVENT_WIFI_RTT_STATUS_CHANGED:
                     onRttStatusChanged((boolean) ar.mResult);
+                    break;
+                case QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION:
+                    onTryWfcConnectionStateChanged(true);
+                    break;
+                case QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION:
+                    onTryWfcConnectionStateChanged(false);
                     break;
                 default:
                     log("never reach here msg=" + message.what);
