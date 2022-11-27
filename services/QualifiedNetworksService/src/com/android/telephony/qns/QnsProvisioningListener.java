@@ -29,20 +29,14 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 class QnsProvisioningListener {
 
-    private static final Map<Integer, QnsProvisioningListener> sInstances =
-            new ConcurrentHashMap<>();
     private static final long REG_CALLBACK_DELAY = 2000L; // 3sec
     private static final int REG_CALLBACK_RETRY = 10; // 10 times
     private static final int EVENT_BASE = 11000;
     private static final int EVENT_REGISTER_PROVISIONING_CALLBACK = EVENT_BASE + 1;
-    private static final int EVENT_IWLAN_NETWORK_STATUS_CHANGED = EVENT_BASE + 2;
     private static final int EVENT_CALLBACK_REGISTERED = EVENT_BASE + 3;
     private static final int EVENT_NOTIFY_PROVISION_INFO_CHANGED = EVENT_BASE + 4;
     private static final int EVENT_IMS_STATE_CHANGED = EVENT_BASE + 5;
@@ -50,21 +44,19 @@ class QnsProvisioningListener {
     private final Context mContext;
     private final int mSlotIndex;
     private final QnsProvisioningInfo mProvisioningInfo;
-    private final QnsEventDispatcher mQnsEventDispatcher;
     private final QnsImsManager mQnsImsManager;
     @VisibleForTesting QnsProvisioningHandler mQnsProvisioningHandler;
 
     private final QnsProvisioningCallback mQnsProvisioningCallback;
     private final QnsRegistrantList mRegistrantList;
-    protected IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     private ProvisioningManager mProvisioningManager;
     private boolean mIsProvisioningCallbackRegistered;
 
-    private QnsProvisioningListener(Context context, int slotIndex) {
-        mLogTag = QnsProvisioningListener.class.getSimpleName() + "_" + slotIndex;
-
-        mContext = context;
+    QnsProvisioningListener(Context context, QnsImsManager imsManager, int slotIndex) {
         mSlotIndex = slotIndex;
+        mLogTag = QnsProvisioningListener.class.getSimpleName() + "_" + mSlotIndex;
+        mContext = context;
+        mQnsImsManager = imsManager;
         mProvisioningInfo = new QnsProvisioningInfo();
         mQnsProvisioningCallback = new QnsProvisioningCallback();
         mIsProvisioningCallbackRegistered = false;
@@ -73,37 +65,16 @@ class QnsProvisioningListener {
         HandlerThread handlerThread = new HandlerThread(mLogTag);
         handlerThread.start();
         mQnsProvisioningHandler = new QnsProvisioningHandler(handlerThread.getLooper());
-        mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotIndex);
-        List<Integer> events = new ArrayList<>();
-        events.add(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED);
-        events.add(QnsEventDispatcher.QNS_EVENT_SIM_ABSENT);
-        events.add(QnsEventDispatcher.QNS_EVENT_SIM_LOADED);
-        mQnsEventDispatcher.registerEvent(events, mQnsProvisioningHandler);
 
         registerProvisioningCallback();
-
-        mIwlanNetworkStatusTracker = IwlanNetworkStatusTracker.getInstance(context);
-        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(
-                mSlotIndex, mQnsProvisioningHandler, EVENT_IWLAN_NETWORK_STATUS_CHANGED);
-
-        mQnsImsManager = QnsImsManager.getInstance(mContext, mSlotIndex);
         mQnsImsManager.registerImsStateChanged(mQnsProvisioningHandler, EVENT_IMS_STATE_CHANGED);
     }
 
-    static QnsProvisioningListener getInstance(@NonNull Context context, int slotIndex) {
-        return sInstances.computeIfAbsent(
-                slotIndex, k -> new QnsProvisioningListener(context, slotIndex));
-    }
-
     void close() {
-        mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(
-                mSlotIndex, mQnsProvisioningHandler);
         mQnsImsManager.unregisterImsStateChanged(mQnsProvisioningHandler);
-        mQnsEventDispatcher.unregisterEvent(mQnsProvisioningHandler);
         mRegistrantList.removeAll();
         mProvisioningInfo.clear();
         unregisterProvisioningCallback();
-        sInstances.remove(mSlotIndex);
     }
 
     private void registerProvisioningCallback() {
@@ -124,8 +95,7 @@ class QnsProvisioningListener {
 
         try {
             // checks ImsException for ims not supported or unavailable.
-            if (QnsUtils.getImsManager(mContext, mSlotIndex).getImsServiceState()
-                    != 2) { // STATE_READY
+            if (mQnsImsManager.getImsServiceState() != 2) { // STATE_READY
                 throw new Exception();
             }
 
@@ -207,7 +177,7 @@ class QnsProvisioningListener {
         }
     }
 
-    boolean getLastProvisioningWfcRoamingEnagledInfo() {
+    boolean getLastProvisioningWfcRoamingEnabledInfo() {
         try {
             return mProvisioningInfo.getIntegerItem(
                             ProvisioningManager.KEY_VOICE_OVER_WIFI_ROAMING_ENABLED_OVERRIDE)
@@ -452,32 +422,6 @@ class QnsProvisioningListener {
             log("message what:" + message.what);
             QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
-                case QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED:
-                    log("carrier config loaded.");
-                    resetRetryRegisterProvisioningCallbackCount();
-                    registerProvisioningCallback();
-                    break;
-                case QnsEventDispatcher.QNS_EVENT_SIM_ABSENT:
-                    log("clear last Provisioning Info.");
-                    clearLastProvisioningInfo();
-                    break;
-                case QnsEventDispatcher.QNS_EVENT_SIM_LOADED:
-                    log("re-register Provisioning Callback");
-                    unregisterProvisioningCallback();
-                    resetRetryRegisterProvisioningCallbackCount();
-                    registerProvisioningCallback();
-                    break;
-                case EVENT_IWLAN_NETWORK_STATUS_CHANGED:
-                    log("iwlan network state changed.");
-                    if (ar != null) {
-                        IwlanNetworkStatusTracker.IwlanAvailabilityInfo info =
-                                (IwlanNetworkStatusTracker.IwlanAvailabilityInfo) ar.mResult;
-                        if (info.getIwlanAvailable()) {
-                            resetRetryRegisterProvisioningCallbackCount();
-                            registerProvisioningCallback();
-                        }
-                    }
-                    break;
                 case EVENT_IMS_STATE_CHANGED:
                     if (ar != null) {
                         QnsImsManager.ImsState state = (QnsImsManager.ImsState) ar.mResult;

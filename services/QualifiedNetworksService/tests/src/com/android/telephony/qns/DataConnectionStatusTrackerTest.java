@@ -66,10 +66,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.IOException;
-
 @RunWith(JUnit4.class)
-public class DataConnectionStatusTrackerTest {
+public class DataConnectionStatusTrackerTest extends QnsTest {
     @Mock private Context mContext;
     @Mock protected TelephonyManager mMockTelephonyManager;
     @Mock protected CarrierConfigManager mMockCarrierConfigManager;
@@ -91,7 +89,7 @@ public class DataConnectionStatusTrackerTest {
                     super.onLooperPrepared();
                     mDataConnectionStatusTracker =
                             new DataConnectionStatusTracker(
-                                    mContext,
+                                    mMockQnsTelephonyListener,
                                     this.getLooper(),
                                     0,
                                     NetworkCapabilities.NET_CAPABILITY_IMS);
@@ -135,7 +133,7 @@ public class DataConnectionStatusTrackerTest {
     }
 
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() {
         MockitoAnnotations.initMocks(this);
         mContext = spy(ApplicationProvider.getApplicationContext());
         when(mContext.getSystemService(TelephonyManager.class)).thenReturn(mMockTelephonyManager);

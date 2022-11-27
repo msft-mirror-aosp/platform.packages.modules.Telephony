@@ -22,11 +22,9 @@ import android.telephony.SignalThresholdInfo;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
 
 @RunWith(JUnit4.class)
 public class ThresholdTest {
@@ -40,8 +38,9 @@ public class ThresholdTest {
 
     @Before
     public void setUp() {
-        mThreshold = new Threshold(
-                mAccessNetwork, mMeasurementType, mThresholdValue, mMatchType, mWaitTime);
+        mThreshold =
+                new Threshold(
+                        mAccessNetwork, mMeasurementType, mThresholdValue, mMatchType, mWaitTime);
     }
 
     @After
@@ -223,8 +222,4 @@ public class ThresholdTest {
         Assert.assertFalse(th[6].isMatching(-81)); // not meeting the criteria
         Assert.assertFalse(th[7].isMatching(9)); // not meeting the criteria
     }
-
-    @Ignore
-    @Test
-    public void testToShortString() {}
 }

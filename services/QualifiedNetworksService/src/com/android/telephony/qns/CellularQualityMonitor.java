@@ -35,7 +35,6 @@ import android.telephony.CellSignalStrengthWcdma;
 import android.telephony.SignalStrength;
 import android.telephony.SignalStrengthUpdateRequest;
 import android.telephony.SignalThresholdInfo;
-import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -67,8 +66,6 @@ class CellularQualityMonitor extends QualityMonitor {
     private int mSubId;
     private final int mSlotIndex;
     private boolean mIsQnsListenerRegistered;
-    private static final SparseArray<CellularQualityMonitor> sCellularQualityMonitors =
-            new SparseArray<>();
     private final List<SignalThresholdInfo> mSignalThresholdInfoList;
     private final HandlerThread mHandlerThread;
 
@@ -86,12 +83,20 @@ class CellularQualityMonitor extends QualityMonitor {
     private final CellularSignalStrengthListener mSignalStrengthListener;
     private final QnsTelephonyListener mQnsTelephonyListener;
     @VisibleForTesting final Handler mHandler;
-
-    private CellularQualityMonitor(Context context, int slotIndex) {
+    /**
+     * Constructor to instantiate CellularQualityMonitor
+     *
+     * @param context application context
+     * @param listener QnsTelephonyListener instance
+     * @param slotIndex slot index
+     */
+    CellularQualityMonitor(Context context, QnsTelephonyListener listener, int slotIndex) {
         super(QualityMonitor.class.getSimpleName() + "-C-" + slotIndex);
-        mTag = CellularQualityMonitor.class.getSimpleName() + "-" + slotIndex;
         mContext = context;
         mSlotIndex = slotIndex;
+        mQnsTelephonyListener = listener;
+
+        mTag = CellularQualityMonitor.class.getSimpleName() + "-" + mSlotIndex;
         mSubId = QnsUtils.getSubId(mContext, mSlotIndex);
         mIsQnsListenerRegistered = false;
         mSignalThresholdInfoList = new ArrayList<>();
@@ -99,7 +104,6 @@ class CellularQualityMonitor extends QualityMonitor {
         mHandlerThread.start();
         mHandler = new CellularEventsHandler(mHandlerThread.getLooper());
         mTelephonyManager = mContext.getSystemService(TelephonyManager.class);
-        mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
         mQnsTelephonyListener.registerSubscriptionIdListener(
                 mHandler, EVENT_SUBSCRIPTION_ID_CHANGED, null);
         if (mTelephonyManager != null) {
@@ -115,25 +119,6 @@ class CellularQualityMonitor extends QualityMonitor {
     private interface OnSignalStrengthListener {
         /** Notify the cellular signal strength changed. */
         void onSignalStrengthsChanged(SignalStrength signalStrength);
-    }
-
-    static QualityMonitor getInstance(Context context, int slotIndex) {
-        CellularQualityMonitor cellularQualityMonitor = sCellularQualityMonitors.get(slotIndex);
-        if (cellularQualityMonitor != null) {
-            return cellularQualityMonitor;
-        }
-        cellularQualityMonitor = new CellularQualityMonitor(context, slotIndex);
-        sCellularQualityMonitors.put(slotIndex, cellularQualityMonitor);
-        return cellularQualityMonitor;
-    }
-
-    private int getSubId() {
-        int[] subId = SubscriptionManager.getSubId(mSlotIndex);
-        if (subId != null && subId.length > 0) {
-            return subId[0];
-        } else {
-            return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
-        }
     }
 
     /** {@link TelephonyCallback} to listen to Cellular Service State Changed. */
@@ -629,8 +614,7 @@ class CellularQualityMonitor extends QualityMonitor {
 
     @VisibleForTesting
     @Override
-    void dispose() {
-        super.dispose();
+    public void close() {
         mQnsTelephonyListener.unregisterSubscriptionIdChanged(mHandler);
         clearOldRequests();
         mSignalThresholdInfoList.clear();
@@ -638,7 +622,6 @@ class CellularQualityMonitor extends QualityMonitor {
         if (mHandlerThread != null) {
             mHandlerThread.quit();
         }
-        sCellularQualityMonitors.remove(mSlotIndex);
     }
 
     @Override

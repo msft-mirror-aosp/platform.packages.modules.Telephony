@@ -16,7 +16,6 @@
 
 package com.android.telephony.qns;
 
-import android.content.Context;
 import android.telephony.AccessNetworkConstants;
 
 import java.util.HashMap;
@@ -24,8 +23,9 @@ import java.util.List;
 
 class AnspImsPreferModePolicyBuilder extends AccessNetworkSelectionPolicyBuilder {
 
-    AnspImsPreferModePolicyBuilder(Context context, int slotIndex, int netCapability) {
-        super(context, slotIndex, netCapability);
+    AnspImsPreferModePolicyBuilder(
+            QnsCarrierConfigManager configManager, int netCapability) {
+        super(configManager, netCapability);
         mLogTag = "QnsAnspImsPrefBuilder";
     }
 

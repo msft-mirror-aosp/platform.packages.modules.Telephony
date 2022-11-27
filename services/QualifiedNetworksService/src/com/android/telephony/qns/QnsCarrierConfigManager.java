@@ -47,11 +47,11 @@ import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.telephony.ims.ImsMmTelManager;
 import android.telephony.ims.ProvisioningManager;
 import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
-import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -203,7 +203,6 @@ class QnsCarrierConfigManager {
      * Boolean indicating if to block IWLAN when UE is in no WWAN coverage and the last stored
      * country code is outside the home country.
      * By default this value is {@code false}.
-     *
      */
     static final String KEY_BLOCK_IWLAN_IN_INTERNATIONAL_ROAMING_WITHOUT_WWAN_BOOL =
             "qns.block_iwlan_in_international_roaming_without_wwan_bool";
@@ -450,7 +449,7 @@ class QnsCarrierConfigManager {
      * <li>0: {@link QnsConstants#COVERAGE_HOME}
      * <li>1: {@link QnsConstants#COVERAGE_ROAM}
      * <li>2: {@link QnsConstants#COVERAGE_BOTH} The default value for this key is {@link
-     *     QnsConstants#COVERAGE_BOTH}
+     * QnsConstants#COVERAGE_BOTH}
      */
     static final String KEY_QNS_IMS_NETWORK_ENABLE_HO_HYSTERESIS_TIMER_INT =
             "qns.ims_network_enable_hysteresis_timer_int";
@@ -642,7 +641,7 @@ class QnsCarrierConfigManager {
      * List of Array items indicating the Access Network Allowed For IMS network capability. The
      * values are set as below: Format "<accessNetwork>:<meas_type>:<gap>" "eutran:rsrp:-2"
      * "ngran:ssrsrp:2" Note: Similar format followed across different accessNetwork & Measurement
-     * TYpes The default value for this key is {@Code ""}
+     * Types. The default value for this key is "".
      */
     static final String KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY =
             "qns.rove_in_threshold_gap_with_guard_timer_string_array";
@@ -656,7 +655,7 @@ class QnsCarrierConfigManager {
      * <!-- fallback WWAN with ImsReason 240,243,323~350 during 90sec -->
      * <item value="cause=240|243|323~350, time=90000"/> </string-array>
      *
-     * <p>The default value for this key is {@Code ""}
+     * <p>The default value for this key is "".
      */
     static final String KEY_QNS_FALLBACK_WWAN_IMS_UNREGISTRATION_REASON_STRING_ARRAY =
             "qns.fallback_wwan_ims_unregistration_reason_string_array";
@@ -671,10 +670,10 @@ class QnsCarrierConfigManager {
      * <!-- fallback WWAN with ImsReason 240,243,323~350 during 90sec -->
      * <item value="cause=240|243|323~350, time=90000"/> </string-array>
      *
-     * <p>The default value for this key is {@Code ""}
+     * <p>The default value for this key is "".
      */
     static final String KEY_QNS_FALLBACK_WWAN_IMS_HO_REGISTER_FAIL_REASON_STRING_ARRAY =
-            "qns.fallback_wwan_ims_ho_reigster_fail_reason_string_array";
+            "qns.fallback_wwan_ims_ho_register_fail_reason_string_array";
 
     /**
      * String array indicating network capabilities that they check international roaming condition.
@@ -691,9 +690,9 @@ class QnsCarrierConfigManager {
      * <p> If only MCC is included without MNC, PLMNs that they have same MCC value will be
      * regarded as international roaming.
      * <string-array name="plmn_list_regarded_as_international_roaming_string_array" num="3">
-     *     <item value="32070"/>
-     *     <item value="320157"/>
-     *     <item value="318"/>
+     * <item value="32070"/>
+     * <item value="320157"/>
+     * <item value="318"/>
      * </string-array>
      */
     static final String KEY_PLMN_LIST_REGARDED_AS_INTERNATIONAL_ROAMING_STRING_ARRAY =
@@ -705,19 +704,16 @@ class QnsCarrierConfigManager {
      * <p> If only MCC is included without MNC, PLMNs that they have same MCC value will be
      * regarded as domestic roaming.
      * <string-array name="plmn_list_regarded_as_domestic_roaming_string_array" num="3">
-     *     <item value="32070"/>
-     *     <item value="320157"/>
-     *     <item value="318"/>
+     * <item value="32070"/>
+     * <item value="320157"/>
+     * <item value="318"/>
      * </string-array>
      */
     static final String KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY =
             "plmn_list_regarded_as_domestic_roaming_string_array";
 
-    private static final SparseArray<QnsCarrierConfigManager> mQnsCarrierConfigManagers =
-            new SparseArray<>();
-
     static HashMap<Integer, String> sAccessNetworkMap =
-            new HashMap<Integer, String>() {
+            new HashMap<>() {
                 {
                     put(AccessNetworkConstants.AccessNetworkType.EUTRAN, "eutran");
                     put(AccessNetworkConstants.AccessNetworkType.UTRAN, "utran");
@@ -728,7 +724,7 @@ class QnsCarrierConfigManager {
             };
 
     static HashMap<Integer, String> sMeasTypeMap =
-            new HashMap<Integer, String>() {
+            new HashMap<>() {
                 {
                     put(SIGNAL_MEASUREMENT_TYPE_RSRP, "rsrp");
                     put(SIGNAL_MEASUREMENT_TYPE_RSRQ, "rsrq");
@@ -743,7 +739,7 @@ class QnsCarrierConfigManager {
             };
 
     static HashMap<Integer, String> sCallTypeMap =
-            new HashMap<Integer, String>() {
+            new HashMap<>() {
                 {
                     put(QnsConstants.CALL_TYPE_IDLE, "idle");
                     put(QnsConstants.CALL_TYPE_VOICE, "voice");
@@ -754,6 +750,7 @@ class QnsCarrierConfigManager {
     private final String mLogTag;
     private final int mSlotIndex;
     private final Context mContext;
+    private boolean mIsConfigLoaded = false;
     protected int mSubId;
     protected int mCurrCarrierId;
     private final QnsEventDispatcher mQnsEventDispatcher;
@@ -805,13 +802,14 @@ class QnsCarrierConfigManager {
     private String[] mPlmnsRegardedAsInternationalRoaming;
     private String[] mFallbackOnInitialConnectionFailure;
 
-    private @NonNull final List<FallbackRule> mFallbackWwanRuleWithImsUnregistered =
-            new ArrayList<>();
-    private @NonNull final List<FallbackRule> mFallbackWwanRuleWithImsHoRegisterFail =
-            new ArrayList<>();
+    @NonNull
+    private final List<FallbackRule> mFallbackWwanRuleWithImsUnregistered = new ArrayList<>();
+
+    @NonNull
+    private final List<FallbackRule> mFallbackWwanRuleWithImsHoRegisterFail = new ArrayList<>();
 
     /** Rules for handover between IWLAN and cellular network. */
-    private @NonNull List<HandoverRule> mHandoverRuleList = new ArrayList<>();
+    @NonNull private List<HandoverRule> mHandoverRuleList = new ArrayList<>();
 
     protected QnsRegistrantList mQnsCarrierConfigLoadedRegistrants = new QnsRegistrantList();
     protected QnsRegistrantList mQnsCarrierConfigChangedRegistrants = new QnsRegistrantList();
@@ -900,7 +898,7 @@ class QnsCarrierConfigManager {
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
-            builder.append("FallbackRule time:" + mBackoffTimeMillis);
+            builder.append("FallbackRule time:").append(mBackoffTimeMillis);
             if (mPreferenceMode == -1) {
                 builder.append(" ");
             } else if (mPreferenceMode == QnsConstants.CELL_PREF) {
@@ -910,7 +908,7 @@ class QnsCarrierConfigManager {
             }
             builder.append(" reasons:");
             for (Integer i : mReasons) {
-                builder.append(i + " ");
+                builder.append(i).append(" ");
             }
             return builder.toString();
         }
@@ -943,21 +941,21 @@ class QnsCarrierConfigManager {
         private static final String RULE_TAG_ROAMING = "roaming";
 
         /** Handover rule type. */
-        final @HandoverRuleType int mHandoverRuleType;
+        @HandoverRuleType final int mHandoverRuleType;
 
         /** The applicable source access networks for handover. */
-        final @NonNull @AccessNetworkConstants.RadioAccessNetworkType Set<Integer>
-                mSourceAccessNetworks;
+        @NonNull @AccessNetworkConstants.RadioAccessNetworkType
+        final Set<Integer> mSourceAccessNetworks;
 
         /** The applicable target access networks for handover. */
-        final @NonNull @AccessNetworkConstants.RadioAccessNetworkType Set<Integer>
-                mTargetAccessNetworks;
+        @NonNull @AccessNetworkConstants.RadioAccessNetworkType
+        final Set<Integer> mTargetAccessNetworks;
 
         /**
          * The network capabilities to any of which this handover rule applies. If is empty, then
          * capability is ignored as a rule matcher.
          */
-        final @NonNull @NetCapability Set<Integer> mNetworkcapabilities;
+        @NonNull @NetCapability final Set<Integer> mNetworkCapabilities;
 
         /** {@code true} indicates this policy is only applicable when the device is roaming. */
         final boolean mIsOnlyForRoaming;
@@ -1065,7 +1063,7 @@ class QnsCarrierConfigManager {
             mSourceAccessNetworks = source;
             mTargetAccessNetworks = target;
             this.mHandoverRuleType = type;
-            mNetworkcapabilities = capabilities;
+            mNetworkCapabilities = capabilities;
             mIsOnlyForRoaming = roaming;
         }
 
@@ -1084,7 +1082,7 @@ class QnsCarrierConfigManager {
                     + ", isRoaming="
                     + mIsOnlyForRoaming
                     + ", capabilities="
-                    + QnsUtils.networkCapabilitiesToString(mNetworkcapabilities)
+                    + QnsUtils.networkCapabilitiesToString(mNetworkCapabilities)
                     + "]";
         }
     }
@@ -1098,15 +1096,17 @@ class QnsCarrierConfigManager {
         public void handleMessage(Message message) {
             switch (message.what) {
                 case QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED:
-                    Log.d(mLogTag, "Event Received QNS_EVENT_CARRIER_CONFIG_CHANGED");
+                    Log.d(mLogTag, "Event received QNS_EVENT_CARRIER_CONFIG_CHANGED");
                     if (SubscriptionManager.isValidSubscriptionId(getSubId())) {
-                        int mNewCarrierID = getCarrierId();
-                        Log.d(mLogTag, "new carrier id " + mNewCarrierID);
-                        Log.d(mLogTag, "current carrier id " + mCurrCarrierId);
-                        if (mNewCarrierID != 0 && mNewCarrierID != UNKNOWN_CARRIER_ID) {
-                            if (mCurrCarrierId != mNewCarrierID) {
-                                mCurrCarrierId = mNewCarrierID;
+                        int newCarrierID = getCarrierId();
+                        Log.d(
+                                mLogTag,
+                                "Carrier Id: current=" + mCurrCarrierId + ", new=" + newCarrierID);
+                        if (newCarrierID != 0 && newCarrierID != UNKNOWN_CARRIER_ID) {
+                            if (mCurrCarrierId != newCarrierID) {
+                                mCurrCarrierId = newCarrierID;
                                 loadQnsConfigurations();
+                                mIsConfigLoaded = true;
                                 notifyLoadQnsConfigurationsCompleted();
                             } else {
                                 if (isQnsConfigChanged()) {
@@ -1126,21 +1126,18 @@ class QnsCarrierConfigManager {
     /**
      * Constructor to Initial Slot and Context whose carrier config ID needs to be loaded along with
      * initialising the Action Intent on which Carrier Config ID to be loaded.
-     *
-     * @param slotIndex : Constructor for initialising the current Slot ID
-     * @param context : Constructor for initialising the current context
      */
-    private QnsCarrierConfigManager(int slotIndex, Context context) {
+    QnsCarrierConfigManager(Context context, QnsEventDispatcher dispatcher, int slotIndex) {
+        mSlotIndex = slotIndex;
+        mContext = context;
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + QnsCarrierConfigManager.class.getSimpleName()
                         + "_"
-                        + slotIndex;
-        mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotIndex);
-        mAnspConfigMgr = QnsCarrierAnspSupportConfig.getInstance(context, slotIndex);
-        mSlotIndex = slotIndex;
-        mContext = context;
+                        + mSlotIndex;
+        mQnsEventDispatcher = dispatcher;
+        mAnspConfigMgr = new QnsCarrierAnspSupportConfig(slotIndex);
 
         HandlerThread handlerThread = new HandlerThread(mLogTag);
         handlerThread.start();
@@ -1162,60 +1159,26 @@ class QnsCarrierConfigManager {
         // To do : Operator Update on Threshold changes handling
     }
 
-    /**
-     * Below API is exposed to other classes in QNS package to register for carrier config Loading
-     * corresponding key items from xml/bundle date based on NetworkProviderImpl
-     *
-     * @param context : Context at which QNSCarrierConfigManager instance to be created
-     * @param slotIndex : slot ID at which QNSCarrierConfigManager instance to be created
-     */
-    static QnsCarrierConfigManager getInstance(Context context, int slotIndex) {
-        QnsCarrierConfigManager qnsCarrierConfigManager = mQnsCarrierConfigManagers.get(slotIndex);
-        if (qnsCarrierConfigManager != null) {
-            return qnsCarrierConfigManager;
-        }
-        qnsCarrierConfigManager = new QnsCarrierConfigManager(slotIndex, context);
-        mQnsCarrierConfigManagers.put(slotIndex, qnsCarrierConfigManager);
-        return qnsCarrierConfigManager;
-    }
-
-    /**
-     * Below API is exposed to other classes in QNS package, to close QNS carrier config manager
-     * mapped to slot index & remove the Access Network Selection Policies
-     *
-     * @param slotIndex : slot ID at which QNSCarrierConfigManager to be cloed
-     */
-    static void closeQnsCarrierConfigManager(int slotIndex) {
-        QnsCarrierConfigManager cm = mQnsCarrierConfigManagers.get(slotIndex);
-        if (cm != null) {
-            mQnsCarrierConfigManagers.remove(slotIndex);
-            cm.close();
-        }
-    }
-
     /** Below API clears the current Access Network selection Policies */
     void close() {
         if (mHandler != null) mQnsEventDispatcher.unregisterEvent(mHandler);
-        mAnspConfigMgr.close();
-        mQnsCarrierConfigManagers.remove(mSlotIndex);
     }
 
-    synchronized PersistableBundle readFromCarrierConfigManager(
-            Context context, int slotidx) {
-        PersistableBundle carrierConfigbundle = new PersistableBundle();
+    synchronized PersistableBundle readFromCarrierConfigManager(Context context) {
+        PersistableBundle carrierConfigBundle;
         CarrierConfigManager carrierConfigManager =
                 context.getSystemService(CarrierConfigManager.class);
 
         if (carrierConfigManager == null) {
             throw new IllegalStateException("Carrier config manager is null.");
         }
-        carrierConfigbundle = carrierConfigManager.getConfigForSubId(getSubId());
+        carrierConfigBundle = carrierConfigManager.getConfigForSubId(getSubId());
 
-        return carrierConfigbundle;
+        return carrierConfigBundle;
     }
 
-    synchronized PersistableBundle readFromAssets(Context context, int slotidx) {
-        PersistableBundle assetBundle = new PersistableBundle();
+    synchronized PersistableBundle readFromAssets(Context context) {
+        PersistableBundle assetBundle;
 
         assetBundle = QnsUtils.readQnsDefaultConfigFromAssets(context, mCurrCarrierId);
 
@@ -1229,10 +1192,10 @@ class QnsCarrierConfigManager {
     /** Below API is used for Loading the carrier configurations based on Current Carrier ID */
     void loadQnsConfigurations() {
 
-        PersistableBundle carrierConfigBundle = readFromCarrierConfigManager(mContext, mSlotIndex);
+        PersistableBundle carrierConfigBundle = readFromCarrierConfigManager(mContext);
         Log.d(mLogTag, "CarrierConfig Bundle for Slot: " + mSlotIndex + carrierConfigBundle);
 
-        PersistableBundle assetConfigBundle = readFromAssets(mContext, mSlotIndex);
+        PersistableBundle assetConfigBundle = readFromAssets(mContext);
         Log.d(mLogTag, "AssetConfig Bundle for Slot: " + mSlotIndex + assetConfigBundle);
 
         // load configurations supporting ANE
@@ -1255,7 +1218,7 @@ class QnsCarrierConfigManager {
     void loadDirectFromCarrierConfigManagerKey(PersistableBundle bundleCarrier) {
         loadHandoverRules(
                 bundleCarrier, null, CarrierConfigManager.KEY_IWLAN_HANDOVER_POLICY_STRING_ARRAY);
-        loadCarrierConfig(bundleCarrier, null);
+        loadCarrierConfig(bundleCarrier);
     }
 
     /**
@@ -1265,14 +1228,14 @@ class QnsCarrierConfigManager {
      * @return : true/false
      */
     synchronized boolean isQnsConfigChanged() {
-        PersistableBundle carrierConfigBundle = readFromCarrierConfigManager(mContext, mSlotIndex);
+        PersistableBundle carrierConfigBundle = readFromCarrierConfigManager(mContext);
         Log.d(
                 mLogTag,
                 "Check carrier config for Qns item changefor_slot: "
                         + mSlotIndex
                         + "_"
                         + carrierConfigBundle);
-        PersistableBundle assetConfigBundle = readFromAssets(mContext, mSlotIndex);
+        PersistableBundle assetConfigBundle = readFromAssets(mContext);
         Log.d(
                 mLogTag,
                 "Check Asset config for Qns item changefor_slot: "
@@ -1321,7 +1284,7 @@ class QnsCarrierConfigManager {
             return false;
         } else {
             mHandoverRuleList = new ArrayList<>(handoverUpdateRuleList);
-            Log.d(mLogTag, "New rule Updated:" + mHandoverRuleList.toString());
+            Log.d(mLogTag, "New rule Updated:" + mHandoverRuleList);
             handoverUpdateRuleList.clear();
             return true;
         }
@@ -1540,19 +1503,12 @@ class QnsCarrierConfigManager {
                     case "cause":
                         String[] cause = value.trim().split("\\s*\\|\\s*");
                         for (String c : cause) {
-                            if (c.indexOf("~") == -1) {
+                            if (!c.contains("~")) {
                                 reasons.add(Integer.parseInt(c));
                             } else {
                                 String[] tok = c.trim().split("\\s*~\\s*");
-                                if (tokens.length != 2) {
-                                    throw new IllegalArgumentException(
-                                            "illegal cause range "
-                                                    + ruleString
-                                                    + ", tokens="
-                                                    + Arrays.toString(tok));
-                                }
-                                int start = Integer.valueOf(tok[0]);
-                                int end = Integer.valueOf(tok[1]);
+                                int start = Integer.parseInt(tok[0]);
+                                int end = Integer.parseInt(tok[1]);
                                 for (int i = start; i <= end; i++) {
                                     reasons.add(i);
                                 }
@@ -1560,7 +1516,7 @@ class QnsCarrierConfigManager {
                         }
                         break;
                     case "time":
-                        time = Integer.valueOf(value);
+                        time = Integer.parseInt(value);
                         break;
                     case "preference":
                         if (value.equals("cell")) {
@@ -1617,7 +1573,6 @@ class QnsCarrierConfigManager {
             PersistableBundle bundleCarrier, PersistableBundle bundleAsset, String key) {
         List<HandoverRule> readNewHandoverRuleList = new ArrayList<>();
         synchronized (this) {
-            readNewHandoverRuleList.clear();
             String[] handoverRulesStrings = getConfig(bundleCarrier, bundleAsset, key);
             if (handoverRulesStrings != null) {
                 for (String ruleString : handoverRulesStrings) {
@@ -1636,7 +1591,7 @@ class QnsCarrierConfigManager {
 
     /** Load carrier config. */
     @VisibleForTesting
-    void loadCarrierConfig(PersistableBundle bundleCarrier, PersistableBundle bundleAsset) {
+    void loadCarrierConfig(PersistableBundle bundleCarrier) {
         mIsMmtelCapabilityRequired =
                 getConfig(
                         bundleCarrier,
@@ -1674,11 +1629,10 @@ class QnsCarrierConfigManager {
 
     /** Notify all the registrants of the Slot loaded after carrier config loading is Completed */
     protected void notifyLoadQnsConfigurationsCompleted() {
-
         if (mQnsCarrierConfigLoadedRegistrants != null) {
             mQnsCarrierConfigLoadedRegistrants.notifyRegistrants();
         } else {
-            Log.d(mLogTag, "notifyLoadQNSConfigurationsCompleted. no Registrant.");
+            Log.d(mLogTag, "notifyLoadQnsConfigurationsCompleted. no Registrant.");
         }
     }
 
@@ -1688,7 +1642,7 @@ class QnsCarrierConfigManager {
         if (mQnsCarrierConfigChangedRegistrants != null) {
             mQnsCarrierConfigChangedRegistrants.notifyRegistrants();
         } else {
-            Log.d(mLogTag, "notifyQnsConfigurationschanged. no Registrant.");
+            Log.d(mLogTag, "notifyQnsConfigurationsChanged. no Registrant.");
         }
     }
 
@@ -1696,18 +1650,22 @@ class QnsCarrierConfigManager {
      * API exposed for other classes to register for notification with handlers on Carrier
      * Configuration Loaded
      *
-     * @param h Handler to receive event
+     * @param h    Handler to receive event
      * @param what Event on which to be handled
      */
     void registerForConfigurationLoaded(Handler h, int what) {
         mQnsCarrierConfigLoadedRegistrants.addUnique(h, what, null);
+        if (mIsConfigLoaded) {
+            // notify the handler if config is already loaded.
+            h.sendEmptyMessage(what);
+        }
     }
 
     /**
      * API exposed for other classes to register for notification with handlers on Carrier
      * Configuration changed
      *
-     * @param h Handler to receive event
+     * @param h    Handler to receive event
      * @param what Event on which to be handled
      */
     void registerForConfigurationChanged(Handler h, int what) {
@@ -1822,8 +1780,8 @@ class QnsCarrierConfigManager {
                     && rule.mTargetAccessNetworks.contains(destAn)) {
                 // if no capability rule specified, data network capability is considered matched.
                 // otherwise, any capabilities overlap is also considered matched.
-                if (rule.mNetworkcapabilities.isEmpty()
-                        || rule.mNetworkcapabilities.contains(netCapability)) {
+                if (rule.mNetworkCapabilities.isEmpty()
+                        || rule.mNetworkCapabilities.contains(netCapability)) {
                     if (rule.mHandoverRuleType == HandoverRule.RULE_TYPE_DISALLOWED) {
                         Log.d(mLogTag, "isHandoverAllowedByPolicy:Not allowed by policy " + rule);
                         return false;
@@ -1857,7 +1815,7 @@ class QnsCarrierConfigManager {
      * This method returns if the Guard timer (Ping Pong) hysteresis is preference specific
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean isGuardTimerHysteresisOnPrefSupported() {
 
@@ -1868,7 +1826,7 @@ class QnsCarrierConfigManager {
      * This method returns if the network(HOME or ROAM) requires handover guard timer.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean isHysteresisTimerEnabled(int coverage) {
         if (mNetworkEnableHysteresisTimer == QnsConstants.COVERAGE_BOTH
@@ -1935,7 +1893,7 @@ class QnsCarrierConfigManager {
      * at handover guarding time.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean isRoveOutWithWiFiLowQualityAtGuardingTime() {
 
@@ -1963,7 +1921,7 @@ class QnsCarrierConfigManager {
      * This method returns the Transport type Preference on Power On.
      *
      * @return : Based on Carrier Config Settings Possible values (3000msec:Default or operator
-     *     customisation.
+     * customisation.
      */
     int getWIFIRssiBackHaulTimer() {
         return mWifiThresBackHaulTimer;
@@ -1973,7 +1931,7 @@ class QnsCarrierConfigManager {
      * This method returns Cellular SS Backhaul Timer.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values ( 0
-     *     : Invalid or 320ms)
+     * : Invalid or 320ms)
      */
     int getCellularSSBackHaulTimer() {
 
@@ -1984,7 +1942,7 @@ class QnsCarrierConfigManager {
      * This method returns IWLAN HO Avoid time due to Low RTP Quality Backhaul Timer.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values ( 0
-     *     : or operator requirement)
+     * : or operator requirement)
      */
     int getHoRestrictedTimeOnLowRTPQuality(
             @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork) {
@@ -2002,8 +1960,8 @@ class QnsCarrierConfigManager {
      * This method returns QNS preferred transport type for network capabilities / Services
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     TRANSPORT_TYPE_ALLOWED_WWAN = 0 TRANSPORT_TYPE_ALLOWED_IWLAN = 1
-     *     TRANSPORT_TYPE_ALLOWED_BOTH = 2
+     * TRANSPORT_TYPE_ALLOWED_WWAN = 0 TRANSPORT_TYPE_ALLOWED_IWLAN = 1
+     * TRANSPORT_TYPE_ALLOWED_BOTH = 2
      */
     int getQnsSupportedTransportType(int netCapability) {
         if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
@@ -2092,7 +2050,7 @@ class QnsCarrierConfigManager {
      * This method returns the timer millis for the minimum guarding timer.
      *
      * @return the minimum guarding timer in millis. applies when handover guarding is disabled or
-     *     there is no guarding time.
+     * there is no guarding time.
      */
     int getMinimumHandoverGuardingTimer() {
         int timer = mMinimumHandoverGuardingTimer;
@@ -2110,7 +2068,7 @@ class QnsCarrierConfigManager {
      * Guard timer Running / Expired conditions from Evaluator
      *
      * @return : Based on Carrier Config Settings & operator requirement Default Value : 0 gap
-     *     offset (Means different threshold for Guard timer conditions not enabled)
+     * offset (Means different threshold for Guard timer conditions not enabled)
      */
     int getThresholdGapWithGuardTimer(
             @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType) {
@@ -2162,13 +2120,12 @@ class QnsCarrierConfigManager {
     /**
      * Finds and returns a threshold config that meets the given parameter condition.
      *
-     * @param accessNetwork (EUTRAN/UTRAN/NGRAN/GERAN/IWLAN)
-     * @param callType (IDLE/VOICE/VIDEO)
+     * @param accessNetwork   (EUTRAN/UTRAN/NGRAN/GERAN/IWLAN)
+     * @param callType        (IDLE/VOICE/VIDEO)
      * @param measurementType (RSRP/RSRQ/RSSNR/SSRSP/SSRSQ/RSCP/RSSI)
      * @return QnsConfigArray for good, bad and worst thresholds. If the value does not exist or is
-     *     not supported, it is filled with invalid (0x0000FFFF). Note, for the wifi case, the worst
-     *     in thresholds will be invalid.
-     * @return IVALID VALUE(to do description, if not found item or exceptions)
+     * not supported, it is filled with invalid (0x0000FFFF). Note, for the wifi case, the worst
+     * in thresholds will be invalid. INVALID VALUE, if not found item or exceptions.
      */
     QnsConfigArray getThreshold(
             @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork,
@@ -2267,7 +2224,7 @@ class QnsCarrierConfigManager {
     }
 
     QnsConfigArray getWifiRssiThresholdWithoutCellular(int callType) {
-        int[] thresholdList = null;
+        int[] thresholdList;
         String call_Type = sCallTypeMap.get(callType);
 
         if (call_Type == null) {
@@ -2287,12 +2244,11 @@ class QnsCarrierConfigManager {
     /**
      * Finds and returns a policy config that meets the given parameter condition.
      *
-     * @param direction (ROVE_IN / ROVE_OUT)
+     * @param direction    (ROVE_IN / ROVE_OUT)
      * @param preCondition (Types of CALL, PREFERENCE, COVERAGE and so on)
      * @return QnsConfigArray for good, bad and worst policy. If the value does not exist or is not
-     *     supported, it is filled with invalid. (0x0000FFFF). Note, for the wifi case, the worst in
-     *     thresholds will be invalid.
-     * @return null (to do description, if not found item or exceptions)
+     * supported, it is filled with invalid. (0x0000FFFF). Note, for the wifi case, the worst in
+     * thresholds will be invalid. null, if not found item or exceptions.
      */
     String[] getPolicy(
             @QnsConstants.RoveDirection int direction,
@@ -2330,7 +2286,7 @@ class QnsCarrierConfigManager {
     /**
      * This method returns RTP Metrics data of Carrier for HO decision making
      *
-     * @return : config of RTP metrics. refer {@link RtpMetricsConfig}
+     * @return config of RTP metrics. refer {@link RtpMetricsConfig}
      */
     @VisibleForTesting
     RtpMetricsConfig getRTPMetricsData() {
@@ -2342,35 +2298,31 @@ class QnsCarrierConfigManager {
     /**
      * This retrieves fallback timer to WWAN with the reason of IMS unregistered.
      *
-     * @param reason
-     * @param preferMode
      * @return fallback time in millis.
      */
     @VisibleForTesting
-    int getFallbackTimeImsUnreigstered(int reason, int preferMode) {
+    int getFallbackTimeImsUnregistered(int reason, int preferMode) {
         Log.d(
                 mLogTag,
-                "getFallbackTimeImsUnreigstered reason:" + reason + " prefMode:" + preferMode);
+                "getFallbackTimeImsUnregistered reason:" + reason + " prefMode:" + preferMode);
         for (FallbackRule rule : mFallbackWwanRuleWithImsUnregistered) {
             Log.d(mLogTag, rule.toString());
             if (preferMode != QnsConstants.WIFI_ONLY
                     && (rule.mPreferenceMode == -1 || rule.mPreferenceMode == preferMode)) {
                 int time = rule.getFallBackTime(reason);
                 if (time > 0) {
-                    Log.d(mLogTag, "getFallbackTimeImsUnreigstered fallbackTime:" + time);
+                    Log.d(mLogTag, "getFallbackTimeImsUnregistered fallbackTime:" + time);
                     return time;
                 }
             }
         }
-        Log.d(mLogTag, "getFallbackTimeImsUnreigstered fallbackTime:" + 0);
+        Log.d(mLogTag, "getFallbackTimeImsUnregistered fallbackTime:" + 0);
         return 0;
     }
 
     /**
      * This retrieves fallback timer to WWAN with the reason of IMS HO register fail.
      *
-     * @param reason
-     * @param preferMode
      * @return fallback time in millis.
      */
     @VisibleForTesting
@@ -2395,7 +2347,6 @@ class QnsCarrierConfigManager {
      * This method returns Access Network Selection Policy Support configurations with boolean array
      * list type
      *
-     * @return: Boolean array as a list of Boolean Type
      */
     void loadAnspCarrierSupportConfigs(
             PersistableBundle bundleCarrier, PersistableBundle bundleAsset) {
@@ -2515,7 +2466,7 @@ class QnsCarrierConfigManager {
      * on does not allow ims pdn.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean allowImsOverIwlanCellularLimitedCase() {
         return mIsAllowImsOverIwlanCellularLimitedCase;
@@ -2545,7 +2496,7 @@ class QnsCarrierConfigManager {
      * qualified Wi-Fi network for network capabilities other than ims.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     int getRatPreference(int netCapability) {
         switch (netCapability) {
@@ -2566,7 +2517,7 @@ class QnsCarrierConfigManager {
      * Roaming or not.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean needToCheckInternationalRoaming(int netCapability) {
         if (mApnTypesInternationalRoamingCheck == null
@@ -2584,7 +2535,7 @@ class QnsCarrierConfigManager {
      * This method returns whether input plmn needs to be regarded as international roaming or not.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean isDefinedInternationalRoamingPlmn(String plmn) {
         if (mPlmnsRegardedAsInternationalRoaming != null
@@ -2614,15 +2565,17 @@ class QnsCarrierConfigManager {
     /**
      * This method returns the rtt check server address config as per operator requirement
      *
-     * @return : Based on carrier config settings of operator . By default to be made empty to
-     *     disable the feature.
+     * @return Based on carrier config settings of operator. By default, to be made empty to
+     * disable the feature.
      */
     String getWlanRttServerAddressConfig() {
         String[] ping_address = getWlanRttPingConfigs();
 
         if (ping_address != null && ping_address[0] != null && !ping_address[0].isEmpty()) {
             return ping_address[0];
-        } else return null;
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -2657,7 +2610,9 @@ class QnsCarrierConfigManager {
                 && !rtt_hyst_fallback_timer[0].isEmpty()
                 && rtt_hyst_fallback_timer[6] != null) {
             return Integer.parseInt(rtt_hyst_fallback_timer[6]);
-        } else return 0;
+        } else {
+            return 0;
+        }
     }
 
     private String[] getWlanRttPingConfigs() {
@@ -2673,7 +2628,7 @@ class QnsCarrierConfigManager {
      *
      * @param netCapability : (ims,sos,mms,xcap,cbs)
      * @return :
-     *     <NetworkCapability_SupportforFallback>:<retry_count>:<retry_timer>:<max_fallback_count>
+     * <NetworkCapability_SupportForFallback>:<retry_count>:<retry_timer>:<max_fallback_count>
      */
     int[] getInitialDataConnectionFallbackConfig(int netCapability) {
 
@@ -2760,7 +2715,7 @@ class QnsCarrierConfigManager {
      * This method returns whether input plmn needs to be regarded as domestic roaming or not.
      *
      * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     *     True / False
+     * True / False
      */
     boolean isDefinedDomesticRoamingPlmn(String plmn) {
         if (mPlmnsRegardedAsDomesticRoaming != null && mPlmnsRegardedAsDomesticRoaming.length > 0) {
@@ -2864,5 +2819,10 @@ class QnsCarrierConfigManager {
                     + mNoRtpInterval
                     + '}';
         }
+    }
+
+    @VisibleForTesting
+    QnsCarrierAnspSupportConfig getQnsCarrierAnspSupportConfig() {
+        return mAnspConfigMgr;
     }
 }

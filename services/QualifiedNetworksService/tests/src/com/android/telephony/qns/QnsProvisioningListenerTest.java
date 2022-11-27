@@ -28,7 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.SubscriptionManager;
@@ -56,21 +55,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
     private QnsProvisioningListener mQnsProvisioningListener;
     private final int mSlotIndex = 0;
     private MockitoSession mMockitoSession;
-    @Mock private QnsEventDispatcher mMockQnsEventDispatcher;
     @Mock private ProvisioningManager mMockProvisioningManager;
-    @Mock private QnsImsManager mMockIM;
-    @Mock private IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
 
-    HandlerThread mHandlerThread =
-            new HandlerThread("") {
-                @Override
-                protected void onLooperPrepared() {
-                    super.onLooperPrepared();
-                    mQnsProvisioningListener =
-                            QnsProvisioningListener.getInstance(sMockContext, mSlotIndex);
-                    setReady(true);
-                }
-            };
     private Handler mHandler;
     TestLooper mTestLooper;
     private ProvisioningManager.Callback mQnsProvisioningCallback;
@@ -81,7 +67,6 @@ public class QnsProvisioningListenerTest extends QnsTest {
         super.setUp();
         mMockitoSession =
                 mockitoSession()
-                        .mockStatic(QnsEventDispatcher.class)
                         .mockStatic(IwlanNetworkStatusTracker.class)
                         .mockStatic(QnsUtils.class)
                         .mockStatic(SubscriptionManager.class)
@@ -90,8 +75,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mTestLooper = new TestLooper();
         mHandler = new Handler(mTestLooper.getLooper());
         mockStatics();
-        mHandlerThread.start();
-        waitUntilReady();
+        mQnsProvisioningListener =
+                new QnsProvisioningListener(sMockContext, mMockQnsImsManager, mSlotIndex);
         captureProvisioningHandler();
     }
 
@@ -106,28 +91,17 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
     private void mockStatics() throws Exception {
         lenient()
-                .when(QnsEventDispatcher.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockQnsEventDispatcher);
-        lenient()
-                .when(IwlanNetworkStatusTracker.getInstance(sMockContext))
-                .thenReturn(mMockIwlanNetworkStatusTracker);
-        lenient()
                 .when(ProvisioningManager.createForSubscriptionId(mSlotIndex))
                 .thenReturn(mMockProvisioningManager);
         lenient().when(QnsUtils.getSubId(sMockContext, mSlotIndex)).thenReturn(mSlotIndex);
         lenient().when(SubscriptionManager.isValidSubscriptionId(mSlotIndex)).thenReturn(true);
-        lenient().when(QnsUtils.getImsManager(sMockContext, mSlotIndex)).thenReturn(mMockIM);
-        when(mMockIM.getImsServiceState()).thenReturn(ImsFeature.STATE_READY);
+        when(mMockQnsImsManager.getImsServiceState()).thenReturn(ImsFeature.STATE_READY);
         when(mMockProvisioningManager.getProvisioningIntValue(anyInt())).thenReturn(0);
         when(mMockProvisioningManager.getProvisioningStringValue(anyInt())).thenReturn("");
     }
 
     @After
     public void tearDown() {
-        if (mHandlerThread != null) {
-            mQnsProvisioningListener.close();
-            mHandlerThread.quit();
-        }
         mMockitoSession.finishMocking();
     }
 
@@ -244,8 +218,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_SIM_ABSENT,
-                        null));
+                        11005, // EVENT_IMS_STATE_CHANGED
+                        new QnsAsyncResult(null, new QnsImsManager.ImsState(false), null)));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE));
         assertNull(info.getIntegerItem(ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS));
         assertNull(info.getStringItem(ProvisioningManager.KEY_VOICE_OVER_WIFI_ENTITLEMENT_ID));
@@ -306,29 +280,14 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_SIM_LOADED,
-                        null));
+                        11005, // EVENT_IMS_STATE_CHANGED
+                        new QnsAsyncResult(null, new QnsImsManager.ImsState(true), null)));
 
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
         verify(mMockProvisioningManager).unregisterProvisioningChangedCallback(arg.capture());
 
         captureProvisioningHandler();
-    }
-
-    @Test
-    public void testOnQnsConfigEventChangedEventHandler() throws ImsException {
-        mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
-                Message.obtain(
-                        mQnsProvisioningListener.mQnsProvisioningHandler,
-                        QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED,
-                        null));
-
-        ArgumentCaptor<ProvisioningManager.Callback> arg =
-                ArgumentCaptor.forClass(ProvisioningManager.Callback.class);
-        verify(mMockProvisioningManager, times(1))
-                .registerProvisioningChangedCallback(isA(Executor.class), arg.capture());
-        mQnsProvisioningCallback = arg.getValue();
     }
 
     @Test

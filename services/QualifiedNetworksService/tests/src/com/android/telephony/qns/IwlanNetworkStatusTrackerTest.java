@@ -21,7 +21,6 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSess
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -60,8 +59,6 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     @Mock private Network mMockNetwork;
     private MockitoSession mMockSession;
     private NetworkCapabilities mNetworkCapabilities;
-    @Mock private QnsEventDispatcher mMockQnsEventDispatcher;
-    @Mock private QnsTelephonyListener mMockQnsTelephonyListener;
 
     @Captor
     private ArgumentCaptor<WifiManager.ActiveCountryCodeChangedCallback>
@@ -75,7 +72,6 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         @Override
         protected void onLooperPrepared() {
             super.onLooperPrepared();
-            mIwlanNetworkStatusTracker = IwlanNetworkStatusTracker.getInstance(sMockContext);
             setReady(true);
         }
     }
@@ -99,30 +95,31 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
             }
         }
     }
-    ;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-        mMockSession =
-                mockitoSession()
-                        .mockStatic(QnsUtils.class)
-                        .mockStatic(QnsEventDispatcher.class)
-                        .mockStatic(QnsTelephonyListener.class)
-                        .startMocking();
-        lenient()
-                .when(QnsEventDispatcher.getInstance(any(Context.class), anyInt()))
-                .thenReturn(mMockQnsEventDispatcher);
-        lenient()
-                .when(QnsTelephonyListener.getInstance(any(Context.class), anyInt()))
-                .thenReturn(mMockQnsTelephonyListener);
+        mMockSession = mockitoSession().mockStatic(QnsUtils.class).startMocking();
         mHandlerThreads[0] = new TestHandlerThread();
         mHandlerThreads[0].start();
         waitUntilReady();
         mHandlerThreads[1] = new TestHandlerThread();
         mHandlerThreads[1].start();
         waitUntilReady();
+        mIwlanNetworkStatusTracker = new IwlanNetworkStatusTracker(sMockContext);
+        mIwlanNetworkStatusTracker.initBySlotIndex(
+                mMockQnsConfigManager,
+                mMockQnsEventDispatcher,
+                mMockQnsImsManager,
+                mMockQnsTelephonyListener,
+                0);
+        mIwlanNetworkStatusTracker.initBySlotIndex(
+                mMockQnsConfigManager,
+                mMockQnsEventDispatcher,
+                mMockQnsImsManager,
+                mMockQnsTelephonyListener,
+                1);
         mHandlers[0] = new TestHandler(mHandlerThreads[0], 0);
         mHandlers[1] = new TestHandler(mHandlerThreads[1], 1);
     }
@@ -162,9 +159,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     public void testHandleMessage_ValidSubID() throws InterruptedException {
         mHandlers[0].mLatch = new CountDownLatch(1);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
-                .thenReturn(true);
+        lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
@@ -182,10 +177,8 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         // active data sub.
         mHandlers[0].mLatch = new CountDownLatch(1);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
-                .thenReturn(true);
-        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(true);
+        lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
+        lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, false /* isVcn */);
@@ -200,9 +193,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     public void testHandleMessage_VcnWithValidSubID() throws InterruptedException {
         mHandlers[0].mLatch = new CountDownLatch(1);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
-                .thenReturn(true);
+        lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
@@ -233,9 +224,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     public void testHandleMessage_DisableCrossSim() throws InterruptedException {
         testHandleMessage_ValidSubID();
         mHandlers[0].mLatch = new CountDownLatch(1);
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(sMockContext, CURRENT_SLOT_ID))
-                .thenReturn(false);
+        lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(false);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(false, 0);
         assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));

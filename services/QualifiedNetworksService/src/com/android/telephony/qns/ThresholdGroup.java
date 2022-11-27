@@ -77,7 +77,7 @@ class ThresholdGroup {
     }
 
     private boolean satisfy(Threshold th, QualityMonitor monitor, boolean available, int an) {
-        //availability
+        // availability
         if (th.getMeasurementType() == QnsConstants.SIGNAL_MEASUREMENT_AVAILABILITY) {
             if (th.getThreshold() == QnsConstants.SIGNAL_AVAILABLE
                     && available
@@ -94,7 +94,7 @@ class ThresholdGroup {
             return false;
         }
 
-        //measurement matching
+        // measurement matching
         if (th.getAccessNetwork() != an) {
             return false;
         }

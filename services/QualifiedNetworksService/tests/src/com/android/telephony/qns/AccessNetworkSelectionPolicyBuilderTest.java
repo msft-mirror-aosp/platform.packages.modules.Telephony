@@ -39,7 +39,6 @@ import android.telephony.Rlog;
 import com.android.telephony.qns.AccessNetworkSelectionPolicy.PreCondition;
 import com.android.telephony.qns.QnsCarrierConfigManager.QnsConfigArray;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,7 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 
 @RunWith(JUnit4.class)
-public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
+public class AccessNetworkSelectionPolicyBuilderTest {
 
     @Mock private QnsCarrierConfigManager mConfig;
 
@@ -74,7 +73,7 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
     static final int IWLAN = AccessNetworkType.IWLAN;
 
     private HashMap<String, QnsConfigArray> mTestConfigsMap =
-            new HashMap<String, QnsConfigArray>() {
+            new HashMap<>() {
                 {
                     put(
                             AccessNetworkType.EUTRAN
@@ -215,9 +214,8 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
             };
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         MockitoAnnotations.initMocks(this);
-        super.setUp();
         mBuilder =
                 new AccessNetworkSelectionPolicyBuilder(
                         mConfig, NetworkCapabilities.NET_CAPABILITY_IMS);
@@ -226,26 +224,22 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
 
     private void stubConfigManager() {
         when(mConfig.getThresholdByPref(anyInt(), anyInt(), anyInt(), anyInt()))
-                .thenAnswer(
-                        (Answer<QnsConfigArray>)
-                    invocation -> {
+                .thenAnswer((Answer<QnsConfigArray>) invocation -> {
                         Object[] args = invocation.getArguments();
                         return mTestConfigsMap.get(
-                                args[0] + "-" + args[2] + "-" + args[1] + "-" + args[3]);
+                                args[0] + "-" + args[2] + "-" + args[1] + "-"
+                                        + args[3]);
                     });
         // stub threshold gap of 5 dBm
         when(mConfig.getThresholdGapWithGuardTimer(anyInt(), anyInt())).thenReturn(5);
     }
 
-    @After
-    public void tearDown() throws Exception {}
-
     protected static void slog(String log) {
         Rlog.d(AccessNetworkSelectionPolicyBuilderTest.class.getSimpleName(), log);
     }
 
-    protected String[] getPolicy(int direction, int calltype, int preference, int coverage) {
-        PreCondition condition = new PreCondition(calltype, preference, coverage);
+    protected String[] getPolicy(int direction, int callType, int preference, int coverage) {
+        PreCondition condition = new PreCondition(callType, preference, coverage);
         return mBuilder.getPolicy(direction, condition);
     }
 
@@ -261,32 +255,32 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
         List<Integer> callTypeList = List.of(IDLE, VOICE, VIDEO);
         List<Integer> coverageList = List.of(HOME, ROAM);
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_IN, calltype, WIFI_PREF, coverage);
+                conditions = getPolicy(ROVE_IN, callType, WIFI_PREF, coverage);
                 assertTrue(conditions.length == 1 && "Condition:WIFI_GOOD".equals(conditions[0]));
             }
         }
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_OUT, calltype, WIFI_PREF, coverage);
+                conditions = getPolicy(ROVE_OUT, callType, WIFI_PREF, coverage);
                 assertEquals(1, conditions.length);
                 assertEquals("Condition:WIFI_BAD", conditions[0]);
             }
         }
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_IN, calltype, CELL_PREF, coverage);
+                conditions = getPolicy(ROVE_IN, callType, CELL_PREF, coverage);
                 assertEquals(1, conditions.length);
                 assertEquals("Condition:WIFI_GOOD,CELLULAR_BAD", conditions[0]);
             }
         }
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_OUT, calltype, CELL_PREF, coverage);
+                conditions = getPolicy(ROVE_OUT, callType, CELL_PREF, coverage);
                 assertEquals(2, conditions.length);
                 assertEquals("Condition:CELLULAR_GOOD", conditions[0]);
                 assertEquals("Condition:WIFI_BAD,CELLULAR_TOLERABLE", conditions[1]);
@@ -352,9 +346,9 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
         List<Integer> callTypeList = List.of(IDLE, VOICE, VIDEO);
         List<Integer> coverageList = List.of(HOME, ROAM);
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_OUT, calltype, CELL_PREF, coverage);
+                conditions = getPolicy(ROVE_OUT, callType, CELL_PREF, coverage);
                 assertEquals(2, conditions.length);
                 assertEquals("Condition:WIFI_BAD", conditions[0]);
                 assertEquals("Condition:CELLULAR_GOOD", conditions[1]);
@@ -373,9 +367,9 @@ public class AccessNetworkSelectionPolicyBuilderTest extends QnsTest {
         List<Integer> callTypeList = List.of(IDLE, VOICE, VIDEO);
         List<Integer> coverageList = List.of(HOME, ROAM);
 
-        for (int calltype : callTypeList) {
+        for (int callType : callTypeList) {
             for (int coverage : coverageList) {
-                conditions = getPolicy(ROVE_IN, calltype, WIFI_PREF, coverage);
+                conditions = getPolicy(ROVE_IN, callType, WIFI_PREF, coverage);
                 assertEquals(2, conditions.length);
                 assertEquals("Condition:WIFI_GOOD", conditions[0]);
                 assertEquals("Condition:CELLULAR_BAD", conditions[1]);

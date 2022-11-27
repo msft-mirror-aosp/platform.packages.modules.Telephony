@@ -22,7 +22,6 @@ import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_ONLY;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
 import android.annotation.IntDef;
-import android.annotation.NonNull;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -48,9 +47,7 @@ import com.android.internal.telephony.TelephonyIntents;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /** QnsEventDispatcher Delivers Broadcasted Intent & change on setting to registered Handlers. */
 class QnsEventDispatcher {
@@ -113,9 +110,7 @@ class QnsEventDispatcher {
     static final int QNS_EVENT_SIM_ABSENT = QNS_EVENT_BASE + 23;
     static final int QNS_EVENT_SIM_LOADED = QNS_EVENT_BASE + 24;
     static final int QNS_EVENT_WIFI_ENABLED = QNS_EVENT_BASE + 25;
-    private static final int EVENT_CREATE_PROVISIONING_LISTENER = QNS_EVENT_BASE + 200;
-    private static final int EVENT_PROVISIONING_INFO_CHANGED = QNS_EVENT_BASE + 201;
-    private static final Map<Integer, QnsEventDispatcher> sInstances = new ConcurrentHashMap<>();
+    private static final int EVENT_PROVISIONING_INFO_CHANGED = QNS_EVENT_BASE + 200;
     private static Boolean sIsAirplaneModeOn;
     private static int sWiFiState = WifiManager.WIFI_STATE_UNKNOWN;
     private final String mLogTag;
@@ -136,7 +131,8 @@ class QnsEventDispatcher {
     int mLastWfcMode = WIFI_MODE_CELLULAR_PREFERRED;
     boolean mLastWfcRoamingEnabled = false;
     int mLastWfcModeRoaming = WIFI_MODE_WIFI_PREFERRED;
-    protected QnsProvisioningListener mQnsProvisioningListener;
+    protected final QnsProvisioningListener mQnsProvisioningListener;
+    protected final QnsImsManager mQnsImsManager;
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo;
     private final QnsEventDispatcherHandler mQnsEventDispatcherHandler;
 
@@ -187,11 +183,7 @@ class QnsEventDispatcher {
                                     sIsAirplaneModeOn
                                             ? QNS_EVENT_APM_ENABLED
                                             : QNS_EVENT_APM_DISABLED;
-                            for (Map.Entry<Integer, QnsEventDispatcher> entry :
-                                    sInstances.entrySet()) {
-                                QnsEventDispatcher instance = entry.getValue();
-                                instance.updateHandlers(event);
-                            }
+                            updateHandlers(event);
                             break;
 
                         case WifiManager.WIFI_STATE_CHANGED_ACTION:
@@ -208,11 +200,7 @@ class QnsEventDispatcher {
                                 } else {
                                     break;
                                 }
-                                for (Map.Entry<Integer, QnsEventDispatcher> entry :
-                                        sInstances.entrySet()) {
-                                    QnsEventDispatcher instance = entry.getValue();
-                                    instance.updateHandlers(event);
-                                }
+                                updateHandlers(event);
                             }
                             break;
 
@@ -225,17 +213,29 @@ class QnsEventDispatcher {
                                             ? QNS_EVENT_EMERGENCY_CALLBACK_MODE_ON
                                             : QNS_EVENT_EMERGENCY_CALLBACK_MODE_OFF;
                             int slotIndex = intent.getIntExtra(EXTRA_SLOT_INDEX, 0);
-                            getInstance(mContext, slotIndex).updateHandlers(event);
+                            // getInstance(mContext, slotIndex).
+                            if (mSlotIndex == slotIndex) {
+                                updateHandlers(event);
+                            }
                             break;
                     }
                 }
             };
 
-    private QnsEventDispatcher(@NonNull Context context, int slotIndex) {
+    /**
+     * QnsEventDispatcher constructor
+     */
+    QnsEventDispatcher(
+            Context context,
+            QnsProvisioningListener provisioningListener,
+            QnsImsManager imsManager,
+            int slotIndex) {
         mContext = context;
         mSlotIndex = slotIndex;
-        mLogTag = QnsEventDispatcher.class.getSimpleName() + "[" + slotIndex + "]";
+        mLogTag = QnsEventDispatcher.class.getSimpleName() + "[" + mSlotIndex + "]";
         mSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        mQnsProvisioningListener = provisioningListener;
+        mQnsImsManager = imsManager;
         final ContentResolver cr = mContext.getContentResolver();
         int airplaneMode = Settings.Global.getInt(cr, Settings.Global.AIRPLANE_MODE_ON, 0);
         sIsAirplaneModeOn = (airplaneMode == 1);
@@ -248,14 +248,14 @@ class QnsEventDispatcher {
         intentFilter.addAction(TelephonyManager.ACTION_SIM_APPLICATION_STATE_CHANGED);
         mContext.registerReceiver(mIntentReceiver, intentFilter);
 
-        HandlerThread handlerThread =
-                new HandlerThread(QnsEventDispatcher.class.getSimpleName() + slotIndex);
+        HandlerThread handlerThread = new HandlerThread(mLogTag);
         handlerThread.start();
         mQnsEventDispatcherHandler = new QnsEventDispatcherHandler(handlerThread.getLooper());
-        Message msg = mQnsEventDispatcherHandler.obtainMessage(EVENT_CREATE_PROVISIONING_LISTENER);
-        mQnsEventDispatcherHandler.sendMessage(msg);
-
         mQnsEventDispatcherHandler.post(() -> loadAndNotifyWfcSettings(mContext, mSlotIndex));
+
+        mLastProvisioningInfo = new QnsProvisioningListener.QnsProvisioningInfo();
+        mQnsProvisioningListener.registerProvisioningItemInfoChanged(
+                mQnsEventDispatcherHandler, EVENT_PROVISIONING_INFO_CHANGED, null, true);
     }
 
     private synchronized void loadAndNotifyWfcSettings(Context context, int slotIndex) {
@@ -272,11 +272,6 @@ class QnsEventDispatcher {
         notifyCurrentSetting(mWfcModeUri, true);
         notifyCurrentSetting(mWfcRoamingEnabledUri, true);
         notifyCurrentSetting(mWfcRoamingModeUri, true);
-    }
-
-    /** Get Instance of QnsEventDispatcher */
-    static QnsEventDispatcher getInstance(@NonNull Context context, int slotId) {
-        return sInstances.computeIfAbsent(slotId, k -> new QnsEventDispatcher(context, slotId));
     }
 
     private synchronized void onCarrierConfigChanged(Context context, int slotId, int carrierId) {
@@ -437,11 +432,11 @@ class QnsEventDispatcher {
             }
         }
         if (mEventHandlers.size() == 0) {
-            dispose();
+            close();
         }
     }
 
-    void dispose() {
+    public void close() {
         try {
             mContext.unregisterReceiver(mIntentReceiver);
         } catch (IllegalArgumentException ignored) {
@@ -456,7 +451,6 @@ class QnsEventDispatcher {
             mQnsProvisioningListener.unregisterProvisioningItemInfoChanged(
                     mQnsEventDispatcherHandler);
         }
-        sInstances.remove(mSlotIndex, this);
     }
 
     private synchronized void unregisterContentObserver() {
@@ -481,12 +475,14 @@ class QnsEventDispatcher {
             mUserSettingObserver = new UserSettingObserver(handler);
 
             // init
-            mLastWfcEnabledByPlatform = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
-            mLastCrossSimCallingEnabled = QnsUtils.isCrossSimCallingEnabled(mContext, mSlotIndex);
-            mLastWfcEnabled = QnsUtils.isWfcEnabled(mContext, mSlotIndex, false);
-            mLastWfcMode = QnsUtils.getWfcMode(mContext, mSlotIndex, false);
-            mLastWfcRoamingEnabled = QnsUtils.isWfcEnabled(mContext, mSlotIndex, true);
-            mLastWfcModeRoaming = QnsUtils.getWfcMode(mContext, mSlotIndex, true);
+            mLastWfcEnabledByPlatform = QnsUtils.isWfcEnabledByPlatform(mQnsImsManager);
+            mLastCrossSimCallingEnabled = QnsUtils.isCrossSimCallingEnabled(mQnsImsManager);
+            mLastWfcEnabled =
+                    QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, false);
+            mLastWfcMode = QnsUtils.getWfcMode(mQnsImsManager, false);
+            mLastWfcRoamingEnabled =
+                    QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, true);
+            mLastWfcModeRoaming = QnsUtils.getWfcMode(mQnsImsManager, true);
         }
 
         if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
@@ -570,7 +566,7 @@ class QnsEventDispatcher {
 
             if (uri.equals(mCrossSimCallingUri)) {
                 boolean isCrossSimCallingEnabled =
-                        QnsUtils.isCrossSimCallingEnabled(mContext, slotIndex);
+                        QnsUtils.isCrossSimCallingEnabled(mQnsImsManager);
                 if (mLastCrossSimCallingEnabled != isCrossSimCallingEnabled || bForceUpdate) {
                     if (isCrossSimCallingEnabled) {
                         event = QNS_EVENT_CROSS_SIM_CALLING_ENABLED;
@@ -583,7 +579,8 @@ class QnsEventDispatcher {
                     updateHandlers(event);
                 }
             } else if (uri.equals(mWfcEnabledUri)) {
-                boolean isWfcEnabled = QnsUtils.isWfcEnabled(mContext, slotIndex, false);
+                boolean isWfcEnabled =
+                        QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, false);
                 if (mLastWfcEnabled != isWfcEnabled || bForceUpdate) {
                     if (isWfcEnabled) {
                         event = QNS_EVENT_WFC_ENABLED;
@@ -596,7 +593,7 @@ class QnsEventDispatcher {
                     updateHandlers(event);
                 }
             } else if (uri.equals(mWfcModeUri)) {
-                int wfcMode = QnsUtils.getWfcMode(mContext, slotIndex, false);
+                int wfcMode = QnsUtils.getWfcMode(mQnsImsManager, false);
                 if (mLastWfcMode != wfcMode || bForceUpdate) {
                     switch (wfcMode) {
                         case WIFI_MODE_WIFI_ONLY:
@@ -615,7 +612,8 @@ class QnsEventDispatcher {
                     updateHandlers(event);
                 }
             } else if (uri.equals(mWfcRoamingEnabledUri)) {
-                boolean isWfcRoamingEnabled = QnsUtils.isWfcEnabled(mContext, slotIndex, true);
+                boolean isWfcRoamingEnabled =
+                        QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, true);
                 if (mLastWfcRoamingEnabled != isWfcRoamingEnabled || bForceUpdate) {
                     if (isWfcRoamingEnabled) {
                         event = QNS_EVENT_WFC_ROAMING_ENABLED;
@@ -628,7 +626,7 @@ class QnsEventDispatcher {
                     updateHandlers(event);
                 }
             } else if (uri.equals(mWfcRoamingModeUri)) {
-                int wfcModeRoaming = QnsUtils.getWfcMode(mContext, slotIndex, true);
+                int wfcModeRoaming = QnsUtils.getWfcMode(mQnsImsManager, true);
                 if (mLastWfcModeRoaming != wfcModeRoaming || bForceUpdate) {
                     switch (wfcModeRoaming) {
                         case WIFI_MODE_WIFI_ONLY:
@@ -656,7 +654,7 @@ class QnsEventDispatcher {
     }
 
     void notifyWfcEnabledByPlatform() {
-        boolean isWfcEnabledByPlatform = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
+        boolean isWfcEnabledByPlatform = QnsUtils.isWfcEnabledByPlatform(mQnsImsManager);
         if (mLastWfcEnabledByPlatform != isWfcEnabledByPlatform) {
             mLastWfcEnabledByPlatform = isWfcEnabledByPlatform;
             Log.d(mLogTag, "notifyWfcEnabledByPlatform:" + isWfcEnabledByPlatform);
@@ -736,9 +734,6 @@ class QnsEventDispatcher {
             Log.d(mLogTag, "handleMessage msg=" + message.what);
             QnsAsyncResult ar = (QnsAsyncResult) message.obj;
             switch (message.what) {
-                case EVENT_CREATE_PROVISIONING_LISTENER:
-                    onCreateProvisioningListener();
-                    break;
                 case EVENT_PROVISIONING_INFO_CHANGED:
                     onProvisioningInfoChanged(
                             (QnsProvisioningListener.QnsProvisioningInfo) ar.mResult);
@@ -746,19 +741,6 @@ class QnsEventDispatcher {
                 default:
                     break;
             }
-        }
-    }
-
-    private void onCreateProvisioningListener() {
-        if (mQnsProvisioningListener != null) {
-            return;
-        }
-        Log.d(mLogTag, "onCreateProvisioningListener");
-        mLastProvisioningInfo = new QnsProvisioningListener.QnsProvisioningInfo();
-        mQnsProvisioningListener = QnsProvisioningListener.getInstance(mContext, mSlotIndex);
-        if (mQnsProvisioningListener != null) {
-            mQnsProvisioningListener.registerProvisioningItemInfoChanged(
-                    mQnsEventDispatcherHandler, EVENT_PROVISIONING_INFO_CHANGED, null, true);
         }
     }
 

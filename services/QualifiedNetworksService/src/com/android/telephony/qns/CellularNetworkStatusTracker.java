@@ -15,11 +15,8 @@
  */
 package com.android.telephony.qns;
 
-import android.annotation.NonNull;
-import android.content.Context;
 import android.os.Handler;
 import android.util.Log;
-import android.util.SparseArray;
 
 /**
  * monitor cellular network status like attach or detach. The CellularNetworkStatusTracker is used
@@ -28,33 +25,25 @@ import android.util.SparseArray;
  */
 class CellularNetworkStatusTracker {
 
-    private static final SparseArray<CellularNetworkStatusTracker>
-            sCellularNetworkStatusTrackerMap = new SparseArray<>();
     private final String mLogTag;
     private final int mSlotIndex;
     private final QnsTelephonyListener mQnsTelephonyListener;
 
-    private CellularNetworkStatusTracker(@NonNull Context context, int slotIndex) {
+    /**
+     * Constructor to instantiate CellularNetworkStatusTracker
+     *
+     * @param listener QnsTelephonyListener instance
+     * @param slotIndex slot index
+     */
+    CellularNetworkStatusTracker(QnsTelephonyListener listener, int slotIndex) {
+        mSlotIndex = slotIndex;
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + CellularNetworkStatusTracker.class.getSimpleName()
                         + "_"
-                        + slotIndex;
-        mSlotIndex = slotIndex;
-        mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, mSlotIndex);
-    }
-
-    static CellularNetworkStatusTracker getInstance(
-            @NonNull Context context, int slotIndex) {
-        CellularNetworkStatusTracker cellStatusTracker =
-                sCellularNetworkStatusTrackerMap.get(slotIndex);
-        if (cellStatusTracker != null) {
-            return cellStatusTracker;
-        }
-        cellStatusTracker = new CellularNetworkStatusTracker(context, slotIndex);
-        sCellularNetworkStatusTrackerMap.put(slotIndex, cellStatusTracker);
-        return cellStatusTracker;
+                        + mSlotIndex;
+        mQnsTelephonyListener = listener;
     }
 
     protected void log(String s) {
@@ -94,7 +83,5 @@ class CellularNetworkStatusTracker {
         return mQnsTelephonyListener.isVoiceBarring();
     }
 
-    void close() {
-        sCellularNetworkStatusTrackerMap.remove(mSlotIndex);
-    }
+    public void close() {}
 }

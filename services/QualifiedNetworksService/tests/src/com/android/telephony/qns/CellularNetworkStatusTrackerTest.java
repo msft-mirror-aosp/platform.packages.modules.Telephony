@@ -16,13 +16,8 @@
 
 package com.android.telephony.qns;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
-
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,52 +30,26 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.MockitoSession;
 
 @RunWith(JUnit4.class)
 public class CellularNetworkStatusTrackerTest extends QnsTest {
 
-    private MockitoSession mMockitoSession;
-    @Mock private QnsTelephonyListener mMockQnsTelephonyListener;
     private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
-    private final int mSlotIndex = 0;
     private Handler mHandler;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-        mMockitoSession = mockitoSession().mockStatic(QnsTelephonyListener.class).startMocking();
-        lenient()
-                .when(QnsTelephonyListener.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockQnsTelephonyListener);
         mCellularNetworkStatusTracker =
-                CellularNetworkStatusTracker.getInstance(sMockContext, mSlotIndex);
+                new CellularNetworkStatusTracker(mMockQnsTelephonyListener, 0);
         mHandler = new Handler(Looper.getMainLooper());
     }
 
     @After
-    public void tearDown() throws Exception {
-        mMockitoSession.finishMocking();
+    public void tearDown() {
         mCellularNetworkStatusTracker.close();
-    }
-
-    @Test
-    public void testGetInstance() {
-        lenient()
-                .when(QnsTelephonyListener.getInstance(sMockContext, mSlotIndex + 1))
-                .thenReturn(mMockQnsTelephonyListener);
-
-        CellularNetworkStatusTracker cnst_0 =
-                CellularNetworkStatusTracker.getInstance(sMockContext, mSlotIndex);
-        CellularNetworkStatusTracker cnst_1 =
-                CellularNetworkStatusTracker.getInstance(sMockContext, mSlotIndex + 1);
-
-        assertSame(cnst_0, mCellularNetworkStatusTracker);
-        assertNotSame(cnst_1, mCellularNetworkStatusTracker);
-        cnst_1.close();
     }
 
     @Test

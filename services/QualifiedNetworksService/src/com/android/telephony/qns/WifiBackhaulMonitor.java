@@ -27,7 +27,6 @@ import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.util.Log;
-import android.util.SparseArray;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -47,17 +46,16 @@ class WifiBackhaulMonitor {
     private static final int EVENT_START_RTT_CHECK = 1;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = 2;
     private final String mTag;
-    private static final SparseArray<WifiBackhaulMonitor> sInstances = new SparseArray<>();
     private final ConnectivityManager mConnectivityManager;
-    private QnsImsManager mQnsImsManager;
-    private ConnectivityManager.NetworkCallback mNetworkCallback;
-    private Context mContext;
-    private int mSlotIndex;
+    private final QnsImsManager mQnsImsManager;
+    private final ConnectivityManager.NetworkCallback mNetworkCallback;
+    private final Context mContext;
+    private final int mSlotIndex;
 
-    private QnsRegistrantList mRegistrantList;
-    private HandlerThread mHandlerThread;
-    private Handler mHandler;
-    private QnsCarrierConfigManager mConfigManager;
+    private final QnsRegistrantList mRegistrantList;
+    private final HandlerThread mHandlerThread;
+    private final Handler mHandler;
+    private final QnsCarrierConfigManager mConfigManager;
     private boolean mRttResult = false;
 
     ArrayList<InetAddress> mValidIpList = new ArrayList<>();
@@ -113,36 +111,25 @@ class WifiBackhaulMonitor {
             mRttResult = false;
         }
     }
-
-    private WifiBackhaulMonitor(Context context, int slotIndex) {
-        mTag = WifiBackhaulMonitor.class.getSimpleName() + "[" + slotIndex + "]";
-        mContext = context;
+    /**
+     * Constructor to create WifiBackhaulMonitor instance.
+     */
+    WifiBackhaulMonitor(
+            Context context,
+            QnsCarrierConfigManager configManager,
+            QnsImsManager imsManager,
+            int slotIndex) {
         mSlotIndex = slotIndex;
+        mTag = WifiBackhaulMonitor.class.getSimpleName() + "[" + mSlotIndex + "]";
+        mContext = context;
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
-        mConfigManager = QnsCarrierConfigManager.getInstance(mContext, mSlotIndex);
-        mQnsImsManager = QnsImsManager.getInstance(mContext, mSlotIndex);
+        mConfigManager = configManager;
+        mQnsImsManager = imsManager;
         mNetworkCallback = new WiFiStatusCallback();
         mRegistrantList = new QnsRegistrantList();
         mHandlerThread = new HandlerThread(mTag);
         mHandlerThread.start();
         mHandler = new BackhaulHandler();
-    }
-
-    /**
-     * It provides WifiBackhaulMonitor instance.
-     *
-     * @param context Context of the application.
-     * @param slotIndex slot index for the instance.
-     * @return instance of WifiBackhaulMonitor
-     */
-    static WifiBackhaulMonitor getInstance(Context context, int slotIndex) {
-        WifiBackhaulMonitor wifiBackhaulMonitor = sInstances.get(slotIndex);
-        if (wifiBackhaulMonitor != null) {
-            return wifiBackhaulMonitor;
-        }
-        wifiBackhaulMonitor = new WifiBackhaulMonitor(context, slotIndex);
-        sInstances.put(slotIndex, wifiBackhaulMonitor);
-        return wifiBackhaulMonitor;
     }
 
     /** This method returns true if operator supports RTT feature. */
@@ -346,7 +333,6 @@ class WifiBackhaulMonitor {
     void close() {
         mHandlerThread.quit();
         clearAll();
-        sInstances.remove(mSlotIndex);
     }
 
     /** Method to clear all settings in WifiBackhaulMonitor */

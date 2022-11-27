@@ -150,14 +150,9 @@ class QnsUtils {
         return info;
     }
 
-    protected static QnsImsManager getImsManager(Context context, int slotIndex) {
-        return QnsImsManager.getInstance(context, slotIndex);
-    }
-
     /** isCrossSimCallingEnabled */
-    static boolean isCrossSimCallingEnabled(Context context, int slotIndex) {
+    public static boolean isCrossSimCallingEnabled(QnsImsManager imsManager) {
         try {
-            QnsImsManager imsManager = getImsManager(context, slotIndex);
             return imsManager.isCrossSimCallingEnabled();
         } catch (Exception e) {
             // Fail to query Cross-SIM calling setting, just return false to avoid an exception.
@@ -166,19 +161,17 @@ class QnsUtils {
     }
 
     /** isWfcEnabled */
-    static boolean isWfcEnabled(Context context, int slotIndex, boolean roaming) {
+    public static boolean isWfcEnabled(
+            QnsImsManager imsManager, QnsProvisioningListener listener, boolean roaming) {
         try {
-            QnsImsManager imsManager = getImsManager(context, slotIndex);
             boolean bWfcEnabledByUser;
             boolean bWfcEnabledByPlatform = imsManager.isWfcEnabledByPlatform();
             boolean bWfcProvisionedOnDevice = imsManager.isWfcProvisionedOnDevice();
             if (roaming) {
                 bWfcEnabledByUser = imsManager.isWfcRoamingEnabledByUser();
                 try {
-                    QnsProvisioningListener listener =
-                            QnsProvisioningListener.getInstance(context, slotIndex);
                     boolean bWfcRoamingEnabled =
-                            listener.getLastProvisioningWfcRoamingEnagledInfo();
+                            listener.getLastProvisioningWfcRoamingEnabledInfo();
                     bWfcEnabledByUser = bWfcEnabledByUser && (bWfcRoamingEnabled);
                 } catch (Exception e) {
                     log("got exception e:" + e);
@@ -188,7 +181,7 @@ class QnsUtils {
             }
             log(
                     "isWfcEnabled slot:"
-                            + slotIndex
+                            + imsManager.getSlotIndex()
                             + " byUser:"
                             + bWfcEnabledByUser
                             + " byPlatform:"
@@ -206,11 +199,14 @@ class QnsUtils {
     }
 
     /** isWfcEnabledByPlatform */
-    static boolean isWfcEnabledByPlatform(Context context, int slotIndex) {
+    public static boolean isWfcEnabledByPlatform(QnsImsManager imsManager) {
         try {
-            QnsImsManager imsManager = getImsManager(context, slotIndex);
             boolean bWfcEnabledByPlatform = imsManager.isWfcEnabledByPlatform();
-            log("isWfcEnabledByPlatform:" + bWfcEnabledByPlatform + " slot:" + slotIndex);
+            log(
+                    "isWfcEnabledByPlatform:"
+                            + bWfcEnabledByPlatform
+                            + " slot:"
+                            + imsManager.getSlotIndex());
             return bWfcEnabledByPlatform;
         } catch (Exception e) {
             loge("isWfcEnabledByPlatform exception:" + e);
@@ -220,11 +216,16 @@ class QnsUtils {
     }
 
     /** getWfcMode */
-    static int getWfcMode(Context context, int slotIndex, boolean roaming) {
+    public static int getWfcMode(QnsImsManager imsManager, boolean roaming) {
         try {
-            QnsImsManager imsManager = getImsManager(context, slotIndex);
             int wfcMode = imsManager.getWfcMode(roaming);
-            log("getWfcMode slot:" + slotIndex + " wfcMode:" + wfcMode + " roaming:" + roaming);
+            log(
+                    "getWfcMode slot:"
+                            + imsManager.getSlotIndex()
+                            + " wfcMode:"
+                            + wfcMode
+                            + " roaming:"
+                            + roaming);
             return wfcMode;
         } catch (Exception e) {
             // Fail to query, just return false to avoid an exception.
@@ -269,8 +270,7 @@ class QnsUtils {
      * @return Set of capabilities
      */
     @NetCapability
-    static Set<Integer> getNetworkCapabilitiesFromString(
-            @NonNull String capabilitiesString) {
+    static Set<Integer> getNetworkCapabilitiesFromString(@NonNull String capabilitiesString) {
         // e.g. "IMS|" is not allowed
         if (!capabilitiesString.matches("(\\s*[a-zA-Z]+\\s*)(\\|\\s*[a-zA-Z]+\\s*)*")) {
             return Collections.singleton(-1);
@@ -539,8 +539,7 @@ class QnsUtils {
         return netCapabilities;
     }
 
-    static PersistableBundle readQnsDefaultConfigFromAssets(
-            Context context, int qnsCarrierID) {
+    static PersistableBundle readQnsDefaultConfigFromAssets(Context context, int qnsCarrierID) {
 
         if (qnsCarrierID == TelephonyManager.UNKNOWN_CARRIER_ID) {
             return null;

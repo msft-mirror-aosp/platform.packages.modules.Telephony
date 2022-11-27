@@ -22,6 +22,7 @@ import android.annotation.NonNull;
 import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.Message;
 import android.telephony.data.QualifiedNetworksService;
 import android.telephony.data.ThrottleStatus;
@@ -47,8 +48,11 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
     private static final int QNS_CONFIGURATION_LOADED = 1;
     private static final int QUALIFIED_NETWORKS_CHANGED = 2;
     private static final int QNS_CONFIGURATION_CHANGED = 3;
-    protected HashMap<Integer, NetworkAvailabilityProviderImpl> mProviderMap = new HashMap<>();
-    protected Context mContext;
+    HashMap<Integer, NetworkAvailabilityProviderImpl> mProviderMap = new HashMap<>();
+    HashMap<Integer, HandlerThread> mHandlerThreadMap = new HashMap<>();
+    Context mContext;
+    HandlerThread mHandlerThread;
+    @VisibleForTesting QnsComponents mQnsComponents;
 
     /** Default constructor. */
     public QualifiedNetworksServiceImpl() {
@@ -72,6 +76,11 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
             log("Invalid slotIndex " + slotIndex + ". fail to create NetworkAvailabilityProvider");
             return null;
         }
+        if (!mHandlerThreadMap.containsKey(slotIndex)) {
+            HandlerThread ht = new HandlerThread("NapConfigHandler-" + slotIndex);
+            ht.start();
+            mHandlerThreadMap.put(slotIndex, ht);
+        }
         NetworkAvailabilityProviderImpl provider = new NetworkAvailabilityProviderImpl(slotIndex);
         mProviderMap.put(slotIndex, provider);
         return provider;
@@ -81,6 +90,9 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
     public void onCreate() {
         log("onCreate");
         mContext = getApplicationContext();
+        mQnsComponents = new QnsComponents(mContext);
+        mHandlerThread = new HandlerThread(LOG_TAG);
+        mHandlerThread.start();
     }
 
     @Override
@@ -89,10 +101,13 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
         for (NetworkAvailabilityProviderImpl provider : mProviderMap.values()) {
             provider.close();
         }
+        for (HandlerThread ht : mHandlerThreadMap.values()) {
+            ht.quitSafely();
+        }
+        mHandlerThreadMap.clear();
         mProviderMap.clear();
+        mHandlerThread.quitSafely();
         super.onDestroy();
-        IwlanNetworkStatusTracker.getInstance(mContext).close();
-        WifiQualityMonitor.getInstance(mContext).dispose();
     }
 
     protected void log(String s) {
@@ -135,15 +150,11 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
         private final int mSlotIndex;
         @VisibleForTesting Handler mHandler;
         @VisibleForTesting Handler mConfigHandler;
-        private final HandlerThread mHandlerThread;
-        private final HandlerThread mConfigHandlerThread;
         private boolean mIsQnsConfigChangeRegistered = false;
 
         protected QnsCarrierConfigManager mConfigManager;
-        protected QnsTelephonyListener mQnsTelephonyListener;
         protected HashMap<Integer, AccessNetworkEvaluator> mEvaluators = new HashMap<>();
         private boolean mIsClosed;
-        protected QnsProvisioningListener mProvisioningManager;
 
         /**
          * Constructor
@@ -156,51 +167,42 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
 
             mIsClosed = false;
             mSlotIndex = slotIndex;
-            mHandlerThread =
-                    new HandlerThread(NetworkAvailabilityProviderImpl.class.getSimpleName());
-            mHandlerThread.start();
-            mHandler =
-                    new Handler(mHandlerThread.getLooper()) {
-                        @Override
-                        public void handleMessage(Message message) {
-                            QnsAsyncResult ar = (QnsAsyncResult) message.obj;
-                            switch (message.what) {
-                                case QUALIFIED_NETWORKS_CHANGED:
-                                    onQualifiedNetworksChanged((QualifiedNetworksInfo) ar.mResult);
-                                    break;
-                                default:
-                                    log("got event " + message.what + " never reached here.");
-                                    break;
-                            }
-                        }
-                    };
-            mConfigHandlerThread =
-                    new HandlerThread(
-                            NetworkAvailabilityProviderImpl.class.getSimpleName() + "config");
-            mConfigHandlerThread.start();
-            mConfigHandler =
-                    new Handler(mConfigHandlerThread.getLooper()) {
-                        @Override
-                        public void handleMessage(Message message) {
-                            switch (message.what) {
-                                case QNS_CONFIGURATION_LOADED:
-                                    onConfigurationLoaded();
-                                    break;
-                                case QNS_CONFIGURATION_CHANGED:
-                                    log("Qns Configuration changed received");
-                                    onConfigurationChanged();
-                                    break;
-                                default:
-                                    log("got event " + message.what + " never reached here.");
-                                    break;
-                            }
-                        }
-                    };
+            mConfigHandler = new NapHandler(mHandlerThreadMap.get(mSlotIndex).getLooper());
+            mConfigHandler.post(this::initNetworkAvailabilityProvider);
+            mHandler = new NapHandler(mHandlerThread.getLooper());
+        }
 
-            mConfigManager = QnsCarrierConfigManager.getInstance(mContext, mSlotIndex);
+        private class NapHandler extends Handler {
+            NapHandler(Looper looper) {
+                super(looper);
+            }
+
+            @Override
+            public void handleMessage(Message msg) {
+                super.handleMessage(msg);
+                switch (msg.what) {
+                    case QNS_CONFIGURATION_LOADED:
+                        onConfigurationLoaded();
+                        break;
+                    case QNS_CONFIGURATION_CHANGED:
+                        log("Qns Configuration changed received");
+                        onConfigurationChanged();
+                        break;
+                    case QUALIFIED_NETWORKS_CHANGED:
+                        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
+                        onQualifiedNetworksChanged((QualifiedNetworksInfo) ar.mResult);
+                        break;
+                    default:
+                        log("got event " + msg.what + " never reached here.");
+                        break;
+                }
+            }
+        }
+
+        private void initNetworkAvailabilityProvider() {
+            mQnsComponents.createQnsComponents(mSlotIndex);
+            mConfigManager = mQnsComponents.getQnsCarrierConfigManager(mSlotIndex);
             mConfigManager.registerForConfigurationLoaded(mConfigHandler, QNS_CONFIGURATION_LOADED);
-            mQnsTelephonyListener = QnsTelephonyListener.getInstance(mContext, mSlotIndex);
-            mProvisioningManager = QnsProvisioningListener.getInstance(mContext, mSlotIndex);
         }
 
         protected void onConfigurationLoaded() {
@@ -228,7 +230,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     evaluator.rebuild();
                 } else {
                     AccessNetworkEvaluator evaluator =
-                            new AccessNetworkEvaluator(getSlotIndex(), netCapability, mContext);
+                            new AccessNetworkEvaluator(mQnsComponents, netCapability, mSlotIndex);
                     evaluator.registerForQualifiedNetworksChanged(
                             mHandler, QUALIFIED_NETWORKS_CHANGED);
                     evaluators.put(netCapability, evaluator);
@@ -297,10 +299,8 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     evaluator.unregisterForQualifiedNetworksChanged(mHandler);
                     evaluator.close();
                 }
-                mConfigManager.close();
-                CellularQualityMonitor.getInstance(mContext, mSlotIndex).dispose();
-                CellularNetworkStatusTracker.getInstance(mContext, mSlotIndex).close();
-                mQnsTelephonyListener.close();
+                mHandlerThread.quitSafely();
+                mQnsComponents.closeComponents(mSlotIndex);
                 mEvaluators.clear();
             }
         }
@@ -322,8 +322,14 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                 AccessNetworkEvaluator ane = aneMap.getValue();
                 ane.dump(pw, prefix + "  ");
             }
-            mQnsTelephonyListener.dump(pw, prefix + "  ");
-            CellularQualityMonitor.getInstance(mContext, mSlotIndex).dump(pw, prefix + "  ");
+            QnsTelephonyListener tl = mQnsComponents.getQnsTelephonyListener(mSlotIndex);
+            if (tl != null) {
+                tl.dump(pw, prefix + "  ");
+            }
+            CellularQualityMonitor cQM = mQnsComponents.getCellularQualityMonitor(mSlotIndex);
+            if (cQM != null) {
+                cQM.dump(pw, prefix + "  ");
+            }
         }
     }
 
@@ -337,8 +343,14 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
             NetworkAvailabilityProviderImpl provider = providerMap.getValue();
             provider.dump(pw, "  ");
         }
-        IwlanNetworkStatusTracker.getInstance(mContext).dump(pw, "  ");
-        WifiQualityMonitor.getInstance(mContext).dump(pw, "  ");
+        IwlanNetworkStatusTracker iwlanNst = mQnsComponents.getIwlanNetworkStatusTracker();
+        if (iwlanNst != null) {
+            iwlanNst.dump(pw, "  ");
+        }
+        WifiQualityMonitor wQM = mQnsComponents.getWifiQualityMonitor();
+        if (wQM != null) {
+            wQM.dump(pw, "  ");
+        }
         pw.println("==============================");
     }
 }
