@@ -37,7 +37,6 @@ import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
 import android.util.Log;
-import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -53,8 +52,6 @@ import java.util.concurrent.Executor;
  */
 class QnsTelephonyListener {
 
-    private static final SparseArray<QnsTelephonyListener> sQnsTelephonyListener =
-            new SparseArray<>();
     private static final Archiving<PreciseDataConnectionState>
             sArchivingPreciseDataConnectionState = new Archiving<>();
     private final String mLogTag;
@@ -96,7 +93,7 @@ class QnsTelephonyListener {
             };
 
     /** Default constructor. */
-    private QnsTelephonyListener(@NonNull Context context, int slotIndex) {
+    QnsTelephonyListener(@NonNull Context context, int slotIndex) {
         mLogTag = QnsTelephonyListener.class.getSimpleName() + "_" + slotIndex;
         mSlotIndex = slotIndex;
         mContext = context;
@@ -113,24 +110,6 @@ class QnsTelephonyListener {
             mSubscriptionManager.addOnSubscriptionsChangedListener(
                     new QnsUtils.QnsExecutor(mHandler), mSubscriptionsChangeListener);
         }
-    }
-
-    /**
-     * Gets a QnsImsManager instance
-     *
-     * @param context application context for creating the manager object
-     * @param slotIndex subscription ID
-     * @return the QnsTelephonyListener instance corresponding to the subId
-     */
-    static synchronized QnsTelephonyListener getInstance(
-            @NonNull Context context, int slotIndex) {
-        QnsTelephonyListener qnsTelephonyListener = sQnsTelephonyListener.get(slotIndex);
-        if (qnsTelephonyListener != null) {
-            return qnsTelephonyListener;
-        }
-        qnsTelephonyListener = new QnsTelephonyListener(context, slotIndex);
-        sQnsTelephonyListener.put(slotIndex, qnsTelephonyListener);
-        return qnsTelephonyListener;
     }
 
     private static int registrationStateToServiceState(int registrationState) {
@@ -271,8 +250,7 @@ class QnsTelephonyListener {
      * @param userObj user object.
      * @param notifyImmediately set true if want to notify immediately.
      */
-    void registerCallStateListener(
-            Handler h, int what, Object userObj, boolean notifyImmediately) {
+    void registerCallStateListener(Handler h, int what, Object userObj, boolean notifyImmediately) {
         log("registerCallStateListener");
         if (h != null) {
             QnsRegistrant r = new QnsRegistrant(h, what, userObj);
@@ -743,7 +721,6 @@ class QnsTelephonyListener {
         mQnsTelephonyInfoRegistrantMap.clear();
         mLastPreciseDataConnectionState.clear();
         mIwlanServiceStateListener.removeAll();
-        sQnsTelephonyListener.remove(mSlotIndex);
     }
 
     /** Listener for change of service state. */
@@ -860,8 +837,6 @@ class QnsTelephonyListener {
                                 && (this.mVopsSupport == ((QnsTelephonyInfoIms) o).getVopsSupport())
                                 && (this.mVopsEmergencySupport
                                         == ((QnsTelephonyInfoIms) o).getVopsEmergencySupport())
-                                && (this.mVoiceBarring
-                                        == ((QnsTelephonyInfoIms) o).getVoiceBarring())
                                 && (this.mEmergencyBarring
                                         == ((QnsTelephonyInfoIms) o).getEmergencyBarring());
             }
@@ -904,13 +879,13 @@ class QnsTelephonyListener {
                 boolean volteRoamingSupported) {
             if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
                 return super.isCellularAvailable()
-                        && (!checkVops || (checkVops && mVopsSupport))
-                        && (!checkBarring || (checkBarring && !mVoiceBarring))
+                        && (!checkVops || mVopsSupport)
+                        && (!checkBarring || !mVoiceBarring)
                         && volteRoamingSupported;
             } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                 return super.isCellularAvailable()
-                        && (!checkVops || (checkVops && mVopsEmergencySupport))
-                        && (!checkBarring || (checkBarring && !mEmergencyBarring));
+                        && (!checkVops || mVopsEmergencySupport)
+                        && (!checkBarring && !mEmergencyBarring);
             }
             return false;
         }
@@ -1076,8 +1051,7 @@ class QnsTelephonyListener {
             mServiceStateListener = listener;
         }
 
-        void setPreciseDataConnectionStateListener(
-                OnPreciseDataConnectionStateListener listener) {
+        void setPreciseDataConnectionStateListener(OnPreciseDataConnectionStateListener listener) {
             mPreciseDataConnectionStateListener = listener;
         }
 

@@ -18,30 +18,23 @@ package com.android.telephony.qns;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.content.Context;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation;
 import android.util.Log;
 
-/**
- * AlternativeEventProvider class
- */
+/** AlternativeEventProvider class */
 public abstract class AlternativeEventProvider {
-    private int mSlotId;
-    private Context mContext;
     private EventCallback mEventCb;
     private final String mLogTag;
 
-    public AlternativeEventProvider(Context context, int slotId) {
-        mSlotId = slotId;
-        mContext = context;
+    public AlternativeEventProvider(AlternativeEventListener altEventListener, int slotId) {
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + AlternativeEventProvider.class.getSimpleName()
                         + "_"
                         + slotId;
-        AlternativeEventListener.getInstance(mContext, mSlotId).setEventProvider(this);
+        altEventListener.setEventProvider(this);
     }
 
     /**
@@ -71,7 +64,7 @@ public abstract class AlternativeEventProvider {
      * Event provider calls this to notify call info changed.
      *
      * @param id CallId
-     * @parma type CallType
+     * @param type CallType
      * @param state CallState
      */
     public void notifyCallInfo(int id, int type, int state) {
@@ -124,15 +117,13 @@ public abstract class AlternativeEventProvider {
         mEventCb = eventCb;
     }
 
-    /**
-     * Event callback for call related item
-     */
+    /** Event callback for call related item */
     public interface EventCallback {
         /**
          * call type event notification.
          *
          * @param id CallId
-         * @parma type CallType
+         * @param type CallType
          * @param state CallState
          */
         void onCallInfoChanged(
@@ -143,21 +134,21 @@ public abstract class AlternativeEventProvider {
         /**
          * RTP event notification.
          *
-         * @param reason
+         * @param reason reason for RTP low quality
          */
         void onVoiceRtpLowQuality(@QnsConstants.RtpLowQualityReason int reason);
 
         /**
          * Notify Emergency Transport Type Preference for initial connect.
          *
-         * @param transport
+         * @param transport Transport Type
          */
         void onEmergencyPreferenceChanged(@AccessNetworkConstants.TransportType int transport);
 
         /**
          * Try WFC connection state change notification.
          *
-         * @param isEnabled
+         * @param isEnabled flag value for WFC connection state change notification
          */
         void onTryWfcConnectionStateChanged(boolean isEnabled);
     }

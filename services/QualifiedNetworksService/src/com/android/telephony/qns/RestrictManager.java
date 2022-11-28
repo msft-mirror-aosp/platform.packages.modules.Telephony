@@ -20,7 +20,6 @@ import static com.android.telephony.qns.DataConnectionStatusTracker.STATE_CONNEC
 import static com.android.telephony.qns.DataConnectionStatusTracker.STATE_HANDOVER;
 
 import android.annotation.IntDef;
-import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.Looper;
@@ -421,51 +420,31 @@ class RestrictManager {
     }
 
     RestrictManager(
-            Context context,
+            QnsComponents qnsComponents,
             Looper loop,
-            int slotId,
-            int netCapability,
-            DataConnectionStatusTracker dcst) {
-        this(context, loop, slotId, netCapability, dcst, null, null);
-    }
-
-    @VisibleForTesting
-    protected RestrictManager(
-            Context context,
-            Looper loop,
-            int slotId,
             int netCapability,
             DataConnectionStatusTracker dcst,
-            QnsCarrierConfigManager configManager,
-            AlternativeEventListener altListener) {
+            int slotId) {
         mRestrictInfos.put(
                 AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                 new RestrictInfo(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
         mRestrictInfos.put(
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                 new RestrictInfo(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+        mSlotId = slotId;
         mLogTag =
                 RestrictManager.class.getSimpleName()
                         + "_"
-                        + slotId
+                        + mSlotId
                         + "_"
                         + QnsUtils.getNameOfNetCapability(netCapability);
-        mTelephonyListener = QnsTelephonyListener.getInstance(context, slotId);
-        mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotId);
-        if (configManager == null) {
-            mQnsCarrierConfigManager = QnsCarrierConfigManager.getInstance(context, slotId);
-        } else {
-            mQnsCarrierConfigManager = configManager;
-        }
-        mSlotId = slotId;
+        mTelephonyListener = qnsComponents.getQnsTelephonyListener(mSlotId);
+        mQnsEventDispatcher = qnsComponents.getQnsEventDispatcher(mSlotId);
+        mQnsCarrierConfigManager = qnsComponents.getQnsCarrierConfigManager(mSlotId);
         mHandler = new RestrictManagerHandler(loop);
         mNetCapability = netCapability;
         mDataConnectionStatusTracker = dcst;
-        if (altListener == null) {
-            mAltEventListener = AlternativeEventListener.getInstance(context, mSlotId);
-        } else {
-            mAltEventListener = altListener;
-        }
+        mAltEventListener = qnsComponents.getAlternativeEventListener(mSlotId);
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
                 mHandler, EVENT_DATA_CONNECTION_CHANGED);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
@@ -475,14 +454,15 @@ class RestrictManager {
                     mHandler, EVENT_SRVCC_STATE_CHANGED, null);
         }
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
-            mQnsImsManager = QnsImsManager.getInstance(context, slotId);
+            mQnsImsManager = qnsComponents.getQnsImsManager(mSlotId);
             mQnsImsManager.registerImsRegistrationStatusChanged(
                     mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
-            mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(context, slotId);
+            mWifiBackhaulMonitor = qnsComponents.getWifiBackhaulMonitor(mSlotId);
         }
 
-        mWfcPreference = QnsUtils.getWfcMode(context, slotId, false);
-        mWfcRoamingPreference = QnsUtils.getWfcMode(context, slotId, true);
+        // check if we can pass "mQnsImsManager"
+        mWfcPreference = QnsUtils.getWfcMode(qnsComponents.getQnsImsManager(mSlotId), false);
+        mWfcRoamingPreference = QnsUtils.getWfcMode(qnsComponents.getQnsImsManager(mSlotId), true);
 
         List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY);
@@ -496,7 +476,7 @@ class RestrictManager {
         events.add(QnsEventDispatcher.QNS_EVENT_WIFI_DISABLING);
         mQnsEventDispatcher.registerEvent(events, mHandler);
 
-        mCellularNetworkStatusTracker = CellularNetworkStatusTracker.getInstance(context, slotId);
+        mCellularNetworkStatusTracker = qnsComponents.getCellularNetworkStatusTracker(mSlotId);
         restrictNonPreferredTransport();
     }
 
@@ -998,7 +978,7 @@ class RestrictManager {
             QnsImsManager.ImsRegistrationState event, int transportType, int prefMode) {
         if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
             int fallbackTimeMillis =
-                    mQnsCarrierConfigManager.getFallbackTimeImsUnreigstered(
+                    mQnsCarrierConfigManager.getFallbackTimeImsUnregistered(
                             event.getReasonInfo().getCode(), prefMode);
             if (fallbackTimeMillis > 0
                     && mQnsCarrierConfigManager.isAccessNetworkAllowed(
@@ -1058,8 +1038,7 @@ class RestrictManager {
     }
 
     /** Update Last notified transport type from ANE which owns this RestrictManager */
-    void updateLastNotifiedTransportType(
-            @AccessNetworkConstants.TransportType int transportType) {
+    void updateLastNotifiedTransportType(@AccessNetworkConstants.TransportType int transportType) {
         if (mDebugFlag) {
             Log.d(
                     mLogTag,

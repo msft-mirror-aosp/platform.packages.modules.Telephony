@@ -38,8 +38,8 @@ import android.net.Network;
 import android.net.NetworkRequest;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.Message;
-import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 
 import com.android.dx.mockito.inline.extended.StaticMockitoSession;
@@ -57,23 +57,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class WifiBackhaulMonitorTest extends QnsTest {
 
     private static final int EVENT_START_RTT_CHECK = 1;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = 2;
 
-    @Mock private QnsCarrierConfigManager mMockConfigManager;
-    @Mock private QnsImsManager mMockQnsImsManager;
     @Mock private Network mMockNetwork;
     @Mock private Process mProcessV4;
     @Mock private Process mProcessV6;
     @Mock private Runtime mRuntime;
 
     private WifiBackhaulMonitor mWbm;
-    private int mSlotIndex = 0;
 
-    private TestLooper mTestLooper;
     private Handler mHandler;
     private StaticMockitoSession mMockitoSession;
     private LinkProperties mLinkProperties = new LinkProperties();
@@ -85,12 +83,34 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                 @Override
                 protected void onLooperPrepared() {
                     super.onLooperPrepared();
-                    mWbm = WifiBackhaulMonitor.getInstance(sMockContext, mSlotIndex);
+                    mWbm =
+                            new WifiBackhaulMonitor(
+                                    sMockContext, mMockQnsConfigManager, mMockQnsImsManager, 0);
                     setReady(true);
                 }
             };
     private NetworkCallback mCallback;
     private Handler mRttHandler;
+    private HandlerThread mHandlerThread;
+    private CountDownLatch mLatch;
+    private QnsAsyncResult mAsyncResult;
+
+    private class TestHandler extends Handler {
+
+        TestHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            assertNotNull(msg);
+            assertTrue(msg.obj instanceof QnsAsyncResult);
+            mAsyncResult = (QnsAsyncResult) msg.obj;
+            if (mLatch != null) {
+                mLatch.countDown();
+            }
+        }
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -100,28 +120,22 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         mServerAddress = "";
         mRttConfigs = null;
         mLinkProperties.setInterfaceName("iwlan0");
+        mLatch = new CountDownLatch(1);
 
         mMockitoSession =
                 mockitoSession()
-                        .mockStatic(QnsCarrierConfigManager.class)
-                        .mockStatic(QnsImsManager.class)
                         .mockStatic(Runtime.class)
                         .spyStatic(InetAddress.class)
                         .startMocking();
         mockDefaults();
         mHt.start();
         waitUntilReady();
-        mTestLooper = new TestLooper();
-        mHandler = new Handler(mTestLooper.getLooper());
+        mHandlerThread = new HandlerThread("");
+        mHandlerThread.start();
+        mHandler = new TestHandler(mHandlerThread.getLooper());
     }
 
     private void mockDefaults() throws IOException {
-        lenient()
-                .when(QnsCarrierConfigManager.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockConfigManager);
-        lenient()
-                .when(QnsImsManager.getInstance(sMockContext, mSlotIndex))
-                .thenReturn(mMockQnsImsManager);
 
         lenient().when(Runtime.getRuntime()).thenReturn(mRuntime);
 
@@ -134,23 +148,24 @@ public class WifiBackhaulMonitorTest extends QnsTest {
 
         doReturn(mLinkProperties).when(mMockConnectivityManager).getLinkProperties(mMockNetwork);
         when(mRuntime.exec(anyString()))
-                .thenAnswer(
-                   (Answer<Process>)
-                        invocation -> {
-                            String arg = invocation.getArgument(0);
-                            if (arg.startsWith("ping6")) {
-                                return mProcessV6;
-                            }
-                            return mProcessV4;
-                        });
-        doAnswer(ret -> mServerAddress).when(mMockConfigManager).getWlanRttServerAddressConfig();
-        doAnswer(invocation -> mRttConfigs).when(mMockConfigManager).getWlanRttOtherConfigs();
+                .thenAnswer((Answer<Process>)
+                    invocation -> {
+                        String arg = invocation.getArgument(0);
+                        if (arg.startsWith("ping6")) {
+                            return mProcessV6;
+                        }
+                        return mProcessV4;
+                    });
+        doAnswer(ret -> mServerAddress).when(mMockQnsConfigManager).getWlanRttServerAddressConfig();
+        doAnswer(invocation -> mRttConfigs).when(mMockQnsConfigManager).getWlanRttOtherConfigs();
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
+        mAsyncResult = null;
         mWbm.close();
         mMockitoSession.finishMocking();
+        mHandlerThread.quit();
     }
 
     @Test
@@ -164,7 +179,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
 
     @Test
     public void registerForRttStatusChange() {
-        Handler handler = new Handler(mTestLooper.getLooper());
+        Handler handler = new Handler(mHandlerThread.getLooper());
 
         mWbm.registerForRttStatusChange(mHandler, 1);
         mWbm.registerForRttStatusChange(handler, 2);
@@ -184,25 +199,23 @@ public class WifiBackhaulMonitorTest extends QnsTest {
     }
 
     @Test
-    public void testRttWhenNoWlanInterface() {
+    public void testRttWhenNoWlanInterface() throws InterruptedException {
         mWbm.registerForRttStatusChange(mHandler, 1);
         mWbm.requestRttCheck();
-        waitFor(50);
         verifyResultAs(false);
     }
 
     @Test
-    public void testRttWhenNoConfigurations() {
+    public void testRttWhenNoConfigurations() throws InterruptedException {
         mWbm.registerForRttStatusChange(mHandler, 1);
         captureNetworkCallback();
         mCallback.onAvailable(mMockNetwork);
         mWbm.requestRttCheck();
-        waitFor(50);
         verifyResultAs(true);
     }
 
     @Test
-    public void testRttPassed_v4() {
+    public void testRttPassed_v4() throws InterruptedException {
         mRttConfigs = new int[] {5, 200, 32, 100, 60000};
         InputStream stream =
                 new ByteArrayInputStream(getCommandOutputs()[0].getBytes(StandardCharsets.UTF_8));
@@ -212,12 +225,11 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         captureNetworkCallback();
         mCallback.onAvailable(mMockNetwork);
         mWbm.requestRttCheck();
-        waitFor(50);
         verifyResultAs(true);
     }
 
     @Test
-    public void testRtt_v4Failed_v6Passed() {
+    public void testRtt_v4Failed_v6Passed() throws InterruptedException {
         mRttConfigs = new int[] {5, 200, 32, 70, 60000};
         InputStream stream_v4 =
                 new ByteArrayInputStream(getCommandOutputs()[0].getBytes(StandardCharsets.UTF_8));
@@ -230,12 +242,11 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         captureNetworkCallback();
         mCallback.onAvailable(mMockNetwork);
         mWbm.requestRttCheck();
-        waitFor(50);
         verifyResultAs(true);
     }
 
     @Test
-    public void testRtt_v4v6Failed() {
+    public void testRtt_v4v6Failed() throws InterruptedException {
         mRttConfigs = new int[] {5, 200, 32, 60, 60000};
         InputStream stream_v4 =
                 new ByteArrayInputStream(getCommandOutputs()[0].getBytes(StandardCharsets.UTF_8));
@@ -248,7 +259,6 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         captureNetworkCallback();
         mCallback.onAvailable(mMockNetwork);
         mWbm.requestRttCheck();
-        waitFor(50);
         verifyResultAs(false);
     }
 
@@ -325,50 +335,46 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         assertFalse(mRttHandler.hasMessages(EVENT_START_RTT_CHECK));
     }
 
-    private void verifyResultAs(boolean expected) {
-        Message msg = mTestLooper.nextMessage();
-        assertNotNull(msg);
-        assertTrue(msg.obj instanceof QnsAsyncResult);
-        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
-        assertEquals(expected, ar.mResult);
+    private void verifyResultAs(boolean expected) throws InterruptedException {
+        assertTrue(mLatch.await(500, TimeUnit.MILLISECONDS));
+        assertNotNull(mAsyncResult);
+        assertEquals(expected, mAsyncResult.mResult);
     }
 
     private String[] getCommandOutputs() {
-        String[] outputs =
-                new String[] {
-                    "PING www.google.com (172.217.163.196) from 172.20.10.2 wlan0: 32(60) bytes of"
-                            + " data.\n"
-                            + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=1"
-                            + " ttl=53 time=119 ms\n"
-                            + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=2"
-                            + " ttl=53 time=110 ms\n"
-                            + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=3"
-                            + " ttl=53 time=66.8 ms\n"
-                            + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=4"
-                            + " ttl=53 time=63.7 ms\n"
-                            + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=5"
-                            + " ttl=53 time=49.9 ms\n"
-                            + "\n"
-                            + "--- www.google.com ping statistics ---\n"
-                            + "5 packets transmitted, 5 received, 0% packet loss, time 805ms\n"
-                            + "rtt min/avg/max/mdev = 49.952/80.066/119.469/27.539 ms",
-                    "PING maa05s21-in-x04.1e100.net(maa05s21-in-x04.1e100.net) 56 data bytes\n"
-                            + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=1 ttl=56 time=56.0"
-                            + " ms\n"
-                            + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=2 ttl=56 time=54.3"
-                            + " ms\n"
-                            + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=3 ttl=56 time=51.2"
-                            + " ms\n"
-                            + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=4 ttl=56 time=89.2"
-                            + " ms\n"
-                            + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=5 ttl=56 time=88.0"
-                            + " ms\n"
-                            + "\n"
-                            + "--- maa05s21-in-x04.1e100.net ping statistics ---\n"
-                            + "5 packets transmitted, 5 received, 0% packet loss, time 807ms\n"
-                            + "rtt min/avg/max/mdev = 51.282/65.793/89.228/17.110 ms"
-                };
-        return outputs;
+        return new String[] {
+            "PING www.google.com (172.217.163.196) from 172.20.10.2 wlan0: 32(60) bytes of"
+                    + " data.\n"
+                    + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=1"
+                    + " ttl=53 time=119 ms\n"
+                    + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=2"
+                    + " ttl=53 time=110 ms\n"
+                    + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=3"
+                    + " ttl=53 time=66.8 ms\n"
+                    + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=4"
+                    + " ttl=53 time=63.7 ms\n"
+                    + "40 bytes from maa05s06-in-f4.1e100.net (172.217.163.196): icmp_seq=5"
+                    + " ttl=53 time=49.9 ms\n"
+                    + "\n"
+                    + "--- www.google.com ping statistics ---\n"
+                    + "5 packets transmitted, 5 received, 0% packet loss, time 805ms\n"
+                    + "rtt min/avg/max/mdev = 49.952/80.066/119.469/27.539 ms",
+            "PING maa05s21-in-x04.1e100.net(maa05s21-in-x04.1e100.net) 56 data bytes\n"
+                    + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=1 ttl=56 time=56.0"
+                    + " ms\n"
+                    + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=2 ttl=56 time=54.3"
+                    + " ms\n"
+                    + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=3 ttl=56 time=51.2"
+                    + " ms\n"
+                    + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=4 ttl=56 time=89.2"
+                    + " ms\n"
+                    + "64 bytes from maa05s21-in-x04.1e100.net: icmp_seq=5 ttl=56 time=88.0"
+                    + " ms\n"
+                    + "\n"
+                    + "--- maa05s21-in-x04.1e100.net ping statistics ---\n"
+                    + "5 packets transmitted, 5 received, 0% packet loss, time 807ms\n"
+                    + "rtt min/avg/max/mdev = 51.282/65.793/89.228/17.110 ms"
+        };
     }
 
     private void captureNetworkCallback() {

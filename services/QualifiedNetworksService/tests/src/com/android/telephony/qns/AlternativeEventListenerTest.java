@@ -17,8 +17,8 @@
 package com.android.telephony.qns;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.when;
 
-import android.content.Context;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
@@ -51,12 +51,12 @@ public class AlternativeEventListenerTest extends QnsTest {
     private Handler mHandler;
     CountDownLatch mLatch;
     int[] mThresholds;
-    QnsTelephonyListener mQtListener;
+    // QnsTelephonyListener mQtListener;
 
     class AltEventProvider extends AlternativeEventProvider {
 
-        AltEventProvider(Context context, int slotId) {
-            super(context, slotId);
+        AltEventProvider(AlternativeEventListener altEventListener, int slotId) {
+            super(altEventListener, slotId);
         }
 
         @Override
@@ -74,7 +74,6 @@ public class AlternativeEventListenerTest extends QnsTest {
                 mLatch.countDown();
             }
         }
-
     }
 
     @Before
@@ -84,15 +83,13 @@ public class AlternativeEventListenerTest extends QnsTest {
         mTestLooper = new TestLooper();
         Mockito.when(sMockContext.getMainLooper()).thenReturn(mTestLooper.getLooper());
         mHandler = new Handler(mTestLooper.getLooper());
-        mListener = AlternativeEventListener.getInstance(sMockContext, SLOT_INDEX);
-        mAltEventProvider = new AltEventProvider(sMockContext, SLOT_INDEX);
-        mQtListener = QnsTelephonyListener.getInstance(sMockContext, 0);
-        // mListener.setEventProvider(mAltEventProvider);
+        mListener = new AlternativeEventListener(sMockContext, mMockQnsTelephonyListener, 0);
+        mAltEventProvider = new AltEventProvider(mMockAltEventListener, SLOT_INDEX);
+        mListener.setEventProvider(mAltEventProvider);
     }
 
     @After
     public void tearDown() {
-        mQtListener.close();
         mListener.close();
     }
 
@@ -367,8 +364,13 @@ public class AlternativeEventListenerTest extends QnsTest {
                                         .setEntryName("ims")
                                         .build())
                         .build();
-        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(emergencyDataStatus);
-        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS))
+                .thenReturn(emergencyDataStatus);
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatus);
         // Test1:
         mAltEventProvider.notifyCallInfo(
                 1, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_DIALING);
@@ -400,7 +402,10 @@ public class AlternativeEventListenerTest extends QnsTest {
                                         .setEntryName("ims")
                                         .build())
                         .build();
-        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+        Mockito.clearInvocations(mMockQnsTelephonyListener);
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatus);
 
         mAltEventProvider.notifyCallInfo(
                 1,
@@ -425,7 +430,10 @@ public class AlternativeEventListenerTest extends QnsTest {
                                         .setEntryName("sos")
                                         .build())
                         .build();
-        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(emergencyDataStatus);
+        Mockito.clearInvocations(mMockQnsTelephonyListener);
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_EIMS))
+                .thenReturn(emergencyDataStatus);
         imsDataStatus =
                 new PreciseDataConnectionState.Builder()
                         .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
@@ -438,7 +446,10 @@ public class AlternativeEventListenerTest extends QnsTest {
                                         .setEntryName("ims")
                                         .build())
                         .build();
-        mQtListener.mTelephonyListener.onPreciseDataConnectionStateChanged(imsDataStatus);
+        Mockito.clearInvocations(mMockQnsTelephonyListener);
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                        NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatus);
         mAltEventProvider.notifyCallInfo(
                 2, QnsConstants.CALL_TYPE_EMERGENCY, PreciseCallState.PRECISE_CALL_STATE_ACTIVE);
         msg = mTestLooper.nextMessage();
@@ -476,5 +487,4 @@ public class AlternativeEventListenerTest extends QnsTest {
         assertNotNull(mThresholds);
         assertArrayEquals(ecnoThresholds, mThresholds);
     }
-
 }

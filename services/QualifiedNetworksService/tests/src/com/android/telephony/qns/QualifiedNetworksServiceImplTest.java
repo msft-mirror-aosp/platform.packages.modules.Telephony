@@ -16,22 +16,18 @@
 
 package com.android.telephony.qns;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
-
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
@@ -46,7 +42,6 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.MockitoSession;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -54,62 +49,99 @@ import java.util.List;
 
 public class QualifiedNetworksServiceImplTest extends QnsTest {
 
-    QualifiedNetworksServiceImpl mQualifiedNetworksService;
     private static final int TEST_QNS_CONFIGURATION_LOADED = 1;
     private static final int TEST_QUALIFIED_NETWORKS_CHANGED = 2;
-    private static final int TEST_QNS_CONFIGURATION_CHANGED = 2;
-    MockitoSession mMockitoSession;
-    @Mock private QnsCarrierConfigManager mMockConfigManager;
-    @Mock private QnsProvisioningListener mMockProvisioningListener;
-    @Mock private QnsTelephonyListener mMockQnsTelephonyListener;
-    private final int mSlotIndex = 0;
+    private static final int TEST_QNS_CONFIGURATION_CHANGED = 3;
+    private int mSlotIndex = 0;
     @Mock private AccessNetworkEvaluator mMockAne;
+
+    HandlerThread mHandlerThread;
+    QualifiedNetworksServiceImpl mQualifiedNetworksService;
+    QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl mProvider;
+
+    private class TestHandlerThread extends HandlerThread {
+
+        TestHandlerThread() {
+            super("");
+        }
+
+        @Override
+        protected void onLooperPrepared() {
+            super.onLooperPrepared();
+            mProvider =
+                    (QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl)
+                            mQualifiedNetworksService.onCreateNetworkAvailabilityProvider(
+                                    mSlotIndex);
+            setReady(true);
+        }
+    }
+
+    private class TestQnsComponents extends QnsComponents {
+
+        TestQnsComponents(int slotId) {
+            super(
+                    sMockContext,
+                    mMockAltEventListener,
+                    mMockCellNetStatusTracker,
+                    mMockCellularQm,
+                    mMockIwlanNetworkStatusTracker,
+                    mMockQnsImsManager,
+                    mMockQnsConfigManager,
+                    mMockQnsEventDispatcher,
+                    mMockQnsProvisioningListener,
+                    mMockQnsTelephonyListener,
+                    mMockWifiBm,
+                    mMockWifiQm,
+                    slotId);
+        }
+
+        @Override
+        public synchronized void createQnsComponents(int slotId) {
+            // always use mocked components for testing.
+        }
+    }
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
         when(mMockTelephonyManager.getActiveModemCount()).thenReturn(2);
-        mMockitoSession =
-                mockitoSession()
-                        .mockStatic(QnsCarrierConfigManager.class)
-                        .mockStatic(QnsTelephonyListener.class)
-                        .mockStatic(QnsProvisioningListener.class)
-                        .startMocking();
         mQualifiedNetworksService = new QualifiedNetworksServiceImpl();
+        mQualifiedNetworksService.mHandlerThread = new HandlerThread("QnsImplTest");
+        mQualifiedNetworksService.mHandlerThread.start();
+        mQualifiedNetworksService.mQnsComponents = new TestQnsComponents(mSlotIndex);
         Field f = QualifiedNetworksServiceImpl.class.getDeclaredField("mContext");
         f.setAccessible(true);
         f.set(mQualifiedNetworksService, sMockContext);
-
-        lenient()
-                .when(QnsCarrierConfigManager.getInstance(isA(Context.class), anyInt()))
-                .thenReturn(mMockConfigManager);
-        lenient()
-                .when(QnsTelephonyListener.getInstance(isA(Context.class), anyInt()))
-                .thenReturn(mMockQnsTelephonyListener);
-        lenient()
-                .when(QnsProvisioningListener.getInstance(isA(Context.class), anyInt()))
-                .thenReturn(mMockProvisioningListener);
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
+        if (mHandlerThread != null) {
+            mHandlerThread.quit();
+        }
         mQualifiedNetworksService.onDestroy();
-        waitFor(100); // close triggers on different thread.
-        mMockitoSession.finishMocking();
+    }
+
+    private void createNap() {
+        mHandlerThread = new TestHandlerThread();
+        mHandlerThread.start();
+        waitUntilReady();
     }
 
     @Test
     public void testOnCreateNetworkAvailabilityProvider() {
-        mQualifiedNetworksService.onCreateNetworkAvailabilityProvider(0);
+
+        // Valid slot
+        mSlotIndex = 0;
+        createNap();
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
+        mHandlerThread.quit();
 
         // Invalid slot
-        mQualifiedNetworksService.onCreateNetworkAvailabilityProvider(3);
+        mSlotIndex = 3;
+        createNap();
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
-
-        mQualifiedNetworksService.onDestroy();
-        assertTrue(mQualifiedNetworksService.mProviderMap.isEmpty());
     }
 
     @Test
@@ -136,10 +168,10 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         supportedNetCapabilities2.add(NetworkCapabilities.NET_CAPABILITY_IMS);
         supportedNetCapabilities2.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
 
-        when(mMockConfigManager.getQnsSupportedNetCapabilities())
+        when(mMockQnsConfigManager.getQnsSupportedNetCapabilities())
                 .thenReturn(supportedNetCapabilities1)
                 .thenReturn(supportedNetCapabilities2);
-        when(mMockConfigManager.getQnsSupportedTransportType(anyInt()))
+        when(mMockQnsConfigManager.getQnsSupportedTransportType(anyInt()))
                 .thenAnswer(
                         (invocation) -> {
                             if (NetworkCapabilities.NET_CAPABILITY_XCAP
@@ -149,25 +181,24 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
                             return QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH;
                         });
 
-        QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
-                mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
-
+        createNap();
+        waitFor(200); // registerForConfigurationLoaded is called on different thread.
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
-        verify(mMockConfigManager)
+        verify(mMockQnsConfigManager)
                 .registerForConfigurationLoaded(
                         capture.capture(), eq(TEST_QNS_CONFIGURATION_LOADED));
         Handler configHandler = capture.getValue();
         configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
         waitFor(3000); // ANEs take time to create.
 
-        assertEquals(3, provider.mEvaluators.size());
+        assertEquals(3, mProvider.mEvaluators.size());
 
         configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
         waitFor(2000); // ANEs take time to create.
 
-        assertEquals(1, provider.mEvaluators.size());
+        assertEquals(1, mProvider.mEvaluators.size());
 
-        provider.close();
+        mProvider.close();
     }
 
     @Test
@@ -212,46 +243,40 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
             builder.setThrottleExpiryTimeMillis(timer);
         }
 
-        QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
-                mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
-        provider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_IMS, mMockAne);
-        provider.reportThrottleStatusChanged(List.of(builder.build()));
+        createNap();
+        mProvider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_IMS, mMockAne);
+        mProvider.reportThrottleStatusChanged(List.of(builder.build()));
     }
 
     @Test
-    public void testOnConfigurationChanged() {
-        QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
-                mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
-        provider.mConfigHandler.handleMessage(
-                Message.obtain(provider.mConfigHandler, TEST_QNS_CONFIGURATION_LOADED, null));
+    public void testOnConfigurationLoaded() {
+        createNap();
+        Message.obtain(mProvider.mConfigHandler, TEST_QNS_CONFIGURATION_LOADED, null)
+                .sendToTarget();
+        waitFor(100);
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
 
-        verify(mMockConfigManager)
+        verify(mMockQnsConfigManager)
                 .registerForConfigurationLoaded(
                         capture.capture(), eq(TEST_QNS_CONFIGURATION_LOADED));
 
         Handler configHandler = capture.getValue();
+        assertEquals(mProvider.mConfigHandler, configHandler);
         configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_CHANGED);
-        provider.mConfigHandler.handleMessage(
-                Message.obtain(provider.mConfigHandler, TEST_QNS_CONFIGURATION_CHANGED, null));
-        provider.mConfigHandler.handleMessage(
-                Message.obtain(provider.mConfigHandler, TEST_QUALIFIED_NETWORKS_CHANGED, null));
+        // ToDo: implementation of onConfigurationChanged()
     }
 
     @Test
     public void testQnsChangedHandlerEvent() {
-        QualifiedNetworksServiceImpl.NetworkAvailabilityProviderImpl provider =
-                mQualifiedNetworksService.new NetworkAvailabilityProviderImpl(mSlotIndex);
+        createNap();
         QualifiedNetworksInfo info =
                 new QualifiedNetworksInfo(
                         NetworkCapabilities.NET_CAPABILITY_IMS, new ArrayList<>());
         info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
         QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
-        provider.mHandler.handleMessage(
-                Message.obtain(provider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar));
+        Message.obtain(mProvider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar).sendToTarget();
+        waitFor(100);
         assertEquals(info.getNetCapability(), NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(List.of(AccessNetworkType.EUTRAN), info.getAccessNetworkTypes());
-        provider.mHandler.handleMessage(
-                Message.obtain(provider.mHandler, TEST_QNS_CONFIGURATION_LOADED, ar));
     }
 }

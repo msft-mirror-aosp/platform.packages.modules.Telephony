@@ -17,8 +17,6 @@
 package com.android.telephony.qns;
 
 import android.annotation.IntDef;
-import android.annotation.NonNull;
-import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -33,7 +31,6 @@ import com.android.internal.annotations.VisibleForTesting;
 
 class DataConnectionStatusTracker {
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = 11001;
-    protected final Context mContext;
     protected final int mSlotIndex;
     private final String mLogTag;
     private final int mNetCapability;
@@ -80,8 +77,19 @@ class DataConnectionStatusTracker {
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
     private SparseArray<ApnSetting> mLastApnSettings = new SparseArray<>();
 
+    /**
+     * Constructor to instantiate CellularQualityMonitor
+     *
+     * @param qnsTelephonyListener QnsTelephonyListener instance
+     * @param looper looper to bind class' handler.
+     * @param slotIndex slot index
+     * @param netCapability integer value of network capability
+     */
     DataConnectionStatusTracker(
-            @NonNull Context context, Looper looper, int slotIndex, int netCapability) {
+            QnsTelephonyListener qnsTelephonyListener,
+            Looper looper,
+            int slotIndex,
+            int netCapability) {
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
@@ -91,13 +99,12 @@ class DataConnectionStatusTracker {
                         + "_"
                         + QnsUtils.getNameOfNetCapability(netCapability);
 
-        mContext = context;
         mSlotIndex = slotIndex;
         mNetCapability = netCapability;
 
         mHandler = new DataConnectionStatusTrackerHandler(looper);
         mDataConnectionStatusRegistrants = new QnsRegistrantList();
-        mQnsTelephonyListener = QnsTelephonyListener.getInstance(context, slotIndex);
+        mQnsTelephonyListener = qnsTelephonyListener;
         mQnsTelephonyListener.registerPreciseDataConnectionStateChanged(
                 mNetCapability, mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED, null, true);
     }

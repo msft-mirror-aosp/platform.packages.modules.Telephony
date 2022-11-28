@@ -29,7 +29,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.net.NetworkCapabilities;
-import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CellSignalStrengthCdma;
@@ -93,27 +92,12 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
     Executor mExecutor = Runnable::run;
 
-    HandlerThread mHandlerThread =
-            new HandlerThread("") {
-                @Override
-                protected void onLooperPrepared() {
-                    super.onLooperPrepared();
-                    mCellularQualityMonitor =
-                            (CellularQualityMonitor)
-                                    QualityMonitor.getInstance(
-                                            sMockContext,
-                                            AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                                            mSlotIndex);
-                    setReady(true);
-                }
-            };
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
-        mHandlerThread.start();
-        waitUntilReady();
+        mCellularQualityMonitor =
+                new CellularQualityMonitor(sMockContext, mMockQnsTelephonyListener, mSlotIndex);
         mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(mExecutor);
 
@@ -446,40 +430,40 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
     @Test
     public void testSameApnDiffThresholdsDiffMeasurementType() {
-        int[] thresholds_rsrp = new int[] {-110, -100};
-        int[] thresholds_rssnr = new int[] {-11, -10};
-        int[] thresholds_rsrq = new int[] {-20};
+        int[] thresholdsRsrp = new int[] {-110, -100};
+        int[] thresholdsRssnr = new int[] {-11, -10};
+        int[] thresholdsRsrq = new int[] {-20};
         int apn1 = NetworkCapabilities.NET_CAPABILITY_IMS;
         Threshold[] t =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
                             SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP,
-                            thresholds_rsrp[0],
+                            thresholdsRsrp[0],
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
                             SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP,
-                            thresholds_rsrp[1],
+                            thresholdsRsrp[1],
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
                             SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR,
-                            thresholds_rssnr[0],
+                            thresholdsRssnr[0],
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
                             SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR,
-                            thresholds_rssnr[1],
+                            thresholdsRssnr[1],
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER),
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.EUTRAN,
                             SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ,
-                            thresholds_rsrq[0],
+                            thresholdsRsrq[0],
                             QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                             QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
                 };
@@ -489,13 +473,13 @@ public final class CellularQualityMonitorTest extends QnsTest {
         for (SignalThresholdInfo stInfo : stInfoList) {
             if (stInfo.getSignalMeasurementType()
                     == SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR) {
-                Assert.assertArrayEquals(thresholds_rssnr, stInfo.getThresholds());
+                Assert.assertArrayEquals(thresholdsRssnr, stInfo.getThresholds());
             } else if (stInfo.getSignalMeasurementType()
                     == SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP) {
-                Assert.assertArrayEquals(thresholds_rsrp, stInfo.getThresholds());
+                Assert.assertArrayEquals(thresholdsRsrp, stInfo.getThresholds());
             } else if (stInfo.getSignalMeasurementType()
                     == SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ) {
-                Assert.assertArrayEquals(thresholds_rsrq, stInfo.getThresholds());
+                Assert.assertArrayEquals(thresholdsRsrq, stInfo.getThresholds());
             } else {
                 Assert.fail();
             }
@@ -736,11 +720,8 @@ public final class CellularQualityMonitorTest extends QnsTest {
 
     @After
     public void tearDown() {
-        if (mHandlerThread != null) {
-            mHandlerThread.quit();
-        }
         if (mCellularQualityMonitor != null) {
-            mCellularQualityMonitor.dispose();
+            mCellularQualityMonitor.close();
         }
     }
 }

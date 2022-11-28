@@ -75,6 +75,7 @@ class AccessNetworkEvaluator {
     private final HandlerThread mHandlerThread;
     private final RestrictManager mRestrictManager;
     protected QnsCarrierConfigManager mConfigManager;
+    protected QnsComponents mQnsComponents;
     protected QualityMonitor mWifiQualityMonitor;
     protected QualityMonitor mCellularQualityMonitor;
     protected CellularNetworkStatusTracker mCellularNetworkStatusTracker;
@@ -112,20 +113,20 @@ class AccessNetworkEvaluator {
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();
 
-    AccessNetworkEvaluator(int slotIndex, int netCapability, Context context) {
-
+    AccessNetworkEvaluator(QnsComponents qnsComponents, int netCapability, int slotIndex) {
+        mNetCapability = netCapability;
+        mQnsComponents = qnsComponents;
+        mSlotIndex = slotIndex;
+        mContext = mQnsComponents.getContext();
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + AccessNetworkEvaluator.class.getSimpleName()
                         + "_"
-                        + slotIndex
+                        + mSlotIndex
                         + "_"
                         + QnsUtils.getNameOfNetCapability(netCapability);
         // load configurations & sort by purpose.
-        mSlotIndex = slotIndex;
-        mNetCapability = netCapability;
-        mContext = context;
 
         log("created AccessNetworkEvaluator");
 
@@ -136,38 +137,36 @@ class AccessNetworkEvaluator {
         mHandler = new EvaluatorEventHandler(mHandlerThread.getLooper());
         Executor executor = new QnsUtils.QnsExecutor(mHandler);
 
-        mConfigManager = QnsCarrierConfigManager.getInstance(context, slotIndex);
-        mAltEventListener = AlternativeEventListener.getInstance(context, slotIndex);
-        mQnsProvisioningListener = QnsProvisioningListener.getInstance(context, slotIndex);
-        mIwlanNetworkStatusTracker = IwlanNetworkStatusTracker.getInstance(context);
+        mConfigManager = mQnsComponents.getQnsCarrierConfigManager(mSlotIndex);
+        mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
+        mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
+        mIwlanNetworkStatusTracker = mQnsComponents.getIwlanNetworkStatusTracker();
         mDataConnectionStatusTracker =
                 new DataConnectionStatusTracker(
-                        mContext, mHandlerThread.getLooper(), mSlotIndex, mNetCapability);
-        mQnsImsManager = QnsImsManager.getInstance(context, slotIndex);
-        mWifiBackhaulMonitor = WifiBackhaulMonitor.getInstance(mContext, mSlotIndex);
+                        mQnsComponents.getQnsTelephonyListener(mSlotIndex),
+                        mHandlerThread.getLooper(),
+                        mSlotIndex,
+                        mNetCapability);
+        mQnsImsManager = mQnsComponents.getQnsImsManager(mSlotIndex);
+        mWifiBackhaulMonitor = mQnsComponents.getWifiBackhaulMonitor(mSlotIndex);
 
         // Pre-Conditions
-        mCellularNetworkStatusTracker =
-                CellularNetworkStatusTracker.getInstance(context, slotIndex);
-        mQnsEventDispatcher = QnsEventDispatcher.getInstance(context, slotIndex);
+        mCellularNetworkStatusTracker = mQnsComponents.getCellularNetworkStatusTracker(mSlotIndex);
+        mQnsEventDispatcher = mQnsComponents.getQnsEventDispatcher(mSlotIndex);
         mThresholdListener = new ThresholdListener(executor);
 
         // Post-Conditions
-        mWifiQualityMonitor =
-                QualityMonitor.getInstance(
-                        context, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, slotIndex);
-        mCellularQualityMonitor =
-                QualityMonitor.getInstance(
-                        context, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, slotIndex);
+        mWifiQualityMonitor = mQnsComponents.getWifiQualityMonitor();
+        mCellularQualityMonitor = mQnsComponents.getCellularQualityMonitor(mSlotIndex);
 
         // Evaluates
         mRestrictManager =
                 new RestrictManager(
-                        mContext,
+                        mQnsComponents,
                         mHandler.getLooper(),
-                        mSlotIndex,
                         mNetCapability,
-                        mDataConnectionStatusTracker);
+                        mDataConnectionStatusTracker,
+                        mSlotIndex);
 
         mHandler.post(() -> buildAccessNetworkSelectionPolicy(false));
         initLastNotifiedQualifiedNetwork();
@@ -177,45 +176,36 @@ class AccessNetworkEvaluator {
 
     @VisibleForTesting
     AccessNetworkEvaluator(
-            int slotIndex,
+            QnsComponents qnsComponents,
             int netCapability,
-            Context context,
             RestrictManager restrictManager,
-            QnsCarrierConfigManager configManager,
-            QualityMonitor wifiQualityMonitor,
-            QualityMonitor cellularQualityMonitor,
-            CellularNetworkStatusTracker cellularNetworkStatusTracker,
-            IwlanNetworkStatusTracker iwlanNetworkStatusTracker,
             DataConnectionStatusTracker dataConnectionStatusTracker,
-            QnsEventDispatcher qnsEventDispatcher,
-            AlternativeEventListener altEventListener,
-            QnsProvisioningListener qnsProvisioningListener,
-            QnsImsManager qnsImsManager,
-            WifiBackhaulMonitor wifiBackhaulMonitor) {
+            int slotIndex) {
+        mQnsComponents = qnsComponents;
+        mSlotIndex = slotIndex;
         mLogTag =
                 QnsConstants.QNS_TAG
                         + "_"
                         + AccessNetworkEvaluator.class.getSimpleName()
                         + "_"
-                        + slotIndex
+                        + mSlotIndex
                         + "_"
                         + QnsUtils.getNameOfNetCapability(netCapability);
         // load configurations & sort by purpose.
-        mSlotIndex = slotIndex;
         mNetCapability = netCapability;
-        mContext = context;
+        mContext = mQnsComponents.getContext();
         mRestrictManager = restrictManager;
-        mConfigManager = configManager;
-        mWifiQualityMonitor = wifiQualityMonitor;
-        mCellularQualityMonitor = cellularQualityMonitor;
-        mCellularNetworkStatusTracker = cellularNetworkStatusTracker;
-        mIwlanNetworkStatusTracker = iwlanNetworkStatusTracker;
+        mConfigManager = mQnsComponents.getQnsCarrierConfigManager(mSlotIndex);
+        mWifiQualityMonitor = mQnsComponents.getWifiQualityMonitor();
+        mCellularQualityMonitor = mQnsComponents.getCellularQualityMonitor(mSlotIndex);
+        mCellularNetworkStatusTracker = mQnsComponents.getCellularNetworkStatusTracker(mSlotIndex);
+        mIwlanNetworkStatusTracker = mQnsComponents.getIwlanNetworkStatusTracker();
         mDataConnectionStatusTracker = dataConnectionStatusTracker;
-        mQnsEventDispatcher = qnsEventDispatcher;
-        mAltEventListener = altEventListener;
-        mQnsProvisioningListener = qnsProvisioningListener;
-        mQnsImsManager = qnsImsManager;
-        mWifiBackhaulMonitor = wifiBackhaulMonitor;
+        mQnsEventDispatcher = mQnsComponents.getQnsEventDispatcher(mSlotIndex);
+        mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
+        mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
+        mQnsImsManager = mQnsComponents.getQnsImsManager(mSlotIndex);
+        mWifiBackhaulMonitor = mQnsComponents.getWifiBackhaulMonitor(mSlotIndex);
         mHandlerThread =
                 new HandlerThread(AccessNetworkEvaluator.class.getSimpleName() + mNetCapability);
         mHandlerThread.start();
@@ -249,20 +239,23 @@ class AccessNetworkEvaluator {
                 && evaluateAvailability(
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
                         isAllowed(AccessNetworkConstants.TRANSPORT_TYPE_WWAN))) {
-            mHandler.post(() -> evaluate());
+            mHandler.post(this::evaluate);
         }
     }
 
     void close() {
         log("close");
+        mHandler.post(this::onClose);
         mHandlerThread.quitSafely();
+    }
+
+    private void onClose() {
         notifyForQualifiedNetworksChanged(getInitialAccessNetworkTypes());
         initLastNotifiedQualifiedNetwork();
         unregisterListeners();
         mQualifiedNetworksChangedRegistrants.removeAll();
         mDataConnectionStatusTracker.close();
         mRestrictManager.close();
-        mWifiBackhaulMonitor.close();
     }
 
     void registerForQualifiedNetworksChanged(Handler h, int what) {
@@ -330,11 +323,12 @@ class AccessNetworkEvaluator {
     }
 
     private void initSettings() {
-        mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
-        mSettingWfcEnabled = QnsUtils.isWfcEnabled(mContext, mSlotIndex, false);
-        mSettingWfcMode = QnsUtils.getWfcMode(mContext, mSlotIndex, false);
-        mSettingWfcRoamingEnabled = QnsUtils.isWfcEnabled(mContext, mSlotIndex, true);
-        mSettingWfcRoamingMode = QnsUtils.getWfcMode(mContext, mSlotIndex, true);
+        mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mQnsImsManager);
+        mSettingWfcEnabled = QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, false);
+        mSettingWfcMode = QnsUtils.getWfcMode(mQnsImsManager, false);
+        mSettingWfcRoamingEnabled =
+                QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, true);
+        mSettingWfcRoamingMode = QnsUtils.getWfcMode(mQnsImsManager, true);
         mAllowIwlanForWfcActivation = false;
         log(
                 "WfcSettings. mWfcPlatformEnabled:"
@@ -941,27 +935,28 @@ class AccessNetworkEvaluator {
 
     private void validateWfcSettingsAndUpdate() {
         boolean roaming = (mCoverage == QnsConstants.COVERAGE_ROAM);
-        boolean wfcSetting = QnsUtils.isWfcEnabled(mContext, mSlotIndex, roaming);
+        boolean wfcSetting =
+                QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, roaming);
         if (roaming && mSettingWfcRoamingEnabled != wfcSetting) {
             log("validateWfcSettingsAndUpdate, found wfc roaming setting mismatch");
             if (wfcSetting) {
                 mWfcPlatformEnabled = true;
                 mSettingWfcRoamingEnabled = true;
             } else {
-                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
+                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mQnsImsManager);
                 mSettingWfcRoamingEnabled = false;
             }
-            mSettingWfcRoamingMode = QnsUtils.getWfcMode(mContext, mSlotIndex, true);
+            mSettingWfcRoamingMode = QnsUtils.getWfcMode(mQnsImsManager, true);
         } else if (!roaming && mSettingWfcEnabled != wfcSetting) {
             log("validateWfcSettingsAndUpdate, found wfc setting mismatch");
             if (wfcSetting) {
                 mWfcPlatformEnabled = true;
                 mSettingWfcEnabled = true;
             } else {
-                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mContext, mSlotIndex);
+                mWfcPlatformEnabled = QnsUtils.isWfcEnabledByPlatform(mQnsImsManager);
                 mSettingWfcEnabled = false;
             }
-            mSettingWfcMode = QnsUtils.getWfcMode(mContext, mSlotIndex, false);
+            mSettingWfcMode = QnsUtils.getWfcMode(mQnsImsManager, false);
         }
     }
 
@@ -1004,7 +999,8 @@ class AccessNetworkEvaluator {
 
             if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                     && (mQnsEventDispatcher.isAirplaneModeToggleOn()
-                            || !QnsTelephonyListener.getInstance(mContext, mSlotIndex)
+                            || !mQnsComponents
+                                    .getQnsTelephonyListener(mSlotIndex)
                                     .getLastQnsTelephonyInfo()
                                     .isCellularAvailable())
                     && mIwlanNetworkStatusTracker.isInternationalRoaming(mContext, mSlotIndex)) {
@@ -1746,7 +1742,8 @@ class AccessNetworkEvaluator {
         if (mAnspPolicyMap == null || bForceUpdate) {
             log("Building list of AccessNetworkSelectionPolicy.");
             mAnspPolicyMap =
-                    AccessNetworkSelectionPolicyBuilder.build(mContext, mSlotIndex, mNetCapability);
+                    AccessNetworkSelectionPolicyBuilder.build(mConfigManager, mNetCapability);
+
             if (DBG) {
                 mAnspPolicyMap
                         .values()

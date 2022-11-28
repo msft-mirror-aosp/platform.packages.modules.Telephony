@@ -34,7 +34,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 
@@ -54,11 +53,10 @@ import javax.xml.xpath.XPathFactory;
 @RunWith(JUnit4.class)
 public class ConfigXmlTest {
 
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         MockitoAnnotations.initMocks(this);
         mContext = spy(ApplicationProvider.getApplicationContext());
     }
@@ -99,8 +97,7 @@ public class ConfigXmlTest {
     private boolean verifyWithXmlQuery(Document doc, String queryIntArray)
             throws XPathExpressionException, TransformerException {
         XPath xpath = XPathFactory.newInstance().newXPath();
-        NodeList nodeList = (NodeList) xpath.evaluate(queryIntArray, doc,
-                XPathConstants.NODESET);
+        NodeList nodeList = (NodeList) xpath.evaluate(queryIntArray, doc, XPathConstants.NODESET);
         if (nodeList == null || nodeList.getLength() <= 0) {
             return true;
         }

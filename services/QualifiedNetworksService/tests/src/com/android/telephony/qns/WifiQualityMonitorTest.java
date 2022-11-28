@@ -83,29 +83,17 @@ public class WifiQualityMonitorTest {
         mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
         mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(mExecutor);
-        mWifiQualityMonitor =
-                (WifiQualityMonitor)
-                        QualityMonitor.getInstance(
-                                mContext, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, 0);
-    }
-
-    @Test
-    public void testGetInstance() {
-        WifiQualityMonitor wqm_slot1 =
-                (WifiQualityMonitor)
-                        QualityMonitor.getInstance(
-                                mContext, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, 1);
-        Assert.assertEquals(mWifiQualityMonitor, wqm_slot1);
+        mWifiQualityMonitor = new WifiQualityMonitor(mContext);
     }
 
     @Test
     public void testGetCurrentQuality() {
         when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
-        int recv_rssi =
+        int receiveRssi =
                 mWifiQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Assert.assertEquals(mSetRssi, recv_rssi);
+        Assert.assertEquals(mSetRssi, receiveRssi);
     }
 
     @Test
@@ -246,7 +234,7 @@ public class WifiQualityMonitorTest {
                         -80,
                         QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
                         QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
-        Threshold[] ths3 =
+        mThs3 =
                 new Threshold[] {
                     new Threshold(
                             AccessNetworkConstants.AccessNetworkType.IWLAN,
@@ -268,7 +256,7 @@ public class WifiQualityMonitorTest {
         mWifiQualityMonitor.registerThresholdChange(
                 mThresholdListener, NetworkCapabilities.NET_CAPABILITY_EIMS, mThs2, 0);
         mWifiQualityMonitor.registerThresholdChange(
-                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_MMS, ths3, 0);
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_MMS, mThs3, 0);
         Intent i = new Intent();
         i.setAction(WifiManager.RSSI_CHANGED_ACTION);
         i.putExtra(WifiManager.EXTRA_NEW_RSSI, -75);
@@ -278,6 +266,6 @@ public class WifiQualityMonitorTest {
 
     @After
     public void tearDown() {
-        mWifiQualityMonitor.dispose();
+        mWifiQualityMonitor.close();
     }
 }
