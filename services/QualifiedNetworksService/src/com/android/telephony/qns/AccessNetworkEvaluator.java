@@ -83,6 +83,7 @@ class AccessNetworkEvaluator {
     protected DataConnectionStatusTracker mDataConnectionStatusTracker;
     protected QnsEventDispatcher mQnsEventDispatcher;
     protected AlternativeEventListener mAltEventListener;
+    protected QnsCallStatusTracker mCallStatusTracker;
     protected QnsProvisioningListener mQnsProvisioningListener;
     protected QnsImsManager mQnsImsManager;
     protected WifiBackhaulMonitor mWifiBackhaulMonitor;
@@ -139,6 +140,7 @@ class AccessNetworkEvaluator {
 
         mConfigManager = mQnsComponents.getQnsCarrierConfigManager(mSlotIndex);
         mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
+        mCallStatusTracker = mQnsComponents.getQnsCallStatusTracker(mSlotIndex);
         mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
         mIwlanNetworkStatusTracker = mQnsComponents.getIwlanNetworkStatusTracker();
         mDataConnectionStatusTracker =
@@ -203,6 +205,7 @@ class AccessNetworkEvaluator {
         mDataConnectionStatusTracker = dataConnectionStatusTracker;
         mQnsEventDispatcher = mQnsComponents.getQnsEventDispatcher(mSlotIndex);
         mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
+        mCallStatusTracker = mQnsComponents.getQnsCallStatusTracker(mSlotIndex);
         mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
         mQnsImsManager = mQnsComponents.getQnsImsManager(mSlotIndex);
         mWifiBackhaulMonitor = mQnsComponents.getWifiBackhaulMonitor(mSlotIndex);
@@ -359,7 +362,7 @@ class AccessNetworkEvaluator {
                 mNetCapability, mHandler, EVENT_QNS_TELEPHONY_INFO_CHANGED);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.registerCallTypeChangedListener(
+            mCallStatusTracker.registerCallTypeChangedListener(
                     mNetCapability, mHandler, EVENT_SET_CALL_TYPE, null);
         }
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
@@ -405,7 +408,7 @@ class AccessNetworkEvaluator {
         mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.unregisterCallTypeChangedListener(mNetCapability, mHandler);
+            mCallStatusTracker.unregisterCallTypeChangedListener(mNetCapability, mHandler);
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
             }
@@ -713,10 +716,6 @@ class AccessNetworkEvaluator {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
                 needEvaluate = true;
                 initLastNotifiedQualifiedNetwork();
-                if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
-                    if (mAltEventListener != null) mAltEventListener.clearNormalCallInfo();
-                }
-                mCallType = QnsConstants.CALL_TYPE_IDLE;
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED:
                 mHandler.post(() -> onDataConnectionConnected(info.getTransportType()));
