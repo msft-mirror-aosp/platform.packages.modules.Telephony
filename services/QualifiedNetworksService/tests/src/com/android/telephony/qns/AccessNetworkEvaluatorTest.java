@@ -977,12 +977,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         waitForLastHandlerAction(mAne.mHandler);
         mLatch = new CountDownLatch(1);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
-        Message.obtain(
-                        mAne.mHandler,
-                        EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
-                .sendToTarget();
-        // no report since ANE is for IMS apn.
+        mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
 
         when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
@@ -998,11 +993,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         // WLAN
         mLatch = new CountDownLatch(1);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
-        Message.obtain(
-                        mAne.mHandler,
-                        EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, null))
-                .sendToTarget();
+        mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         assertTrue(mLatch.await(500, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
@@ -1011,11 +1002,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         // UNKNOWN
         mLatch = new CountDownLatch(1);
-        Message.obtain(
-                        mAne.mHandler,
-                        EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
-                .sendToTarget();
+        mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
 
@@ -1033,11 +1020,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         waitForLastHandlerAction(mAne.mHandler);
 
         mLatch = new CountDownLatch(1);
-        Message.obtain(
-                        mAne.mHandler,
-                        EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED,
-                        new QnsAsyncResult(null, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, null))
-                .sendToTarget();
+        mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo

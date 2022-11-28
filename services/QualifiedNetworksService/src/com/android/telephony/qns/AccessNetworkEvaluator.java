@@ -57,7 +57,6 @@ class AccessNetworkEvaluator {
     private static final int EVENT_RESTRICT_INFO_CHANGED = EVENT_BASE + 4;
     private static final int EVENT_SET_CALL_TYPE = EVENT_BASE + 5;
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = EVENT_BASE + 6;
-    private static final int EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED = EVENT_BASE + 7;
     private static final int EVENT_PROVISIONING_INFO_CHANGED = EVENT_BASE + 8;
     private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
@@ -367,10 +366,7 @@ class AccessNetworkEvaluator {
             mCallStatusTracker.registerCallTypeChangedListener(
                     mNetCapability, mHandler, EVENT_SET_CALL_TYPE, null);
         }
-        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.registerEmergencyPreferredTransportTypeChanged(
-                    mHandler, EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED, null);
-        }
+
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mAltEventListener.registerTryWfcConnectionStateListener(
                     mHandler, EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED, null);
@@ -416,9 +412,6 @@ class AccessNetworkEvaluator {
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 mWifiBackhaulMonitor.unRegisterForRttStatusChange(mHandler);
             }
-        }
-        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.unregisterEmergencyPreferredTransportTypeChanged();
         }
         mQnsProvisioningListener.unregisterProvisioningItemInfoChanged(mHandler);
         mQnsEventDispatcher.unregisterEvent(mHandler);
@@ -671,7 +664,7 @@ class AccessNetworkEvaluator {
         evaluate();
     }
 
-    private void onEmergencyPreferredTransportTypeChanged(
+    void onEmergencyPreferredTransportTypeChanged(
             @AccessNetworkConstants.TransportType int transport) {
         if (mNetCapability != NetworkCapabilities.NET_CAPABILITY_EIMS) {
             return;
@@ -1881,9 +1874,6 @@ class AccessNetworkEvaluator {
                     break;
                 case EVENT_SET_CALL_TYPE:
                     onSetCallType((int) ar.mResult);
-                    break;
-                case EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED:
-                    onEmergencyPreferredTransportTypeChanged((int) ar.mResult);
                     break;
                 case EVENT_DATA_CONNECTION_STATE_CHANGED:
                     onDataConnectionStateChanged(
