@@ -124,22 +124,35 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     }
 
     private void createNap() {
+        setReady(false);
         mHandlerThread = new TestHandlerThread();
         mHandlerThread.start();
         waitUntilReady();
     }
 
     @Test
-    public void testOnCreateNetworkAvailabilityProvider() {
+    public void testNetworkAvailabilityProviderLifeCycle() {
 
         // Valid slot
         mSlotIndex = 0;
+        createNap();
+        assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
+
+        // Closing NAP
+        mQualifiedNetworksService.mProviderMap.get(0).close();
+        waitFor(200);
+        mHandlerThread.quit();
+
+        // recreating NAP instance
+        mSlotIndex = 0;
+        mQualifiedNetworksService.mQnsComponents = new TestQnsComponents(mSlotIndex);
         createNap();
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
         mHandlerThread.quit();
 
         // Invalid slot
         mSlotIndex = 3;
+        mQualifiedNetworksService.mQnsComponents = new TestQnsComponents(mSlotIndex);
         createNap();
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
     }
