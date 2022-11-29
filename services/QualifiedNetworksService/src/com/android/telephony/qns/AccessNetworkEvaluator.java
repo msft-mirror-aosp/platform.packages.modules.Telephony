@@ -402,7 +402,6 @@ class AccessNetworkEvaluator {
         mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(mNetCapability, mHandler);
         mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(mSlotIndex, mHandler);
-        mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
             mAltEventListener.unregisterCallTypeChangedListener(mNetCapability, mHandler);
