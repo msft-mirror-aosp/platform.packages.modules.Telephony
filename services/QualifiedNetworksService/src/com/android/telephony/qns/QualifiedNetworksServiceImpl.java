@@ -299,7 +299,6 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                     evaluator.unregisterForQualifiedNetworksChanged(mHandler);
                     evaluator.close();
                 }
-                mHandlerThread.quitSafely();
                 mQnsComponents.closeComponents(mSlotIndex);
                 mEvaluators.clear();
             }
