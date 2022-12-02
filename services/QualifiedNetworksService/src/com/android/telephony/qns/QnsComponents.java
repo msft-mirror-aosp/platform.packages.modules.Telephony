@@ -232,16 +232,58 @@ class QnsComponents {
             mIwlanNetworkStatusTracker = null;
             mWifiQualityMonitor = null;
         }
-        mWifiBackhaulMonitors.removeReturnOld(slotId).close();
-        mQnsCarrierConfigManagers.removeReturnOld(slotId).close();
-        mQnsEventDispatchers.removeReturnOld(slotId).close();
-        mQnsProvisioningListeners.removeReturnOld(slotId).close();
-        mCellularNetworkStatusTrackers.removeReturnOld(slotId).close();
-        mAlternativeEventListeners.removeReturnOld(slotId).close();
-        mQnsImsManagers.removeReturnOld(slotId).close();
-        mCellularQualityMonitors.removeReturnOld(slotId).close();
-        mQnsCallStatusTracker.removeReturnOld(slotId).close();
-        mQnsTelephonyListeners.removeReturnOld(slotId).close();
+
+        WifiBackhaulMonitor wifiBackhaulMonitor = mWifiBackhaulMonitors.get(slotId);
+        if (wifiBackhaulMonitor != null) {
+            mWifiBackhaulMonitors.remove(slotId);
+            wifiBackhaulMonitor.close();
+        }
+        QnsCarrierConfigManager qnsCarrierConfigManager = mQnsCarrierConfigManagers.get(slotId);
+        if (qnsCarrierConfigManager != null) {
+            mQnsCarrierConfigManagers.remove(slotId);
+            qnsCarrierConfigManager.close();
+        }
+        QnsEventDispatcher qnsEventDispatcher = mQnsEventDispatchers.get(slotId);
+        if (qnsEventDispatcher != null) {
+            mQnsEventDispatchers.remove(slotId);
+            qnsEventDispatcher.close();
+        }
+        QnsProvisioningListener qnsProvisioningListener = mQnsProvisioningListeners.get(slotId);
+        if (qnsProvisioningListener != null) {
+            mQnsProvisioningListeners.remove(slotId);
+            qnsProvisioningListener.close();
+        }
+        QnsCallStatusTracker qnsCallStatusTracker = mQnsCallStatusTracker.get(slotId);
+        if (qnsCallStatusTracker != null) {
+            mQnsCallStatusTracker.remove(slotId);
+            qnsCallStatusTracker.close();
+        }
+        CellularQualityMonitor cellularQualityMonitor = mCellularQualityMonitors.get(slotId);
+        if (cellularQualityMonitor != null) {
+            mCellularQualityMonitors.remove(slotId);
+            cellularQualityMonitor.close();
+        }
+        CellularNetworkStatusTracker cellularTracker = mCellularNetworkStatusTrackers.get(slotId);
+        if (cellularTracker != null) {
+            mCellularNetworkStatusTrackers.remove(slotId);
+            cellularTracker.close();
+        }
+        AlternativeEventListener alternativeEventListener = mAlternativeEventListeners.get(slotId);
+        if (alternativeEventListener != null) {
+            mAlternativeEventListeners.remove(slotId);
+            alternativeEventListener.close();
+        }
+        QnsImsManager qnsImsManager = mQnsImsManagers.get(slotId);
+        if (qnsImsManager != null) {
+            mQnsTelephonyListeners.remove(slotId);
+            qnsImsManager.close();
+        }
+        QnsTelephonyListener qnsTelephonyListener = mQnsTelephonyListeners.get(slotId);
+        if (qnsTelephonyListener != null) {
+            mQnsTelephonyListeners.remove(slotId);
+            qnsTelephonyListener.close();
+        }
+
         mSlotIds.remove(Integer.valueOf(slotId));
         Log.d(mLogTag, "QnsComponents closed for slot " + slotId);
     }
