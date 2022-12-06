@@ -44,6 +44,8 @@ import static com.android.telephony.qns.QnsConstants.POLICY_GOOD;
 import static com.android.telephony.qns.QnsConstants.POLICY_TOLERABLE;
 import static com.android.telephony.qns.QnsConstants.WIFI_ONLY;
 import static com.android.telephony.qns.QnsConstants.WIFI_PREF;
+import static com.android.telephony.qns.wfc.WfcCarrierConfigManager.CONFIG_DEFAULT_VOWIFI_REGISTATION_TIMER;
+import static com.android.telephony.qns.wfc.WfcCarrierConfigManager.KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -2374,6 +2376,19 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         m.setAccessible(true);
         return (QnsCarrierConfigManager.QnsConfigArray)
                 m.invoke(mConfigManager, configArray, accessNetwork, measType, callType);
+    }
+
+    @Test
+    public void testGetVowifiRegistrationTimerForVowifiActivation() {
+        // Test for the default setting
+        int defaultTimer = mConfigManager.getVowifiRegistrationTimerForVowifiActivation();
+        Assert.assertEquals(CONFIG_DEFAULT_VOWIFI_REGISTATION_TIMER, defaultTimer);
+
+        // Test for a new setting
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putInt(KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT, 60000);
+        mConfigManager.loadWfcConfigurations(null, bundle);
+        Assert.assertEquals(60000, mConfigManager.getVowifiRegistrationTimerForVowifiActivation());
     }
 
     @After
