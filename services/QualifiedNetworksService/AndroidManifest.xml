@@ -19,6 +19,10 @@
     coreApp="true"
     android:sharedUserId="android.uid.system"
     package="com.android.telephony.qns">
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" />
+  <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
   <application
       android:directBootAware="true"
       android:defaultToDeviceProtectedStorage="true">
@@ -30,6 +34,33 @@
                <action android:name="android.telephony.data.QualifiedNetworksService" />
          </intent-filter>
     </service>
+
+    <activity
+      android:name=".wfc.WfcActivationActivity"
+      android:configChanges="orientation"
+      android:exported="false"
+      android:permission="android.permission.MODIFY_PHONE_STATE"
+      android:screenOrientation="nosensor"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:windowFullscreen="false"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
+
+    <activity-alias
+      android:name=".WfcActivationActivity"
+      android:exported="true"
+      android:label="@string/wifi_calling_activation_activity_label"
+      android:permission="android.permission.MODIFY_PHONE_STATE"
+      android:targetActivity=".wfc.WfcActivationActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity-alias>
     <!--
     <receiver android:name=".QnsBroadcastReceiver"
               android:exported="true">
