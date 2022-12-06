@@ -127,7 +127,6 @@ public class RestrictManagerTest extends QnsTest {
                         mMockQnsEventDispatcher,
                         mMockQnsProvisioningListener,
                         mTelephonyListener,
-                        mMockQnsCallStatusTracker,
                         mMockWifiBm,
                         mMockWifiQm,
                         0);

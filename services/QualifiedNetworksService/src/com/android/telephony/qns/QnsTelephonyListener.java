@@ -28,7 +28,6 @@ import android.os.HandlerThread;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation;
 import android.telephony.BarringInfo;
-import android.telephony.CallState;
 import android.telephony.NetworkRegistrationInfo;
 import android.telephony.NrVopsSupportInfo;
 import android.telephony.PreciseDataConnectionState;
@@ -42,12 +41,10 @@ import android.util.Log;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 
 /*
  * QnsTelephonyListener
@@ -67,8 +64,6 @@ class QnsTelephonyListener {
     QnsRegistrantList mSrvccStateListener = new QnsRegistrantList();
     QnsRegistrantList mSubscriptionIdListener = new QnsRegistrantList();
     QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
-    List<Consumer<List<CallState>>> mCallStatesConsumerList = new ArrayList<>();
-    List<Consumer<Integer>> mSrvccStateConsumerList = new ArrayList<>();
     protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
     protected HashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
@@ -750,15 +745,11 @@ class QnsTelephonyListener {
         void onCallStateChanged(@Annotation.CallState int state);
     }
 
-    protected interface OnSrvccStateChangedCallback {
+    protected interface OnSrvccStateListener {
         /** Notify the Call state changed. */
         void onSrvccStateChanged(@Annotation.SrvccState int state);
     }
 
-    protected interface OnCallStatesChangedCallback {
-        /** Notify the Call state changed. */
-        void onCallStatesChanged(List<CallState> callStateList);
-    }
     protected static class Archiving<V> {
         protected HashMap<String, V> mArchiving = new HashMap<>();
 
@@ -1042,16 +1033,13 @@ class QnsTelephonyListener {
                     TelephonyCallback.PreciseDataConnectionStateListener,
                     TelephonyCallback.BarringInfoListener,
                     TelephonyCallback.CallStateListener,
-                    TelephonyCallback.SrvccStateListener,
-                    TelephonyCallback.CallAttributesListener {
+                    TelephonyCallback.SrvccStateListener {
         private final Executor mExecutor;
         private OnServiceStateListener mServiceStateListener;
         private OnPreciseDataConnectionStateListener mPreciseDataConnectionStateListener;
         private OnBarringInfoListener mBarringInfoListener;
         private OnCallStateListener mCallStateListener;
-        private OnSrvccStateChangedCallback mSrvccStateCallback;
-        private OnSrvccStateChangedCallback mSrvccStateListener;
-        private OnCallStatesChangedCallback mCallStatesCallback;
+        private OnSrvccStateListener mSrvccStateListener;
         private TelephonyManager mTelephonyManager;
 
         TelephonyListener(Executor executor) {
@@ -1075,17 +1063,10 @@ class QnsTelephonyListener {
             mCallStateListener = listener;
         }
 
-        void setSrvccStateCallback(OnSrvccStateChangedCallback callback) {
-            mSrvccStateCallback = callback;
-        }
-
-        void setSrvccStateListener(OnSrvccStateChangedCallback listener) {
+        void setSrvccStateListener(OnSrvccStateListener listener) {
             mSrvccStateListener = listener;
         }
 
-        void setCallStatesCallback(OnCallStatesChangedCallback listener) {
-            mCallStatesCallback = listener;
-        }
         /**
          * Register a TelephonyCallback for this listener.
          *
@@ -1153,36 +1134,7 @@ class QnsTelephonyListener {
             if (mSrvccStateListener != null) {
                 mSrvccStateListener.onSrvccStateChanged(state);
             }
-            for (Consumer<Integer> consumer : mSrvccStateConsumerList) {
-                consumer.accept(state);
-            }
         }
-
-        @Override
-        public void onCallStatesChanged(List<CallState> callStateList) {
-            for (Consumer<List<CallState>> consumer : mCallStatesConsumerList) {
-                consumer.accept(callStateList);
-            }
-            if (mCallStatesCallback != null) {
-                mCallStatesCallback.onCallStatesChanged(callStateList);
-            }
-        }
-    }
-
-    void addCallStatesChangedCallback(Consumer<List<CallState>> consumer) {
-        mCallStatesConsumerList.add(consumer);
-    }
-
-    void removeCallStatesChangedCallback(Consumer<List<CallState>> consumer) {
-        mCallStatesConsumerList.remove(consumer);
-    }
-
-    void addSrvccStateChangedCallback(Consumer<Integer> consumer) {
-        mSrvccStateConsumerList.add(consumer);
-    }
-
-    void removeSrvccStateChangedCallback(Consumer<Integer> consumer) {
-        mSrvccStateConsumerList.remove(consumer);
     }
 
     /**
