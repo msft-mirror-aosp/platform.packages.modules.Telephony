@@ -21,8 +21,12 @@
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="23" />
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG"/>
     <uses-permission android:name="android.permission.READ_PRECISE_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE"/>
     <application android:label="QnsUnitTests" android:debuggable="true">
         <uses-library android:name="android.test.runner" />
+        <activity android:name="com.android.telephony.qns.wfc.WfcActivationActivity" />
     </application>
 
     <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"

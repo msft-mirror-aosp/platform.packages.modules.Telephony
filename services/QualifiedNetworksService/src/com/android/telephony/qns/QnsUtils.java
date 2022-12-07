@@ -19,6 +19,9 @@ package com.android.telephony.qns;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_CELLULAR_PREFERRED;
 import static android.telephony.ims.ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED;
 
+import static com.android.telephony.qns.wfc.WfcCarrierConfigManager.CONFIG_DEFAULT_VOWIFI_REGISTATION_TIMER;
+import static com.android.telephony.qns.wfc.WfcCarrierConfigManager.KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
@@ -603,6 +606,8 @@ class QnsUtils {
             case QnsCarrierConfigManager.KEY_QNS_MMS_RAT_PREFERENCE_INT:
             case QnsCarrierConfigManager.KEY_QNS_CBS_RAT_PREFERENCE_INT:
                 return (T) Integer.valueOf(QnsConstants.RAT_PREFERENCE_DEFAULT);
+            case KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT:
+                return (T) Integer.valueOf(CONFIG_DEFAULT_VOWIFI_REGISTATION_TIMER);
             case QnsCarrierConfigManager
                     .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY:
                 return (T)

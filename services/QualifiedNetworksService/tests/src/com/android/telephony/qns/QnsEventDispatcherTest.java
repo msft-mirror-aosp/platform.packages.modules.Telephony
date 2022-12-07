@@ -17,6 +17,11 @@
 package com.android.telephony.qns;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.ACTION_TRY_WFC_CONNECTION;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.EXTRA_SUB_ID;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.EXTRA_TRY_STATUS;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.STATUS_END;
+import static com.android.telephony.qns.wfc.WfcActivationHelper.STATUS_START;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -726,5 +731,70 @@ public class QnsEventDispatcherTest extends QnsTest {
         dispatcher.registerEvent(events, mMockHandler);
         dispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         verify(mMockMessage1, times(1)).sendToTarget();
+    }
+
+    @Test
+    public void testOnReceivedTryWfcConnectionIntent() throws Exception {
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
+                .thenReturn(mMockMessage2);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION);
+        events.add(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // Send WfcActivationHelper.ACTION_TRY_WFC_CONNECTION intent
+        // with WfcActivationHelper.STATUS_START and valid subId
+        final Intent validWfcActivationdStartIntent = new Intent(ACTION_TRY_WFC_CONNECTION);
+        validWfcActivationdStartIntent.putExtra(EXTRA_SUB_ID, 0);
+        validWfcActivationdStartIntent.putExtra(EXTRA_TRY_STATUS, STATUS_START);
+        mQnsEventDispatcher.mWfcActivationIntentReceiver.onReceive(
+                mMockContext, validWfcActivationdStartIntent);
+        verify(mMockMessage, times(1)).sendToTarget();
+
+        // Send WfcActivationHelper.ACTION_TRY_WFC_CONNECTION intent
+        // with WfcActivationHelper.STATUS_END and valid subId
+        final Intent validWfcActivationdEndIntent = new Intent(ACTION_TRY_WFC_CONNECTION);
+        validWfcActivationdEndIntent.putExtra(EXTRA_SUB_ID, 0);
+        validWfcActivationdEndIntent.putExtra(EXTRA_TRY_STATUS, STATUS_END);
+        mQnsEventDispatcher.mWfcActivationIntentReceiver.onReceive(
+                mMockContext, validWfcActivationdEndIntent);
+        verify(mMockMessage2, times(1)).sendToTarget();
+    }
+
+    @Test
+    public void testOnReceivedTryWfcConnectionIntentWithInvalidSubId() throws Exception {
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION)))
+                .thenReturn(mMockMessage);
+        when(mMockHandler.obtainMessage(
+                        eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
+                .thenReturn(mMockMessage2);
+
+        List<Integer> events = new ArrayList<Integer>();
+        events.add(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION);
+        events.add(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+
+        // Send WfcActivationHelper.ACTION_TRY_WFC_CONNECTION intent
+        // with WfcActivationHelper.STATUS_START and invalid subId
+        final Intent validWfcActivationdStartIntent = new Intent(ACTION_TRY_WFC_CONNECTION);
+        validWfcActivationdStartIntent.putExtra(EXTRA_SUB_ID, 1);
+        validWfcActivationdStartIntent.putExtra(EXTRA_TRY_STATUS, STATUS_START);
+        mQnsEventDispatcher.mWfcActivationIntentReceiver.onReceive(
+                mMockContext, validWfcActivationdStartIntent);
+        verify(mMockMessage, never()).sendToTarget();
+
+        // Send WfcActivationHelper.ACTION_TRY_WFC_CONNECTION intent
+        // with WfcActivationHelper.STATUS_END and invalid subId
+        final Intent validWfcActivationdEndIntent =
+                new Intent(ACTION_TRY_WFC_CONNECTION);
+        validWfcActivationdEndIntent.putExtra(EXTRA_SUB_ID, 1);
+        validWfcActivationdEndIntent.putExtra(EXTRA_TRY_STATUS, STATUS_END);
+        mQnsEventDispatcher.mWfcActivationIntentReceiver.onReceive(
+                mMockContext, validWfcActivationdEndIntent);
+        verify(mMockMessage2, never()).sendToTarget();
     }
 }
