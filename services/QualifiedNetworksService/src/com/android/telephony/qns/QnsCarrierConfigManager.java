@@ -32,6 +32,7 @@ import static android.telephony.TelephonyManager.UNKNOWN_CARRIER_ID;
 
 import static com.android.telephony.qns.QnsConstants.FALLBACK_REASON_INVALID;
 import static com.android.telephony.qns.QnsConstants.MAX_COUNT_INVALID;
+import static com.android.telephony.qns.wfc.WfcCarrierConfigManager.KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -782,6 +783,7 @@ class QnsCarrierConfigManager {
     private int mCbsRatPreference;
     private int mNetworkEnableHysteresisTimer;
     private int mMinimumHandoverGuardingTimer;
+    private int mVowifiRegistrationTimerForVowifiActivation;
 
     private int[] mWwanHysteresisTimer;
     private int[] mWlanHysteresisTimer;
@@ -1209,6 +1211,8 @@ class QnsCarrierConfigManager {
 
         // Load configs using Carrier Config Manager Keys
         loadDirectFromCarrierConfigManagerKey(carrierConfigBundle);
+
+        loadWfcConfigurations(carrierConfigBundle, assetConfigBundle);
     }
 
     /**
@@ -1436,6 +1440,16 @@ class QnsCarrierConfigManager {
                         KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY);
 
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
+    }
+
+    @VisibleForTesting
+    void loadWfcConfigurations(PersistableBundle bundleCarrier, PersistableBundle bundleAsset) {
+
+        mVowifiRegistrationTimerForVowifiActivation =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT);
     }
 
     @VisibleForTesting
@@ -2489,6 +2503,14 @@ class QnsCarrierConfigManager {
      */
     boolean blockIpv6OnlyWifi() {
         return mIsBlockIpv6OnlyWifi;
+    }
+
+    /**
+     * This method returns the wait timer in milliseconds that VoWiFi registration in VoWiFi
+     * activation process
+     */
+    int getVowifiRegistrationTimerForVowifiActivation() {
+        return mVowifiRegistrationTimerForVowifiActivation;
     }
 
     /**

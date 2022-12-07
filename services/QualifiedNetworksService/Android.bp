@@ -27,6 +27,11 @@ android_app {
         "src/**/I*.aidl",
     ],
 
+    static_libs: [
+        "androidx.appcompat_appcompat",
+        "androidx.browser_browser",
+    ],
+
     libs: [
         "telephony-common",
         "ims-common",
@@ -73,11 +78,17 @@ android_test {
         "android.test.base"
     ],
     static_libs: [
+        "androidx.appcompat_appcompat",
+        "androidx.browser_browser",
+        "androidx.test.ext.truth",
+        "androidx.test.ext.junit",
         "androidx.test.rules",
         "androidx.test.core",
         "frameworks-base-testutils",
         "mockito-target-extended-minus-junit4",
         "platform-test-annotations",
+         "truth-prebuilt",
+         "testables",
     ],
     jni_libs: [
         "libdexmakerjvmtiagent",
