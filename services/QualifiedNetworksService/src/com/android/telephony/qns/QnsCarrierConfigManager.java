@@ -676,43 +676,6 @@ class QnsCarrierConfigManager {
     static final String KEY_QNS_FALLBACK_WWAN_IMS_HO_REGISTER_FAIL_REASON_STRING_ARRAY =
             "qns.fallback_wwan_ims_ho_register_fail_reason_string_array";
 
-    /**
-     * String array indicating network capabilities that they check international roaming condition.
-     *
-     * <p><string-array name="exclude_domestic_roaming_condition_string_array" num="3"> <item
-     * value="ims"/> <item value="emergency"/> <item value="xcap"/> </string-array>
-     */
-    static final String KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY =
-            "qns.apn_types_with_international_roaming_condition_string_array";
-
-    /**
-     * String array indicating PLMN list to be regarded as international roaming.
-     *
-     * <p> If only MCC is included without MNC, PLMNs that they have same MCC value will be
-     * regarded as international roaming.
-     * <string-array name="plmn_list_regarded_as_international_roaming_string_array" num="3">
-     * <item value="32070"/>
-     * <item value="320157"/>
-     * <item value="318"/>
-     * </string-array>
-     */
-    static final String KEY_PLMN_LIST_REGARDED_AS_INTERNATIONAL_ROAMING_STRING_ARRAY =
-            "plmn_list_regarded_as_international_roaming_string_array";
-
-    /**
-     * String array indicating PLMN list to be regarded as domestic roaming.
-     *
-     * <p> If only MCC is included without MNC, PLMNs that they have same MCC value will be
-     * regarded as domestic roaming.
-     * <string-array name="plmn_list_regarded_as_domestic_roaming_string_array" num="3">
-     * <item value="32070"/>
-     * <item value="320157"/>
-     * <item value="318"/>
-     * </string-array>
-     */
-    static final String KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY =
-            "plmn_list_regarded_as_domestic_roaming_string_array";
-
     static HashMap<Integer, String> sAccessNetworkMap =
             new HashMap<>() {
                 {
@@ -799,9 +762,6 @@ class QnsCarrierConfigManager {
     private String mWlanRttBackhaulCheckConfigsOnPing;
     private String[] mImsAllowedRats;
     private String[] mRoveInGuardTimerConditionThresholdGaps;
-    private String[] mApnTypesInternationalRoamingCheck;
-    private String[] mPlmnsRegardedAsDomesticRoaming;
-    private String[] mPlmnsRegardedAsInternationalRoaming;
     private String[] mFallbackOnInitialConnectionFailure;
 
     @NonNull
@@ -1423,21 +1383,6 @@ class QnsCarrierConfigManager {
                         bundleCarrier,
                         bundleAsset,
                         KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY);
-        mApnTypesInternationalRoamingCheck =
-                getConfig(
-                        bundleCarrier,
-                        bundleAsset,
-                        KEY_APN_TYPES_WITH_INTERNATIONAL_ROAMING_CONDITION_STRING_ARRAY);
-        mPlmnsRegardedAsInternationalRoaming =
-                getConfig(
-                        bundleCarrier,
-                        bundleAsset,
-                        KEY_PLMN_LIST_REGARDED_AS_INTERNATIONAL_ROAMING_STRING_ARRAY);
-        mPlmnsRegardedAsDomesticRoaming =
-                getConfig(
-                        bundleCarrier,
-                        bundleAsset,
-                        KEY_PLMN_LIST_REGARDED_AS_DOMESTIC_ROAMING_STRING_ARRAY);
 
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
     }
@@ -2535,56 +2480,6 @@ class QnsCarrierConfigManager {
     }
 
     /**
-     * This method returns whether the network capability check roaming condition with International
-     * Roaming or not.
-     *
-     * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     * True / False
-     */
-    boolean needToCheckInternationalRoaming(int netCapability) {
-        if (mApnTypesInternationalRoamingCheck == null
-                || mApnTypesInternationalRoamingCheck.length == 0) {
-            return false;
-        }
-
-        return QnsUtils.getNetCapabilitiesFromApnTypesString(mApnTypesInternationalRoamingCheck)
-                .stream()
-                .mapToInt(netCapabilityFromApn -> netCapabilityFromApn)
-                .anyMatch(netCapabilityFromApn -> netCapabilityFromApn == netCapability);
-    }
-
-    /**
-     * This method returns whether input plmn needs to be regarded as international roaming or not.
-     *
-     * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     * True / False
-     */
-    boolean isDefinedInternationalRoamingPlmn(String plmn) {
-        if (mPlmnsRegardedAsInternationalRoaming != null
-                && mPlmnsRegardedAsInternationalRoaming.length > 0) {
-            for (String configuredPlmn : mPlmnsRegardedAsInternationalRoaming) {
-                Log.d(
-                        mLogTag,
-                        "isDefinedInternationalRoamingPlmn"
-                                + configuredPlmn
-                                + " is match with "
-                                + plmn);
-                if (configuredPlmn.length() == 3 && plmn.startsWith(configuredPlmn)) {
-                    return true;
-                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6) {
-                    if ((Integer.valueOf(configuredPlmn.substring(0, 3))
-                                    .equals(Integer.valueOf(plmn.substring(0, 3))))
-                            && (Integer.valueOf(configuredPlmn.substring(3)))
-                                    .equals(Integer.valueOf(plmn.substring(3)))) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
      * This method returns the rtt check server address config as per operator requirement
      *
      * @return Based on carrier config settings of operator. By default, to be made empty to
@@ -2731,33 +2626,6 @@ class QnsCarrierConfigManager {
             }
         }
         return null;
-    }
-
-    /**
-     * This method returns whether input plmn needs to be regarded as domestic roaming or not.
-     *
-     * @return : Based on Carrier Config Settings based on operator requirement possible values:
-     * True / False
-     */
-    boolean isDefinedDomesticRoamingPlmn(String plmn) {
-        if (mPlmnsRegardedAsDomesticRoaming != null && mPlmnsRegardedAsDomesticRoaming.length > 0) {
-            for (String configuredPlmn : mPlmnsRegardedAsDomesticRoaming) {
-                Log.d(
-                        mLogTag,
-                        "isDefinedDomesticRoamingPlmn" + configuredPlmn + " is match with " + plmn);
-                if (configuredPlmn.length() == 3 && plmn.startsWith(configuredPlmn)) {
-                    return true;
-                } else if (configuredPlmn.length() > 4 && configuredPlmn.length() <= 6) {
-                    if ((Integer.valueOf(configuredPlmn.substring(0, 3))
-                                    .equals(Integer.valueOf(plmn.substring(0, 3))))
-                            && (Integer.valueOf(configuredPlmn.substring(3)))
-                                    .equals(Integer.valueOf(plmn.substring(3)))) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     static class QnsConfigArray {

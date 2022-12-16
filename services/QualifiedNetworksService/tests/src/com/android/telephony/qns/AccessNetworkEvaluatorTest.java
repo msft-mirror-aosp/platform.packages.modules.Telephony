@@ -55,7 +55,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
@@ -748,34 +747,13 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
                 mMockQnsTelephonyListener.new QnsTelephonyInfo();
         QnsTelephonyInfoIms infoIms =
                 mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
-        infoIms.setCoverage(true);
-        infoIms.setRoamingType(ServiceState.ROAMING_TYPE_INTERNATIONAL);
         infoIms.setRegisteredPlmn(TEST_PLMN);
 
-        setGetCoverageStubs(true, false);
-        assertEquals(QnsConstants.COVERAGE_ROAM, mAne.getCoverage(infoIms, mNetCapability));
-        setGetCoverageStubs(true, true);
-        assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
-        infoIms.setCoverage(false);
-        setGetCoverageStubs(true, false);
-        assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
-        setGetCoverageStubs(false, false);
-        assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
         infoIms.setCoverage(true);
-        infoIms.setRoamingType(ServiceState.ROAMING_TYPE_DOMESTIC);
-        setGetCoverageStubs(true, false);
-        assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms, mNetCapability));
-        when(mMockQnsConfigManager.isDefinedInternationalRoamingPlmn(TEST_PLMN)).thenReturn(true);
-        assertEquals(QnsConstants.COVERAGE_ROAM, mAne.getCoverage(infoIms, mNetCapability));
-    }
+        assertEquals(QnsConstants.COVERAGE_ROAM, mAne.getCoverage(infoIms));
 
-    private void setGetCoverageStubs(boolean checkIntRoaming, boolean isDefDomPlmn) {
-        Mockito.clearInvocations(mMockQnsConfigManager);
-        when(mMockQnsConfigManager.needToCheckInternationalRoaming(
-                NetworkCapabilities.NET_CAPABILITY_IMS))
-                .thenReturn(checkIntRoaming);
-        when(mMockQnsConfigManager.isDefinedDomesticRoamingPlmn(TEST_PLMN))
-                .thenReturn(isDefDomPlmn);
+        infoIms.setCoverage(false);
+        assertEquals(QnsConstants.COVERAGE_HOME, mAne.getCoverage(infoIms));
     }
 
     @Test
@@ -893,7 +871,6 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         QnsTelephonyInfoIms infoIms =
                 mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         infoIms.setCoverage(true);
-        infoIms.setRoamingType(ServiceState.ROAMING_TYPE_INTERNATIONAL);
         infoIms.setRegisteredPlmn(TEST_PLMN);
         mAne.onQnsTelephonyInfoChanged(infoIms);
 

@@ -497,11 +497,10 @@ class QnsTelephonyListener {
 
             // Event for cellular data roaming registration state changed.
             // Refer roaming state which is not overridden by configs.
-            if (!serviceState.getDataRoamingFromRegistration()) {
+            if (!newWwanNrs.isNetworkRoaming()) {
                 mCoverage = QnsConstants.COVERAGE_HOME;
             } else {
                 mCoverage = QnsConstants.COVERAGE_ROAM;
-                newInfo.setRoamingType(newWwanNrs.getRoamingType());
             }
             newInfo.setRegisteredPlmn(newWwanNrs.getRegisteredPlmn());
             newInfo.setCoverage(mCoverage == QnsConstants.COVERAGE_ROAM);
@@ -871,8 +870,6 @@ class QnsTelephonyListener {
                     + getDataNetworkType()
                     + ", mCoverage="
                     + mCoverage
-                    + ", mRoamingType="
-                    + getRoamingType()
                     + ", mRegisteredPlmn='"
                     + getRegisteredPlmn()
                     + "'"
@@ -905,7 +902,6 @@ class QnsTelephonyListener {
         private int mDataRegState;
         private int mDataNetworkType;
         private boolean mCoverage;
-        private int mRoamingType;
         private String mRegisteredPlmn;
         private boolean mCellularAvailable;
 
@@ -916,7 +912,6 @@ class QnsTelephonyListener {
             mCoverage = false; // home
             mCellularAvailable = false; // not available
             mRegisteredPlmn = "";
-            mRoamingType = ServiceState.ROAMING_TYPE_NOT_ROAMING; // home
         }
 
         QnsTelephonyInfo(QnsTelephonyInfo info) {
@@ -926,7 +921,6 @@ class QnsTelephonyListener {
             mCoverage = info.mCoverage;
             mCellularAvailable = info.mCellularAvailable;
             mRegisteredPlmn = info.mRegisteredPlmn;
-            mRoamingType = info.mRoamingType;
         }
 
         int getVoiceNetworkType() {
@@ -953,15 +947,6 @@ class QnsTelephonyListener {
             mDataNetworkType = dataNetworkType;
         }
 
-        @ServiceState.RoamingType
-        int getRoamingType() {
-            return mRoamingType;
-        }
-
-        void setRoamingType(@ServiceState.RoamingType int roamingType) {
-            mRoamingType = roamingType;
-        }
-
         String getRegisteredPlmn() {
             return mRegisteredPlmn;
         }
@@ -983,7 +968,6 @@ class QnsTelephonyListener {
                     && mDataRegState == that.mDataRegState
                     && mDataNetworkType == that.mDataNetworkType
                     && mCoverage == that.mCoverage
-                    && mRoamingType == that.mRoamingType
                     && mRegisteredPlmn.equals(that.mRegisteredPlmn)
                     && mCellularAvailable == that.mCellularAvailable;
         }
@@ -1009,8 +993,6 @@ class QnsTelephonyListener {
                     + mDataNetworkType
                     + ", mCoverage="
                     + mCoverage
-                    + ", mRoamingType="
-                    + mRoamingType
                     + ", mRegisteredPlmn='"
                     + mRegisteredPlmn
                     + "'"

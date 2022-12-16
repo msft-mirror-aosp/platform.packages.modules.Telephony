@@ -165,7 +165,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         assertEquals("00101", qtInfo.getRegisteredPlmn());
         assertFalse(qtInfo.isCoverage());
         assertTrue(qtInfo.isCellularAvailable());
-        assertEquals(ServiceState.ROAMING_TYPE_NOT_ROAMING, qtInfo.getRoamingType());
     }
 
     @Test
@@ -535,9 +534,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
                 TelephonyManager.NETWORK_TYPE_LTE,
                 mQtListener.mLastQnsTelephonyInfoIms.getVoiceNetworkType());
         assertEquals("00101", mQtListener.mLastQnsTelephonyInfoIms.getRegisteredPlmn());
-        assertEquals(
-                ServiceState.ROAMING_TYPE_NOT_ROAMING,
-                mQtListener.mLastQnsTelephonyInfoIms.getRoamingType());
         assertFalse(mQtListener.mLastQnsTelephonyInfoIms.isCoverage());
         assertTrue(mQtListener.mLastQnsTelephonyInfoIms.isCellularAvailable());
         assertFalse(mQtListener.mLastQnsTelephonyInfoIms.getEmergencyBarring());
@@ -928,7 +924,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         QnsTelephonyListener.QnsTelephonyInfo qtInfo = mQtListener.new QnsTelephonyInfo();
 
         // test default values
-        assertEquals(ServiceState.ROAMING_TYPE_NOT_ROAMING, qtInfo.getRoamingType());
         assertFalse(qtInfo.isCoverage());
         assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getVoiceNetworkType());
         assertEquals(TelephonyManager.NETWORK_TYPE_UNKNOWN, qtInfo.getDataNetworkType());
@@ -937,9 +932,6 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         assertEquals(ServiceState.STATE_OUT_OF_SERVICE, qtInfo.getDataRegState());
 
         // test setters
-        qtInfo.setRoamingType(ServiceState.ROAMING_TYPE_DOMESTIC);
-        assertEquals(ServiceState.ROAMING_TYPE_DOMESTIC, qtInfo.getRoamingType());
-
         qtInfo.setCoverage(true);
         assertTrue(qtInfo.isCoverage());
 
