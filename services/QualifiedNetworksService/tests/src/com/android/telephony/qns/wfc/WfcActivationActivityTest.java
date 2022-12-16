@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.app.UiAutomation;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
@@ -32,6 +33,8 @@ import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
+import android.os.SystemClock;
 import android.telephony.SubscriptionManager;
 import android.telephony.ims.ImsMmTelManager;
 import android.testing.AndroidTestingRunner;
@@ -39,9 +42,9 @@ import android.testing.TestableLooper;
 import android.testing.TestableLooper.RunWithLooper;
 
 import androidx.activity.result.ActivityResultLauncher;
-import androidx.lifecycle.Lifecycle;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -60,7 +63,7 @@ import org.mockito.junit.MockitoRule;
 public final class WfcActivationActivityTest {
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
-    private final Context appContext = ApplicationProvider.getApplicationContext();
+    private final Context mAppContext = ApplicationProvider.getApplicationContext();
     private static final int SUB_ID = 1;
 
     private WfcActivationHelper mWfcActivationHelper;
@@ -88,6 +91,7 @@ public final class WfcActivationActivityTest {
                 .thenReturn(100);
         mTestableLooper = TestableLooper.get(this);
         mIsTestExecuted = false;
+        turnOnAndUnlockScreen();
     }
 
     @After
@@ -101,7 +105,7 @@ public final class WfcActivationActivityTest {
     public void testMessageCheckWifi_pass() {
         mWfcActivationHelper =
                 new WfcActivationHelper(
-                        appContext,
+                        mAppContext,
                         SUB_ID,
                         mockConnectivityManager,
                         mockImsMmTelManager,
@@ -111,7 +115,7 @@ public final class WfcActivationActivityTest {
 
         mActivityScenario =
                 ActivityScenario.launch(
-                        new Intent(appContext, WfcActivationActivity.class)
+                        new Intent(mAppContext, WfcActivationActivity.class)
                                 .putExtra(
                                         WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                         WfcUtils.LAUNCH_APP_ACTIVATE)
@@ -123,7 +127,7 @@ public final class WfcActivationActivityTest {
     public void testMessageCheckWifiDone_wifiConnectionSuccess_showProgressDialog() {
         mWfcActivationHelper =
                 new WfcActivationHelper(
-                        appContext,
+                        mAppContext,
                         SUB_ID,
                         mockConnectivityManager,
                         mockImsMmTelManager,
@@ -133,7 +137,7 @@ public final class WfcActivationActivityTest {
 
         mActivityScenario =
                 ActivityScenario.launch(
-                        new Intent(appContext, WfcActivationActivity.class)
+                        new Intent(mAppContext, WfcActivationActivity.class)
                                 .putExtra(
                                         WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                         WfcUtils.LAUNCH_APP_ACTIVATE)
@@ -153,7 +157,7 @@ public final class WfcActivationActivityTest {
       when(mockNetworkInfo.getType()).thenReturn(ConnectivityManager.TYPE_MOBILE);
       mWfcActivationHelper =
               new WfcActivationHelper(
-                      appContext,
+                      mAppContext,
                       SUB_ID,
                       mockConnectivityManager,
                       mockImsMmTelManager,
@@ -163,7 +167,7 @@ public final class WfcActivationActivityTest {
 
       mActivityScenario =
               ActivityScenario.launch(
-                      new Intent(appContext, WfcActivationActivity.class)
+                      new Intent(mAppContext, WfcActivationActivity.class)
                               .putExtra(
                                       WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                       WfcUtils.LAUNCH_APP_ACTIVATE)
@@ -183,7 +187,7 @@ public final class WfcActivationActivityTest {
     public void testMessageTryEpdgConnectionDone_imsMmTelManagerNotNull_epdgConnectionSuccess() {
         mWfcActivationHelper =
                 new WfcActivationHelper(
-                        appContext,
+                        mAppContext,
                         SUB_ID,
                         mockConnectivityManager,
                         mockImsMmTelManager,
@@ -200,12 +204,11 @@ public final class WfcActivationActivityTest {
         WfcUtils.setWfcActivationHelper(mWfcActivationHelper);
         mActivityScenario =
                 ActivityScenario.launch(
-                        new Intent(appContext, WfcActivationActivity.class)
+                        new Intent(mAppContext, WfcActivationActivity.class)
                                 .putExtra(
                                         WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                         WfcUtils.LAUNCH_APP_ACTIVATE)
                                 .putExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, SUB_ID));
-        mActivityScenario.moveToState(Lifecycle.State.RESUMED);
         mTestableLooper.processAllMessages();
 
         mActivityScenario.onActivity(
@@ -221,7 +224,7 @@ public final class WfcActivationActivityTest {
     public void testMessageShowWebPortal_imsMmTelManagerNull_showWfcWebPortal() {
         mWfcActivationHelper =
                 new WfcActivationHelper(
-                        appContext,
+                        mAppContext,
                         SUB_ID,
                         mockConnectivityManager,
                         null,
@@ -232,7 +235,7 @@ public final class WfcActivationActivityTest {
 
         mActivityScenario =
                 ActivityScenario.launch(
-                        new Intent(appContext, WfcActivationActivity.class)
+                        new Intent(mAppContext, WfcActivationActivity.class)
                                 .putExtra(
                                         WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                         WfcUtils.LAUNCH_APP_ACTIVATE)
@@ -253,7 +256,7 @@ public final class WfcActivationActivityTest {
                .thenReturn(false);
         mWfcActivationHelper =
                 new WfcActivationHelper(
-                        appContext,
+                        mAppContext,
                         SUB_ID,
                         mockConnectivityManager,
                         mockImsMmTelManager,
@@ -271,7 +274,7 @@ public final class WfcActivationActivityTest {
 
         mActivityScenario =
                 ActivityScenario.launch(
-                        new Intent(appContext, WfcActivationActivity.class)
+                        new Intent(mAppContext, WfcActivationActivity.class)
                                 .putExtra(
                                         WfcUtils.EXTRA_LAUNCH_CARRIER_APP,
                                         WfcUtils.LAUNCH_APP_ACTIVATE)
@@ -285,6 +288,35 @@ public final class WfcActivationActivityTest {
                     mIsTestExecuted = true;
                 });
         assertTrue(mIsTestExecuted);
+    }
+
+    private void turnOnAndUnlockScreen() {
+        UiAutomation uiAutomation= InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        String screenOnCmd = "input keyevent KEYCODE_WAKEUP";
+        uiAutomation.executeShellCommand(screenOnCmd);
+        waitCmdCompletion();
+        String unlockCmd = "input keyevent KEYCODE_MENU";
+        uiAutomation.executeShellCommand(unlockCmd);
+        waitCmdCompletion();
+    }
+
+    private void  waitCmdCompletion() {
+          PowerManager powerManager = mAppContext.getSystemService(PowerManager.class);
+          int waitTimeMs = 100;
+          final long timeoutMs = SystemClock.uptimeMillis() + 10 * 1000;
+
+          while (SystemClock.uptimeMillis() < timeoutMs) {
+              if (powerManager.isInteractive()) {
+                  return;
+              }
+              try {
+                  Thread.sleep(waitTimeMs);
+              } catch (Exception e) {
+                  throw new AssertionError("Thread sleep fails", e);
+              }
+              waitTimeMs = waitTimeMs * 2;
+              waitTimeMs = Math.min(1000, waitTimeMs);
+          }
     }
 
     static private class FakeEpdgConnectHandler extends Handler {
