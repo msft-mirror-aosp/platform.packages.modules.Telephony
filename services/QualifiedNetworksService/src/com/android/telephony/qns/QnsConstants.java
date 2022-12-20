@@ -162,6 +162,18 @@ class QnsConstants {
             })
     @interface QnsImsRegiEvent {}
 
+    static final int SIP_DIALOG_SESSION_POLICY_NONE = 0;
+    static final int SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL = 1;
+    static final int SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL = 2;
+
+    @IntDef(
+            value = {
+                    SIP_DIALOG_SESSION_POLICY_NONE,
+                    SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL,
+                    SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL,
+            })
+    @interface QnsSipDialogSessionPolicy {}
+
     static final int THRESHOLD_MATCH_TYPE_EQUAL_TO = 0;
     static final int THRESHOLD_EQUAL_OR_LARGER = 1;
     static final int THRESHOLD_EQUAL_OR_SMALLER = 2;
@@ -420,6 +432,26 @@ class QnsConstants {
                 return AccessNetworkType.IWLAN;
             default:
                 return AccessNetworkType.UNKNOWN;
+        }
+    }
+
+    /**
+     * This method converts QnsSipDialogSessionPolicy to string.
+     *
+     * @param policy int value of QnsSipDialogSessionPolicy.
+     * @return String value of QnsSipDialogSessionPolicy.
+     */
+    static String qnsSipDialogSessionPolicyToString(
+            @QnsConstants.QnsSipDialogSessionPolicy int policy) {
+        switch (policy) {
+            case SIP_DIALOG_SESSION_POLICY_NONE:
+                return "POLICY_NONE";
+            case SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL:
+                return "POLICY_VOICE";
+            case SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL:
+                return "POLICY_VIDEO";
+            default:
+                return "NONE";
         }
     }
 }

@@ -676,6 +676,23 @@ class QnsCarrierConfigManager {
     static final String KEY_QNS_FALLBACK_WWAN_IMS_HO_REGISTER_FAIL_REASON_STRING_ARRAY =
             "qns.fallback_wwan_ims_ho_register_fail_reason_string_array";
 
+    /**
+     * Specifies override the call precondition policy of AccessNetworkSelectionPolicy when the
+     * Sip Dialog Session is active.
+     * This Sip Dialog Session policy is applied when there is no calling in the subscription, and
+     * when the device is in a calling state, the calling policy is used first.
+     *
+     * <p> If the Sip Dialog Session is active, the AccessNetworkSelectionPolicy is applied as one
+     * of three policies: none, follow policy as voice call or as video call.
+     * <li>0: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_NONE} not Applied. The default value
+     * for this key.
+     * <li>1: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL} apply voice call
+     * policy.
+     * <li>2: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL}  apply video call
+     * policy.
+     */
+    static final String KEY_SIP_DIALOG_SESSION_POLICY_INT = "qns.sip_dialog_session_policy_int";
+
     static HashMap<Integer, String> sAccessNetworkMap =
             new HashMap<>() {
                 {
@@ -747,6 +764,7 @@ class QnsCarrierConfigManager {
     private int mNetworkEnableHysteresisTimer;
     private int mMinimumHandoverGuardingTimer;
     private int mVowifiRegistrationTimerForVowifiActivation;
+    private int mSipDialogSessionPolicy;
 
     private int[] mWwanHysteresisTimer;
     private int[] mWlanHysteresisTimer;
@@ -1383,6 +1401,8 @@ class QnsCarrierConfigManager {
                         bundleCarrier,
                         bundleAsset,
                         KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY);
+        mSipDialogSessionPolicy =
+                getConfig(bundleCarrier, bundleAsset, KEY_SIP_DIALOG_SESSION_POLICY_INT);
 
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
     }
@@ -2626,6 +2646,20 @@ class QnsCarrierConfigManager {
             }
         }
         return null;
+    }
+
+    /**
+     * Get the Sip Dialog Session policy when the Sip Dialog State is active. This Sip Dialog
+     * Session policy is applied when there is no calling in the subscription, and when the device
+     * is in a calling state, the calling policy is used first.
+     *
+     * @return 0: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_NONE} not Applied. The default value
+     * for this key. 1: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL} apply voice
+     * call policy. 2: {@code QnsConstants#SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL}  apply video
+     * call policy.
+     */
+    @QnsConstants.QnsSipDialogSessionPolicy int getSipDialogSessionPolicy() {
+        return mSipDialogSessionPolicy;
     }
 
     static class QnsConfigArray {

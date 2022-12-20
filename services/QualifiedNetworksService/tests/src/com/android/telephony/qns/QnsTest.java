@@ -38,6 +38,8 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsManager;
 import android.telephony.ims.ImsMmTelManager;
+import android.telephony.ims.ImsRcsManager;
+import android.telephony.ims.SipDelegateManager;
 
 import androidx.test.core.app.ApplicationProvider;
 
@@ -60,6 +62,8 @@ public abstract class QnsTest {
     @Mock protected CountryDetector mMockCountryDetector;
 
     @Mock protected ImsMmTelManager mMockImsMmTelManager;
+    @Mock protected ImsRcsManager mMockImsRcsManager;
+    @Mock protected SipDelegateManager mMockSipDelegateManager;
     @Mock protected SubscriptionInfo mMockSubscriptionInfo;
     @Mock protected WifiInfo mMockWifiInfo;
     @Mock protected Resources mMockResources;
@@ -150,6 +154,8 @@ public abstract class QnsTest {
         when(mMockTelephonyManager.getSimCarrierId()).thenReturn(0);
         when(mMockTelephonyManager.getSimCountryIso()).thenReturn("ca");
         when(mMockImsManager.getImsMmTelManager(anyInt())).thenReturn(mMockImsMmTelManager);
+        when(mMockImsManager.getImsRcsManager(anyInt())).thenReturn(mMockImsRcsManager);
+        when(mMockImsManager.getSipDelegateManager(anyInt())).thenReturn(mMockSipDelegateManager);
         when(mMockSubscriptionManager.getActiveSubscriptionInfo(anyInt()))
                 .thenReturn(mMockSubscriptionInfo);
         when(mMockSubscriptionManager.getActiveSubscriptionInfoForSimSlotIndex(anyInt()))

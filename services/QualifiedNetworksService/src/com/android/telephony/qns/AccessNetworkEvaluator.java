@@ -62,6 +62,7 @@ class AccessNetworkEvaluator {
     private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
     private static final int EVENT_WIFI_RTT_STATUS_CHANGED = EVENT_BASE + 11;
+    private static final int EVENT_SIP_DIALOG_SESSION_STATE_CHANGED = EVENT_BASE + 12;
     private static final int EVALUATE_SPECIFIC_REASON_NONE = 0;
     private static final int EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE = 1;
     protected final int mSlotIndex;
@@ -110,6 +111,7 @@ class AccessNetworkEvaluator {
     private boolean mIsRttCheckSuccess = false;
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo =
             new QnsProvisioningListener.QnsProvisioningInfo();
+    private boolean mSipDialogSessionState = false;
 
     AccessNetworkEvaluator(QnsComponents qnsComponents, int netCapability, int slotIndex) {
         mNetCapability = netCapability;
@@ -330,6 +332,7 @@ class AccessNetworkEvaluator {
                 QnsUtils.isWfcEnabled(mQnsImsManager, mQnsProvisioningListener, true);
         mSettingWfcRoamingMode = QnsUtils.getWfcMode(mQnsImsManager, true);
         mAllowIwlanForWfcActivation = false;
+        mSipDialogSessionState = false;
         log(
                 "WfcSettings. mWfcPlatformEnabled:"
                         + mWfcPlatformEnabled
@@ -355,6 +358,8 @@ class AccessNetworkEvaluator {
                 mHandler, EVENT_DATA_CONNECTION_STATE_CHANGED);
         mQnsImsManager.registerImsRegistrationStatusChanged(
                 mHandler, EVENT_IMS_REGISTRATION_STATE_CHANGED);
+        mQnsImsManager.registerSipDialogSessionStateChanged(
+                mHandler, EVENT_SIP_DIALOG_SESSION_STATE_CHANGED);
         mCellularNetworkStatusTracker.registerQnsTelephonyInfoChanged(
                 mNetCapability, mHandler, EVENT_QNS_TELEPHONY_INFO_CHANGED);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
@@ -402,6 +407,7 @@ class AccessNetworkEvaluator {
         mCellularQualityMonitor.unregisterThresholdChange(mNetCapability, mSlotIndex);
         mDataConnectionStatusTracker.unRegisterDataConnectionStatusChanged(mHandler);
         mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
+        mQnsImsManager.unregisterSipDialogSessionStateChanged(mHandler);
         mCellularNetworkStatusTracker.unregisterQnsTelephonyInfoChanged(mNetCapability, mHandler);
         mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(mSlotIndex, mHandler);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
@@ -641,7 +647,7 @@ class AccessNetworkEvaluator {
         if (isEnabled) {
             mHandler.sendEmptyMessageDelayed(
                     QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION,
-                    timeout + /* milliseconds */3000);
+                    timeout + /* milliseconds */ 3000);
         } else {
             mHandler.removeMessages(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION);
         }
@@ -842,6 +848,19 @@ class AccessNetworkEvaluator {
                             + QnsConstants.transportTypeToString(transportType)
                             + ","
                             + QnsConstants.imsRegistrationEventToString(event));
+            evaluate();
+        }
+    }
+
+    protected void onSipDialogSessionStateChanged(boolean isActive) {
+        if (mConfigManager.getSipDialogSessionPolicy()
+                == QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE) {
+            mSipDialogSessionState = false;
+            return;
+        }
+        if (mSipDialogSessionState != isActive) {
+            mSipDialogSessionState = isActive;
+            log("onSipDialogSessionStateChanged isActive:" + isActive);
             evaluate();
         }
     }
@@ -1782,6 +1801,26 @@ class AccessNetworkEvaluator {
                 && mCallType == QnsConstants.CALL_TYPE_EMERGENCY) {
             callType = QnsConstants.CALL_TYPE_VOICE;
         }
+        int sipDialogPolicy = mConfigManager.getSipDialogSessionPolicy();
+        if (callType == QnsConstants.CALL_TYPE_IDLE && mSipDialogSessionState) {
+            if (sipDialogPolicy > QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE) {
+                log("apply sipDialogPolicy:"
+                        + QnsConstants.qnsSipDialogSessionPolicyToString(sipDialogPolicy));
+            }
+            switch (sipDialogPolicy) {
+                case QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL:
+                    callType = QnsConstants.CALL_TYPE_VOICE;
+                    break;
+                case QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL:
+                    callType = QnsConstants.CALL_TYPE_VIDEO;
+                    break;
+                case QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE:
+                    // fall-through
+                default:
+                    // do-nothing
+                    break;
+            }
+        }
 
         if (mConfigManager.hasThresholdGapWithGuardTimer()) {
             @QnsConstants.QnsGuarding int guarding = QnsConstants.GUARDING_NONE;
@@ -1859,6 +1898,9 @@ class AccessNetworkEvaluator {
                     break;
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
                     onImsRegStateChanged((QnsImsManager.ImsRegistrationState) ar.mResult);
+                    break;
+                case EVENT_SIP_DIALOG_SESSION_STATE_CHANGED:
+                    onSipDialogSessionStateChanged((boolean) ar.mResult);
                     break;
                 case QnsEventDispatcher.QNS_EVENT_WFC_ENABLED:
                     onWfcEnabledChanged(true, false);
@@ -1997,5 +2039,10 @@ class AccessNetworkEvaluator {
         pw.println(prefix + "mAccessNetworkSelectionPolicies=" + mAccessNetworkSelectionPolicies);
         pw.println(prefix + "mAnspPolicyMap=" + mAnspPolicyMap);
         mRestrictManager.dump(pw, prefix + "  ");
+    }
+
+    @VisibleForTesting
+    boolean getSipDialogSessionState() {
+        return mSipDialogSessionState;
     }
 }

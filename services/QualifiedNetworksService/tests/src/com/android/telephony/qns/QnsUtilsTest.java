@@ -329,6 +329,14 @@ public class QnsUtilsTest extends QnsTest {
                 QnsUtils.getConfig(
                         mTestBundle, null, QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL));
         assertEquals(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL,
+                (int)
+                        QnsUtils.getConfig(
+                                mTestBundle,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_QNS_CELLULAR_SS_THRESHOLDBACKHAUL_TIMER_MS_INT));
+        assertEquals(
                 1,
                 (int)
                         QnsUtils.getConfig(
@@ -560,6 +568,9 @@ public class QnsUtilsTest extends QnsTest {
                 false);
         mTestBundle.putBoolean(QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL, false);
         mTestBundle.putInt(
+                QnsCarrierConfigManager.KEY_SIP_DIALOG_SESSION_POLICY_INT,
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+        mTestBundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_CELLULAR_SS_THRESHOLDBACKHAUL_TIMER_MS_INT, 1);
         mTestBundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_WIFI_RSSI_THRESHOLDBACKHAUL_TIMER_MS_INT, 1);
@@ -698,6 +709,14 @@ public class QnsUtilsTest extends QnsTest {
         assertTrue(
                 QnsUtils.getConfig(
                         null, null, QnsCarrierConfigManager.KEY_BLOCK_IPV6_ONLY_WIFI_BOOL));
+        assertEquals(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE,
+                (int)
+                        QnsUtils.getConfig(
+                                null,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_SIP_DIALOG_SESSION_POLICY_INT));
         assertEquals(
                 QnsConstants.KEY_DEFAULT_VALUE,
                 (int)

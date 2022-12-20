@@ -282,4 +282,19 @@ public class QnsConstantsTest {
         Assert.assertEquals(
                 AccessNetworkType.UNKNOWN, QnsConstants.networkTypeToAccessNetworkType(-1));
     }
+
+    @Test
+    public void testQnsSipDialogSessionPolicyToString() {
+        String convertedString;
+
+        convertedString = QnsConstants.qnsSipDialogSessionPolicyToString(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE);
+        Assert.assertEquals(convertedString, "POLICY_NONE");
+        convertedString = QnsConstants.qnsSipDialogSessionPolicyToString(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+        Assert.assertEquals(convertedString, "POLICY_VOICE");
+        convertedString = QnsConstants.qnsSipDialogSessionPolicyToString(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL);
+        Assert.assertEquals(convertedString, "POLICY_VIDEO");
+    }
 }
