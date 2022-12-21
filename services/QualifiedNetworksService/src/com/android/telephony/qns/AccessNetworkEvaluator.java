@@ -16,9 +16,6 @@
 
 package com.android.telephony.qns;
 
-import static android.telephony.ServiceState.ROAMING_TYPE_DOMESTIC;
-import static android.telephony.ServiceState.ROAMING_TYPE_INTERNATIONAL;
-
 import android.content.Context;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
@@ -448,7 +445,7 @@ class AccessNetworkEvaluator {
                     QnsUtils.getCellularAccessNetworkType(
                             infoIms.getDataRegState(), infoIms.getDataNetworkType());
 
-            int coverage = getCoverage(infoIms, mNetCapability);
+            int coverage = getCoverage(infoIms);
             if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                     && infoIms.isCellularAvailable()) {
                 checkVoPs = vopsCheckRequired(cellularAccessNetworkType, coverage, mCallType);
@@ -493,7 +490,7 @@ class AccessNetworkEvaluator {
                     "onQnsTelephonyInfoChanged cellularAccessNetworkType:"
                             + mCellularAccessNetworkType);
         }
-        int coverage = getCoverage(info, mNetCapability);
+        int coverage = getCoverage(info);
         if (mCoverage != coverage) {
             mCoverage = coverage;
             needEvaluate = true;
@@ -507,36 +504,11 @@ class AccessNetworkEvaluator {
     }
 
     @VisibleForTesting
-    int getCoverage(QnsTelephonyListener.QnsTelephonyInfo info, int netCapability) {
+    int getCoverage(QnsTelephonyListener.QnsTelephonyInfo info) {
         if (DBG) {
-            log(
-                    "getCoverage roaming?"
-                            + info.isCoverage()
-                            + " roamingType:"
-                            + info.getRoamingType()
-                            + " registeredPlmn:"
-                            + info.getRegisteredPlmn());
+            log("getCoverage roaming=" + info.isCoverage());
         }
         if (info.isCoverage()) {
-            if (mConfigManager.needToCheckInternationalRoaming(netCapability)) {
-                if (DBG) log("needToCheckInternationalRoaming : true ");
-                if (info.getRoamingType() == ROAMING_TYPE_INTERNATIONAL) {
-                    if (mConfigManager.isDefinedDomesticRoamingPlmn(info.getRegisteredPlmn())) {
-                        if (DBG) log("isDefinedDomesticRoamingPlmn : true ");
-                        return QnsConstants.COVERAGE_HOME;
-                    } else {
-                        return QnsConstants.COVERAGE_ROAM;
-                    }
-                } else if (info.getRoamingType() == ROAMING_TYPE_DOMESTIC) {
-                    if (mConfigManager.isDefinedInternationalRoamingPlmn(
-                            info.getRegisteredPlmn())) {
-                        if (DBG) log("isDefinedInternationalRoamingPlmn : true");
-                        return QnsConstants.COVERAGE_ROAM;
-                    } else {
-                        return QnsConstants.COVERAGE_HOME;
-                    }
-                }
-            }
             return QnsConstants.COVERAGE_ROAM;
         } else {
             return QnsConstants.COVERAGE_HOME;
