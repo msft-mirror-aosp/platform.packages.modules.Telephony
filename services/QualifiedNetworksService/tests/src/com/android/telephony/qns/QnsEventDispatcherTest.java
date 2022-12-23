@@ -24,7 +24,6 @@ import static com.android.telephony.qns.wfc.WfcActivationHelper.STATUS_END;
 import static com.android.telephony.qns.wfc.WfcActivationHelper.STATUS_START;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.*;
 
 import android.content.ContentResolver;
@@ -91,7 +90,6 @@ public class QnsEventDispatcherTest extends QnsTest {
 
         mStaticMockSession =
                 mockitoSession()
-                        .mockStatic(QnsUtils.class)
                         .mockStatic(SubscriptionManager.class)
                         .mockStatic(Settings.Global.class)
                         .startMocking();
@@ -115,11 +113,13 @@ public class QnsEventDispatcherTest extends QnsTest {
                                 mMockContentResolver, Settings.Global.AIRPLANE_MODE_ON, 0))
                 .thenReturn(0);
 
-        lenient().when(QnsUtils.getSubId(mMockContext, 0)).thenReturn(0);
+        when(mMockSubscriptionInfo.getSubscriptionId()).thenReturn(0);
 
         mQnsEventDispatcher =
                 new QnsEventDispatcher(
                         sMockContext, mMockQnsProvisioningListener, mMockQnsImsManager, 0);
+        // wait for QnsEventDispatcher to complete initial setting load
+        waitForLastHandlerAction(mQnsEventDispatcher.mQnsEventDispatcherHandler);
     }
 
     @After
@@ -368,7 +368,7 @@ public class QnsEventDispatcherTest extends QnsTest {
     }
 
     @Test
-    public void testNotifyImmeditatelyWfcSettingsWithDisabledStatus() {
+    public void testNotifyImmediatelyWfcSettingsWithDisabledStatus() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_DISABLED)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_DISABLED)))
@@ -399,7 +399,7 @@ public class QnsEventDispatcherTest extends QnsTest {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED)))
                 .thenReturn(mMockMessage2);
 
-        List<Integer> events = new ArrayList<Integer>();
+        List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_PLATFORM_ENABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ROAMING_ENABLED);
@@ -414,10 +414,8 @@ public class QnsEventDispatcherTest extends QnsTest {
     @Test
     public void testNotifyImmediatelyDifferentWfcModes() {
         setEnabledStatusForWfcSettingsCrossSimSettings();
-        lenient()
-                .when(QnsUtils.getWfcMode(mQnsComponents[0].getQnsImsManager(0), false))
-                .thenReturn(1)
-                .thenReturn(2);
+        when(mMockQnsImsManager.getWfcMode(false)).thenReturn(1, 2);
+
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY)))
                 .thenReturn(mMockMessage);
         when(mMockHandler.obtainMessage(
@@ -500,7 +498,7 @@ public class QnsEventDispatcherTest extends QnsTest {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CARRIER_CONFIG_CHANGED)))
                 .thenReturn(mMockMessage3);
 
-        List<Integer> events = new ArrayList<Integer>();
+        List<Integer> events = new ArrayList<>();
         events.add(QnsEventDispatcher.QNS_EVENT_CROSS_SIM_CALLING_ENABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_ENABLED);
         events.add(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_ONLY);
@@ -524,19 +522,12 @@ public class QnsEventDispatcherTest extends QnsTest {
     }
 
     private void setEnabledStatusForWfcSettingsCrossSimSettings() {
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(mQnsComponents[0].getQnsImsManager(0)))
-                .thenReturn(true);
-        lenient()
-                .when(QnsUtils.isWfcEnabledByPlatform(mQnsComponents[0].getQnsImsManager(0)))
-                .thenReturn(true);
-        lenient()
-                .when(
-                        QnsUtils.isWfcEnabled(
-                                mMockQnsImsManager, mMockQnsProvisioningListener, false))
-                .thenReturn(true);
-        lenient()
-                .when(QnsUtils.isWfcEnabled(mMockQnsImsManager, mMockQnsProvisioningListener, true))
+        when(mMockQnsImsManager.isCrossSimCallingEnabled()).thenReturn(true);
+        when(mMockQnsImsManager.isWfcEnabledByPlatform()).thenReturn(true);
+        when(mMockQnsImsManager.isWfcProvisionedOnDevice()).thenReturn(true);
+        when(mMockQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(true);
+        when(mMockQnsImsManager.isWfcEnabledByUser()).thenReturn(true);
+        when(mMockQnsProvisioningListener.getLastProvisioningWfcRoamingEnabledInfo())
                 .thenReturn(true);
 
         // Initialise stubbed variables in QnsUtils:
@@ -548,19 +539,12 @@ public class QnsEventDispatcherTest extends QnsTest {
     }
 
     private void setDisabledStatusForWfcSettingsCrossSimSettings() {
-        lenient()
-                .when(QnsUtils.isCrossSimCallingEnabled(mQnsComponents[0].getQnsImsManager(0)))
-                .thenReturn(false);
-        lenient()
-                .when(QnsUtils.isWfcEnabledByPlatform(mQnsComponents[0].getQnsImsManager(0)))
-                .thenReturn(false);
-        lenient()
-                .when(
-                        QnsUtils.isWfcEnabled(
-                                mMockQnsImsManager, mMockQnsProvisioningListener, false))
-                .thenReturn(false);
-        lenient()
-                .when(QnsUtils.isWfcEnabled(mMockQnsImsManager, mMockQnsProvisioningListener, true))
+        when(mMockQnsImsManager.isCrossSimCallingEnabled()).thenReturn(false);
+        when(mMockQnsImsManager.isWfcEnabledByPlatform()).thenReturn(false);
+        when(mMockQnsImsManager.isWfcProvisionedOnDevice()).thenReturn(false);
+        when(mMockQnsImsManager.isWfcRoamingEnabledByUser()).thenReturn(false);
+        when(mMockQnsImsManager.isWfcEnabledByUser()).thenReturn(false);
+        when(mMockQnsProvisioningListener.getLastProvisioningWfcRoamingEnabledInfo())
                 .thenReturn(false);
 
         // Initialise stubbed variables in QnsUtils:
@@ -718,27 +702,22 @@ public class QnsEventDispatcherTest extends QnsTest {
         when(mMockHandler.obtainMessage(
                         eq(QnsEventDispatcher.QNS_EVENT_WFC_MODE_TO_WIFI_PREFERRED)))
                 .thenReturn(mMockMessage1);
-
-        lenient()
-                .when(QnsUtils.getWfcMode(mQnsComponents[0].getQnsImsManager(0), false))
-                .thenReturn(QnsConstants.WIFI_PREF);
-        QnsEventDispatcher dispatcher =
+        when(mMockQnsImsManager.getWfcMode(false)).thenReturn(QnsConstants.WIFI_PREF);
+        mQnsEventDispatcher =
                 new QnsEventDispatcher(
                         sMockContext, mMockQnsProvisioningListener, mMockQnsImsManager, 0);
-        assertNotNull(dispatcher);
-        waitForWfcModeChange(500, dispatcher, QnsConstants.WIFI_PREF);
-        assertEquals(dispatcher.mLastWfcMode, QnsConstants.WIFI_PREF);
-        dispatcher.registerEvent(events, mMockHandler);
-        dispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
+        waitForWfcModeChange(500, mQnsEventDispatcher, QnsConstants.WIFI_PREF);
+        assertEquals(QnsConstants.WIFI_PREF, mQnsEventDispatcher.mLastWfcMode);
+        mQnsEventDispatcher.registerEvent(events, mMockHandler);
+        mQnsEventDispatcher.mUserSettingObserver.onChange(true, WFC_MODE_URI);
         verify(mMockMessage1, times(1)).sendToTarget();
     }
 
     @Test
-    public void testOnReceivedTryWfcConnectionIntent() throws Exception {
+    public void testOnReceivedTryWfcConnectionIntent() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION)))
                 .thenReturn(mMockMessage);
-        when(mMockHandler.obtainMessage(
-                        eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
                 .thenReturn(mMockMessage2);
 
         List<Integer> events = new ArrayList<Integer>();
@@ -766,11 +745,10 @@ public class QnsEventDispatcherTest extends QnsTest {
     }
 
     @Test
-    public void testOnReceivedTryWfcConnectionIntentWithInvalidSubId() throws Exception {
+    public void testOnReceivedTryWfcConnectionIntentWithInvalidSubId() {
         when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_TRY_WFC_ACTIVATION)))
                 .thenReturn(mMockMessage);
-        when(mMockHandler.obtainMessage(
-                        eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
+        when(mMockHandler.obtainMessage(eq(QnsEventDispatcher.QNS_EVENT_CANCEL_TRY_WFC_ACTIVATION)))
                 .thenReturn(mMockMessage2);
 
         List<Integer> events = new ArrayList<Integer>();
@@ -789,8 +767,7 @@ public class QnsEventDispatcherTest extends QnsTest {
 
         // Send WfcActivationHelper.ACTION_TRY_WFC_CONNECTION intent
         // with WfcActivationHelper.STATUS_END and invalid subId
-        final Intent validWfcActivationdEndIntent =
-                new Intent(ACTION_TRY_WFC_CONNECTION);
+        final Intent validWfcActivationdEndIntent = new Intent(ACTION_TRY_WFC_CONNECTION);
         validWfcActivationdEndIntent.putExtra(EXTRA_SUB_ID, 1);
         validWfcActivationdEndIntent.putExtra(EXTRA_TRY_STATUS, STATUS_END);
         mQnsEventDispatcher.mWfcActivationIntentReceiver.onReceive(

@@ -141,13 +141,14 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
 
         // Closing NAP
         mQualifiedNetworksService.mProviderMap.get(0).close();
-        waitFor(200);
+        waitForLastHandlerAction(mQualifiedNetworksService.mProviderMap.get(0).mConfigHandler);
         mHandlerThread.quit();
 
         // recreating NAP instance
         mSlotIndex = 0;
         mQualifiedNetworksService.mQnsComponents = new TestQnsComponents(mSlotIndex);
         createNap();
+        waitForLastHandlerAction(mQualifiedNetworksService.mProviderMap.get(0).mConfigHandler);
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
         mHandlerThread.quit();
 
@@ -155,6 +156,8 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         mSlotIndex = 3;
         mQualifiedNetworksService.mQnsComponents = new TestQnsComponents(mSlotIndex);
         createNap();
+        waitForLastHandlerAction(mQualifiedNetworksService.mProviderMap.get(0).mHandler);
+        waitForLastHandlerAction(mQualifiedNetworksService.mProviderMap.get(0).mConfigHandler);
         assertEquals(1, mQualifiedNetworksService.mProviderMap.size());
     }
 
@@ -196,19 +199,15 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
                         });
 
         createNap();
-        waitFor(200); // registerForConfigurationLoaded is called on different thread.
-        ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
-        verify(mMockQnsConfigManager)
-                .registerForConfigurationLoaded(
-                        capture.capture(), eq(TEST_QNS_CONFIGURATION_LOADED));
-        Handler configHandler = capture.getValue();
-        configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
-        waitFor(3000); // ANEs take time to create.
+        // registerForConfigurationLoaded is called on different thread.
+        waitForLastHandlerAction(mProvider.mConfigHandler);
+        mProvider.mConfigHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
+        waitForLastHandlerAction(mProvider.mConfigHandler); // ANEs take time to create.
 
         assertEquals(3, mProvider.mEvaluators.size());
 
-        configHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
-        waitFor(2000); // ANEs take time to create.
+        mProvider.mConfigHandler.sendEmptyMessage(TEST_QNS_CONFIGURATION_LOADED);
+        waitForLastHandlerAction(mProvider.mConfigHandler); // ANEs take time to create.
 
         assertEquals(1, mProvider.mEvaluators.size());
 
@@ -267,7 +266,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         createNap();
         Message.obtain(mProvider.mConfigHandler, TEST_QNS_CONFIGURATION_LOADED, null)
                 .sendToTarget();
-        waitFor(100);
+        waitForLastHandlerAction(mProvider.mConfigHandler);
         ArgumentCaptor<Handler> capture = ArgumentCaptor.forClass(Handler.class);
 
         verify(mMockQnsConfigManager)
@@ -289,7 +288,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         info.setAccessNetworkTypes(List.of(AccessNetworkType.EUTRAN));
         QnsAsyncResult ar = new QnsAsyncResult(null, info, null);
         Message.obtain(mProvider.mHandler, TEST_QUALIFIED_NETWORKS_CHANGED, ar).sendToTarget();
-        waitFor(100);
+        waitForLastHandlerAction(mProvider.mHandler);
         assertEquals(info.getNetCapability(), NetworkCapabilities.NET_CAPABILITY_IMS);
         assertEquals(List.of(AccessNetworkType.EUTRAN), info.getAccessNetworkTypes());
     }
