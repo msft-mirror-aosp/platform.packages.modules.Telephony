@@ -18,6 +18,8 @@ package com.android.telephony.qns;
 
 import android.annotation.NonNull;
 import android.content.Context;
+import android.location.Country;
+import android.location.CountryDetector;
 import android.net.ConnectivityManager;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
@@ -27,7 +29,6 @@ import android.net.NetworkSpecifier;
 import android.net.TelephonyNetworkSpecifier;
 import android.net.TransportInfo;
 import android.net.vcn.VcnTransportInfo;
-import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -45,7 +46,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -70,19 +70,18 @@ class IwlanNetworkStatusTracker {
     private DefaultNetworkCallback mDefaultNetworkCallback;
     private final HandlerThread mHandlerThread;
     private final ConnectivityManager mConnectivityManager;
-    private final WifiManager mWifiManager;
-    private WifiCountryCodeCallback mWifiCountryCodeCallback;
-    private final Handler mNetCbHandler;
+    private final TelephonyManager mTelephonyManager;
+    private Handler mNetCbHandler;
+    private String mLastKnownCountryCode;
     private boolean mWifiAvailable = false;
     private boolean mWifiToggleOn = false;
-    private boolean mWifiCountryCodeRegistered = false;
     private Map<Integer, Boolean> mIwlanRegistered = new ConcurrentHashMap<>();
 
     // The current active data subscription. May not be the default data subscription.
     private int mConnectedDataSub = INVALID_SUB_ID;
     private SparseArray<IwlanEventHandler> mHandlerSparseArray = new SparseArray<>();
     private SparseArray<IwlanAvailabilityInfo> mLastIwlanAvailabilityInfo = new SparseArray<>();
-    private String mWifiCountryCode = null;
+    private CountryDetector mCountryDetector;
 
     enum LinkProtocolType {
         UNKNOWN,
@@ -146,11 +145,11 @@ class IwlanNetworkStatusTracker {
         Looper looper = mHandlerThread.getLooper();
         mNetCbHandler = new Handler(looper);
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
-        mWifiManager = mContext.getSystemService(WifiManager.class);
-        mWifiCountryCodeCallback = new WifiCountryCodeCallback();
+        mTelephonyManager = mContext.getSystemService(TelephonyManager.class);
         mLastIwlanAvailabilityInfo.clear();
         registerDefaultNetworkCb();
         Log.d(sLogTag, "Registered with Connectivity Service");
+        startCountryDetector();
     }
 
     void initBySlotIndex(
@@ -176,48 +175,6 @@ class IwlanNetworkStatusTracker {
         mQnsImsManagers.remove(slotId);
         mQnsTelephonyListeners.remove(slotId);
         mHandlerSparseArray.remove(slotId);
-    }
-
-    private class WifiCountryCodeCallback implements WifiManager.ActiveCountryCodeChangedCallback {
-        public void onActiveCountryCodeChanged(@NonNull String countryCode) {
-            Log.d(sLogTag, "Received OnActive Wifi country code :" + countryCode);
-            setWifiCountryCode(countryCode);
-        }
-
-        public void onCountryCodeInactive() {
-            Log.d(sLogTag, "Received Inactive Wifi country code ");
-            setWifiCountryCode("");
-        }
-    }
-
-    private void setWifiCountryCode(String countryCode) {
-        // Empty country code.
-        if (countryCode == null || TextUtils.isEmpty(countryCode)) {
-            Log.d(sLogTag, "Received empty wifi country code");
-            mWifiCountryCode = null;
-        } else {
-            Log.d(sLogTag, "Before Upper case: " + countryCode);
-            mWifiCountryCode = countryCode.toUpperCase(Locale.US);
-        }
-    }
-
-    /** Register for Active country code changed event for Wifi connection */
-    synchronized void registerWifiCountryCode() {
-        if (mWifiManager != null && !mWifiCountryCodeRegistered) {
-            Log.d(sLogTag, "Register Wifi Country code");
-            mWifiCountryCodeRegistered = true;
-            mWifiManager.registerActiveCountryCodeChangedCallback(
-                    new QnsUtils.QnsExecutor(mNetCbHandler), mWifiCountryCodeCallback);
-        }
-    }
-
-    /** unregister for Active country code changed event on Wifi connection */
-    synchronized void unregisterWifiCountryCode() {
-        if (mWifiCountryCodeRegistered) {
-            Log.d(sLogTag, "Unregister Wifi Country code");
-            mWifiCountryCodeRegistered = false;
-            mWifiManager.unregisterActiveCountryCodeChangedCallback(mWifiCountryCodeCallback);
-        }
     }
 
     @VisibleForTesting
@@ -252,7 +209,6 @@ class IwlanNetworkStatusTracker {
     @VisibleForTesting
     void onWifiEnabled() {
         mWifiToggleOn = true;
-        registerWifiCountryCode();
         if (!mWifiAvailable) {
             for (Integer slotId : mIwlanNetworkListenersArray.keySet()) {
                 if (!isCrossSimCallingCondition(slotId)
@@ -314,11 +270,10 @@ class IwlanNetworkStatusTracker {
 
     private void onClose() {
         unregisterDefaultNetworkCb();
-        unregisterWifiCountryCode();
-        mHandlerSparseArray.clear();
         mLastIwlanAvailabilityInfo.clear();
         mIwlanNetworkListenersArray.clear();
         mIwlanRegistered.clear();
+        mCountryDetector.unregisterCountryDetectorCallback(this::updateCountryCode);
         Log.d(sLogTag, "closed IwlanNetworkStatusTracker");
     }
 
@@ -362,7 +317,6 @@ class IwlanNetworkStatusTracker {
                             && ((linkProtocolType == LinkProtocolType.UNKNOWN)
                                     || (linkProtocolType == LinkProtocolType.IPV6));
             iwlanEnable = !blockWifi && isRegistered;
-            isCrossWfc = false;
         } else if (isCrossSimCallingCondition(slotId) && isRegistered) {
             iwlanEnable = true;
             isCrossWfc = true;
@@ -617,10 +571,10 @@ class IwlanNetworkStatusTracker {
         boolean hasIpv4 = false;
         boolean hasIpv6 = false;
         for (LinkAddress linkAddress : linkProperties.getLinkAddresses()) {
-            InetAddress inetaddr = linkAddress.getAddress();
-            if (inetaddr instanceof Inet4Address) {
+            InetAddress inetAddress = linkAddress.getAddress();
+            if (inetAddress instanceof Inet4Address) {
                 hasIpv4 = true;
-            } else if (inetaddr instanceof Inet6Address) {
+            } else if (inetAddress instanceof Inet6Address) {
                 hasIpv6 = true;
             }
         }
@@ -638,33 +592,44 @@ class IwlanNetworkStatusTracker {
      *
      * @return True if it is international roaming, otherwise false.
      */
-    boolean isInternationalRoaming(Context context, int slotId) {
+    boolean isInternationalRoaming(int slotId) {
         boolean isInternationalRoaming = false;
-        TelephonyManager telephonyManager = mContext.getSystemService(TelephonyManager.class);
-
-        if (telephonyManager != null) {
-            telephonyManager =
-                    telephonyManager.createForSubscriptionId(QnsUtils.getSubId(context, slotId));
-
-            if (telephonyManager != null) {
-                String simCountry = telephonyManager.getSimCountryIso();
-                Log.d(
-                        sLogTag,
-                        "SIM country = " + simCountry + ", current country = " + mWifiCountryCode);
-                if (mWifiCountryCode != null
-                        && !TextUtils.isEmpty(simCountry)
-                        && !TextUtils.isEmpty(mWifiCountryCode)) {
-                    isInternationalRoaming = !simCountry.equalsIgnoreCase(mWifiCountryCode);
-                }
-            }
+        String simCountry = mTelephonyManager.createForSubscriptionId(slotId).getSimCountryIso();
+        if (!TextUtils.isEmpty(simCountry) && !TextUtils.isEmpty(mLastKnownCountryCode)) {
+            Log.d(
+                    sLogTag,
+                    "SIM country = " + simCountry + ", current country = " + mLastKnownCountryCode);
+            isInternationalRoaming = !simCountry.equalsIgnoreCase(mLastKnownCountryCode);
         }
         return isInternationalRoaming;
     }
 
-    /** This method is only for Testing */
-    @VisibleForTesting
-    String getLastUpdatedWifiCountryCode() {
-        return mWifiCountryCode;
+    /**
+     * This method is to add country listener in order to receive country code from the detector.
+     */
+    private void startCountryDetector() {
+        mCountryDetector = mContext.getSystemService(CountryDetector.class);
+        if (mCountryDetector != null) {
+            mCountryDetector.registerCountryDetectorCallback(
+                    new QnsUtils.QnsExecutor(mNetCbHandler), this::updateCountryCode);
+        }
+    }
+
+    /** This method is to update the last known country code if it is changed. */
+    private void updateCountryCode(Country country) {
+        if (country == null) {
+            return;
+        }
+        if (country.getSource() == Country.COUNTRY_SOURCE_NETWORK
+                || country.getSource() == Country.COUNTRY_SOURCE_LOCATION) {
+            String newCountryCode = country.getCountryCode();
+            if (!TextUtils.isEmpty(newCountryCode)
+                    && (TextUtils.isEmpty(mLastKnownCountryCode)
+                            || !mLastKnownCountryCode.equalsIgnoreCase(newCountryCode))) {
+                mLastKnownCountryCode = newCountryCode;
+                Log.d(sLogTag, "Update the last known country code = " + mLastKnownCountryCode);
+            }
+        }
     }
 
     /**
@@ -687,6 +652,6 @@ class IwlanNetworkStatusTracker {
                         + ", mIwlanRegistered="
                         + mIwlanRegistered);
         pw.println(prefix + "sLinkProtocolType=" + sLinkProtocolType);
-        pw.println(prefix + "getLastKnownCountryCode=" + mWifiCountryCode);
+        pw.println(prefix + "mLastKnownCountryCode=" + mLastKnownCountryCode);
     }
 }
