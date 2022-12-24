@@ -891,7 +891,7 @@ class AccessNetworkEvaluator {
             return true;
         }
         if ((mCoverage == QnsConstants.COVERAGE_ROAM
-                        || mIwlanNetworkStatusTracker.isInternationalRoaming(mContext, mSlotIndex))
+                        || mIwlanNetworkStatusTracker.isInternationalRoaming(mSlotIndex))
                 && mSettingWfcRoamingEnabled) {
             return true;
         }
@@ -984,7 +984,7 @@ class AccessNetworkEvaluator {
                                     .getQnsTelephonyListener(mSlotIndex)
                                     .getLastQnsTelephonyInfo()
                                     .isCellularAvailable())
-                    && mIwlanNetworkStatusTracker.isInternationalRoaming(mContext, mSlotIndex)) {
+                    && mIwlanNetworkStatusTracker.isInternationalRoaming(mSlotIndex)) {
                 boolean isBlockIwlan = mConfigManager.blockIwlanInInternationalRoamWithoutWwan();
                 sb.append(" isBlockIwlanInInternationalRoamWithoutWwan:").append(isBlockIwlan);
                 if (isBlockIwlan) {

@@ -23,7 +23,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.location.Country;
@@ -55,8 +54,6 @@ public abstract class QnsTest {
     @Mock protected SubscriptionManager mMockSubscriptionManager;
     @Mock protected WifiManager mMockWifiManager;
     @Mock protected CountryDetector mMockCountryDetector;
-    @Mock protected SharedPreferences mMockSharedPreferences;
-    @Mock protected SharedPreferences.Editor mMockSharedPreferencesEditor;
 
     @Mock protected ImsMmTelManager mMockImsMmTelManager;
     @Mock protected SubscriptionInfo mMockSubscriptionInfo;
@@ -130,8 +127,6 @@ public abstract class QnsTest {
     private void stubContext() {
         when(sMockContext.getSystemService(TelephonyManager.class))
                 .thenReturn(mMockTelephonyManager);
-        when(sMockContext.getSystemService(TelephonyManager.class))
-                .thenReturn(mMockTelephonyManager);
         when(sMockContext.getSystemService(SubscriptionManager.class))
                 .thenReturn(mMockSubscriptionManager);
         when(sMockContext.getSystemService(CarrierConfigManager.class))
@@ -141,8 +136,6 @@ public abstract class QnsTest {
         when(sMockContext.getSystemService(ImsManager.class)).thenReturn(mMockImsManager);
         when(sMockContext.getSystemService(WifiManager.class)).thenReturn(mMockWifiManager);
         when(sMockContext.getSystemService(CountryDetector.class)).thenReturn(mMockCountryDetector);
-        when(sMockContext.getSharedPreferences(anyString(), anyInt()))
-                .thenReturn(mMockSharedPreferences);
 
         when(sMockContext.getResources()).thenReturn(mMockResources);
     }
@@ -162,7 +155,6 @@ public abstract class QnsTest {
 
         when(mMockCountryDetector.detectCountry())
                 .thenReturn(new Country("US", Country.COUNTRY_SOURCE_LOCATION));
-        when(mMockSharedPreferences.edit()).thenReturn(mMockSharedPreferencesEditor);
     }
 
     private void stubOthers() {
