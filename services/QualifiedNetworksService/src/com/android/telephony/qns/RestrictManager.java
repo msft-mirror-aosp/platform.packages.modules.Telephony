@@ -641,10 +641,13 @@ class RestrictManager {
                     sReleaseEventMap.get(RESTRICT_TYPE_RTP_LOW_QUALITY),
                     lowRtpQualityRestrictTime);
             unregisterLowRtpQualityEvent();
-            int fallbackReason = mQnsCarrierConfigManager.getQnsIwlanHoRestrictReason();
-            if (fallbackReason == QnsConstants.FALLBACK_REASON_RTP_OR_WIFI
-                    || fallbackReason == QnsConstants.FALLBACK_REASON_RTP_ONLY) {
-                increaseCounterToRestrictIwlanInCall();
+
+            if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+                int fallbackReason = mQnsCarrierConfigManager.getQnsIwlanHoRestrictReason();
+                if (fallbackReason == QnsConstants.FALLBACK_REASON_RTP_OR_WIFI
+                        || fallbackReason == QnsConstants.FALLBACK_REASON_RTP_ONLY) {
+                    increaseCounterToRestrictIwlanInCall();
+                }
             }
         }
     }
