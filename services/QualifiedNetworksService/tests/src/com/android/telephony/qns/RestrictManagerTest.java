@@ -509,6 +509,9 @@ public class RestrictManagerTest extends QnsTest {
         when(mMockQnsConfigManager.getHoRestrictedTimeOnLowRTPQuality(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
                 .thenReturn(30000);
+        when(mMockQnsConfigManager.getQnsMaxIwlanHoCountDuringCall()).thenReturn(1);
+        when(mMockQnsConfigManager.getQnsIwlanHoRestrictReason())
+                .thenReturn(QnsConstants.FALLBACK_REASON_RTP_ONLY);
         QnsCarrierConfigManager.RtpMetricsConfig config =
                 new QnsCarrierConfigManager.RtpMetricsConfig(0, 0, 0, 0);
         when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
@@ -534,6 +537,10 @@ public class RestrictManagerTest extends QnsTest {
         assertTrue(
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_RTP_LOW_QUALITY));
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        RESTRICT_TYPE_RESTRICT_IWLAN_IN_CALL));
         assertFalse(mRestrictManager.isRestricted(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
         mTestLooper.moveTimeForward(30000);
         mTestLooper.dispatchAll();
