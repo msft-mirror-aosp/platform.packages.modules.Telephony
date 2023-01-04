@@ -42,7 +42,10 @@ android_app {
 
     plugins: ["auto_value_plugin"],
 
-    required: ["privapp-permlist_com.android.telephony.qns.xml"],
+    required: [
+        "privapp-permissions_com.android.telephony.qns",
+    ],
+
     apex_available: [
         "//apex_available:platform",
         "com.android.telephonymodules",
@@ -54,9 +57,9 @@ android_app {
 }
 
 prebuilt_etc {
-    name: "privapp-permlist_com.android.telephony.qns.xml",
+    name: "privapp-permissions_com.android.telephony.qns",
     sub_dir: "permissions",
-    src: "com.android.telephony.qns.xml",
+    src: "privapp-permissions_com.android.telephony.qns.xml",
     filename_from_src: true,
     system_ext_specific: true,
 }
