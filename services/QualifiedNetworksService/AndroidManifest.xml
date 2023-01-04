@@ -17,11 +17,14 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     coreApp="true"
-    android:sharedUserId="android.uid.system"
     package="com.android.telephony.qns">
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" />
+  <uses-permission android:name="android.permission.NETWORK_SIGNAL_STRENGTH_WAKEUP" />
+  <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+  <uses-permission android:name="android.permission.READ_PRECISE_PHONE_STATE" />
   <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
   <application
       android:directBootAware="true"
@@ -34,7 +37,6 @@
                <action android:name="android.telephony.data.QualifiedNetworksService" />
          </intent-filter>
     </service>
-
     <activity
       android:name=".wfc.WfcActivationActivity"
       android:configChanges="orientation"
@@ -61,13 +63,5 @@
         <category android:name="android.intent.category.DEFAULT" />
       </intent-filter>
     </activity-alias>
-    <!--
-    <receiver android:name=".QnsBroadcastReceiver"
-              android:exported="true">
-         <intent-filter>
-            <action android:name="android.telephony.action.CARRIER_CONFIG_CHANGED"/>
-         </intent-filter>
-    </receiver>
-    -->
   </application>
 </manifest>
