@@ -29,6 +29,7 @@ class QnsConstants {
 
     static final String QNS_TAG = "QNS";
 
+    static final int INVALID_VALUE = -1;
     static final int INVALID_ID = -1;
     static final int INVALID_SUB_ID = -1;
     static final int KEY_DEFAULT_VALUE = 0;
@@ -37,10 +38,7 @@ class QnsConstants {
     static final int CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER = 0;
     static final int CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT = 5000;
 
-    static final int KEY_DEFAULT_JITTER = 120;
-    static final int KEY_DEFAULT_PACKET_LOSS_RATE = 40;
     static final int KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS = 5000;
-    static final int KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS = 2000;
     static final int KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS = 60000;
 
     static final int KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD = -99;
@@ -77,6 +75,8 @@ class QnsConstants {
     @IntDef(value = {COVERAGE_HOME, COVERAGE_ROAM, COVERAGE_BOTH})
     @interface CellularCoverage {}
 
+    // These(RTP_LOW_QUALITY_) constants are used to @code worseThanBefore(),
+    // be caution before change.
     static final int RTP_LOW_QUALITY_REASON_JITTER = 1;
     static final int RTP_LOW_QUALITY_REASON_PACKET_LOSS = 2;
     static final int RTP_LOW_QUALITY_REASON_NO_RTP = 3;

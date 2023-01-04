@@ -246,7 +246,6 @@ public class QnsUtilsTest extends QnsTest {
         doReturn(mTestBundle).when(mMockCarrierConfigManager).getConfigForSubId(anyInt());
         int[] defaultIntArray = new int[] {1, 2};
         int[] defaultNoVopsArray = new int[] {1, 0};
-        int[] defaultRtpMetricsIntArray = new int[] {150, 50, 10000, 3000};
         int[] defaultWwanHystTimerIntArray = new int[] {50000, 50000, 50000};
         int[] defaultWlanHystTimerIntArray = new int[] {50000, 50000, 50000};
         int[] defaultNonImsWwanHystTimerIntArray = new int[] {50000, 50000};
@@ -415,6 +414,14 @@ public class QnsUtilsTest extends QnsTest {
                                 null,
                                 QnsCarrierConfigManager
                                         .KEY_QNS_IMS_NETWORK_ENABLE_HO_HYSTERESIS_TIMER_INT));
+        assertEquals(
+                3000 /* test value */,
+                (int)
+                        QnsUtils.getConfig(
+                                mTestBundle,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT));
         assertArrayEquals(
                 defaultIwlanMaxHoCountAndFallback,
                 QnsUtils.getConfig(
@@ -446,10 +453,6 @@ public class QnsUtilsTest extends QnsTest {
                         mTestBundle,
                         null,
                         QnsCarrierConfigManager.KEY_NON_IMS_WLAN_HYSTERESIS_TIMER_MS_INT_ARRAY));
-        assertArrayEquals(
-                defaultRtpMetricsIntArray,
-                QnsUtils.getConfig(
-                        mTestBundle, null, QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
         assertArrayEquals(
                 defaultWaitingTimerIntArray,
                 QnsUtils.getConfig(
@@ -575,6 +578,9 @@ public class QnsUtilsTest extends QnsTest {
         mTestBundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_IMS_NETWORK_ENABLE_HO_HYSTERESIS_TIMER_INT,
                 QnsConstants.COVERAGE_HOME);
+        mTestBundle.putInt(
+                QnsCarrierConfigManager.KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT,
+                3000);
         mTestBundle.putIntArray(
                 QnsCarrierConfigManager
                         .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY,
@@ -591,9 +597,6 @@ public class QnsUtilsTest extends QnsTest {
         mTestBundle.putIntArray(
                 QnsCarrierConfigManager.KEY_NON_IMS_WLAN_HYSTERESIS_TIMER_MS_INT_ARRAY,
                 new int[] {50000, 50000});
-        mTestBundle.putIntArray(
-                QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY,
-                new int[] {150, 50, 10000, 3000});
         mTestBundle.putIntArray(
                 QnsCarrierConfigManager
                         .KEY_WAITING_TIME_FOR_PREFERRED_TRANSPORT_WHEN_POWER_ON_INT_ARRAY,
@@ -785,6 +788,14 @@ public class QnsUtilsTest extends QnsTest {
                                 null,
                                 QnsCarrierConfigManager
                                         .KEY_QNS_IMS_NETWORK_ENABLE_HO_HYSTERESIS_TIMER_INT));
+        assertEquals(
+                QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS,
+                (int)
+                        QnsUtils.getConfig(
+                                null,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT));
         assertArrayEquals(
                 new int[] {QnsConstants.MAX_COUNT_INVALID, QnsConstants.FALLBACK_REASON_INVALID},
                 QnsUtils.getConfig(
@@ -824,15 +835,6 @@ public class QnsUtilsTest extends QnsTest {
                         null,
                         null,
                         QnsCarrierConfigManager.KEY_NON_IMS_WLAN_HYSTERESIS_TIMER_MS_INT_ARRAY));
-        assertArrayEquals(
-                new int[] {
-                    QnsConstants.KEY_DEFAULT_JITTER,
-                    QnsConstants.KEY_DEFAULT_PACKET_LOSS_RATE,
-                    QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS,
-                    QnsConstants.KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS
-                },
-                QnsUtils.getConfig(
-                        null, null, QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY));
         assertArrayEquals(
                 new int[] {QnsConstants.KEY_DEFAULT_VALUE, QnsConstants.KEY_DEFAULT_VALUE},
                 QnsUtils.getConfig(

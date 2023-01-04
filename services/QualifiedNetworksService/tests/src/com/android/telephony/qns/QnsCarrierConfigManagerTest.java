@@ -1480,12 +1480,12 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         QnsCarrierConfigManager.RtpMetricsConfig rtpMetricsData =
                 mConfigManager.getRTPMetricsData();
 
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_JITTER, rtpMetricsData.mJitter);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_PACKET_LOSS_RATE, rtpMetricsData.mPktLossRate);
+        Assert.assertEquals(QnsConstants.INVALID_VALUE, rtpMetricsData.mJitter);
+        Assert.assertEquals(QnsConstants.INVALID_VALUE, rtpMetricsData.mPktLossRate);
         Assert.assertEquals(
                 QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS, rtpMetricsData.mPktLossTime);
         Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS, rtpMetricsData.mNoRtpInterval);
+                QnsConstants.INVALID_VALUE, rtpMetricsData.mNoRtpInterval);
 
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, rtpMetricsData.mJitter);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, rtpMetricsData.mPktLossRate);
