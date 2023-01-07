@@ -141,7 +141,7 @@ class QnsEventDispatcher {
     protected final QnsProvisioningListener mQnsProvisioningListener;
     protected final QnsImsManager mQnsImsManager;
     private QnsProvisioningListener.QnsProvisioningInfo mLastProvisioningInfo;
-    private final QnsEventDispatcherHandler mQnsEventDispatcherHandler;
+    @VisibleForTesting final QnsEventDispatcherHandler mQnsEventDispatcherHandler;
 
     @VisibleForTesting
     final BroadcastReceiver mIntentReceiver =
@@ -243,8 +243,7 @@ class QnsEventDispatcher {
                                 Log.d(mLogTag, "Intent subId: " + subId + ", mSubId: " + mSubId);
                                 break;
                             }
-                            int request =
-                                    intent.getIntExtra(EXTRA_TRY_STATUS, 0);
+                            int request = intent.getIntExtra(EXTRA_TRY_STATUS, 0);
                             event =
                                     request == STATUS_START
                                             ? QNS_EVENT_TRY_WFC_ACTIVATION
@@ -255,9 +254,7 @@ class QnsEventDispatcher {
                 }
             };
 
-    /**
-     * QnsEventDispatcher constructor
-     */
+    /** QnsEventDispatcher constructor */
     QnsEventDispatcher(
             Context context,
             QnsProvisioningListener provisioningListener,

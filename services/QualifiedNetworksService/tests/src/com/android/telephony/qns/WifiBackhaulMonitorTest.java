@@ -281,7 +281,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                                         null),
                                 null))
                 .sendToTarget();
-        waitFor(100);
+        waitForDelayedHandlerAction(mRttHandler, 100, 100);
         assertTrue(mRttHandler.hasMessages(EVENT_START_RTT_CHECK));
     }
 
@@ -313,7 +313,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                                         null),
                                 null))
                 .sendToTarget();
-        waitFor(100);
+        waitForDelayedHandlerAction(mRttHandler, 100, 100);
         assertFalse(mRttHandler.hasMessages(EVENT_START_RTT_CHECK));
     }
 
@@ -331,12 +331,12 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                                         null),
                                 null))
                 .sendToTarget();
-        waitFor(100);
+        waitForDelayedHandlerAction(mRttHandler, 100, 100);
         assertFalse(mRttHandler.hasMessages(EVENT_START_RTT_CHECK));
     }
 
     private void verifyResultAs(boolean expected) throws InterruptedException {
-        assertTrue(mLatch.await(500, TimeUnit.MILLISECONDS));
+        assertTrue(mLatch.await(1000, TimeUnit.MILLISECONDS));
         assertNotNull(mAsyncResult);
         assertEquals(expected, mAsyncResult.mResult);
     }

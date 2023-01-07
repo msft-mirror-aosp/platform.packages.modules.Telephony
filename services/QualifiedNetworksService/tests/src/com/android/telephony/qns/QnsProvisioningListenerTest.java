@@ -107,6 +107,8 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
     @Test
     public void testRegisterProvisioningItemInfoChanged() {
+        // wait for QnsProvisioningListener to load default items.
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(mHandler, 1, null, true);
 
         Message msg = mTestLooper.nextMessage();
@@ -118,11 +120,12 @@ public class QnsProvisioningListenerTest extends QnsTest {
         QnsProvisioningListener.QnsProvisioningInfo info =
                 (QnsProvisioningListener.QnsProvisioningInfo) result.mResult;
         assertNotNull(info);
+        mTestLooper.dispatchAll();
 
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS,
                 ProvisioningManager.PROVISIONING_VALUE_ENABLED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertEquals(1, msg.what);
@@ -136,19 +139,20 @@ public class QnsProvisioningListenerTest extends QnsTest {
                 (int) info.getIntegerItem(ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS));
 
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(mHandler, 2, null, false);
-
         msg = mTestLooper.nextMessage();
         assertNull(msg);
     }
 
     @Test
     public void testUnregisterProvisioningItemInfoChanged() {
+        // wait for QnsProvisioningListener to load default items.
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(mHandler, 1, null, false);
 
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS,
                 ProvisioningManager.PROVISIONING_VALUE_ENABLED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
 
@@ -158,28 +162,30 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS,
                 ProvisioningManager.PROVISIONING_VALUE_ENABLED);
-        waitFor(300);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         msg = mTestLooper.nextMessage();
         assertNull(msg);
     }
 
     @Test
     public void testQnsProvisioningInfo() {
+        // wait for QnsProvisioningListener to load default items.
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         String entitlementId = "test-id";
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(mHandler, 1, null, false);
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOLTE_PROVISIONING_STATUS,
                 ProvisioningManager.PROVISIONING_VALUE_ENABLED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mTestLooper.nextMessage();
         mQnsProvisioningCallback.onProvisioningStringChanged(
                 ProvisioningManager.KEY_VOICE_OVER_WIFI_ENTITLEMENT_ID, entitlementId);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mTestLooper.nextMessage();
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE,
                 ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         Message msg = mTestLooper.nextMessage();
 
         assertNotNull(msg);
@@ -227,11 +233,13 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
     @Test
     public void testEqualsIntegerItem_QnsProvisioningInfo() {
+        // wait for QnsProvisioningListener to load default items.
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mQnsProvisioningListener.registerProvisioningItemInfoChanged(mHandler, 1, null, false);
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE,
                 ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         Message msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertEquals(1, msg.what);
@@ -244,7 +252,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE,
                 ImsMmTelManager.WIFI_MODE_WIFI_ONLY);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertEquals(1, msg.what);
@@ -257,7 +265,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
         mQnsProvisioningCallback.onProvisioningIntChanged(
                 ProvisioningManager.KEY_VOICE_OVER_WIFI_MODE_OVERRIDE,
                 ImsMmTelManager.WIFI_MODE_WIFI_PREFERRED);
-        waitFor(200);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         msg = mTestLooper.nextMessage();
         assertNotNull(msg);
         assertEquals(1, msg.what);
@@ -323,31 +331,23 @@ public class QnsProvisioningListenerTest extends QnsTest {
 
         QnsImsManager.ImsState unavailable = new QnsImsManager.ImsState(false);
         QnsImsManager.ImsState available = new QnsImsManager.ImsState(true);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
                         mQnsProvisioningListener.mQnsProvisioningHandler,
                         eventImsStateChanged,
                         new QnsAsyncResult(null, unavailable, null)));
 
-        for (int i : new int[] {100, 200, 400, 800}) {
-            if (mQnsProvisioningListener.mQnsProvisioningHandler.hasMessages(
-                    eventImsStateChanged)) {
-                waitFor(i);
-            } else {
-                QnsProvisioningListener.QnsProvisioningInfo clearInfo =
-                        new QnsProvisioningListener.QnsProvisioningInfo();
-                clearInfo.clear();
+        QnsProvisioningListener.QnsProvisioningInfo clearInfo =
+                new QnsProvisioningListener.QnsProvisioningInfo();
+        clearInfo.clear();
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
+        Field field = QnsProvisioningListener.class.getDeclaredField("mProvisioningInfo");
+        field.setAccessible(true);
+        QnsProvisioningListener.QnsProvisioningInfo provisioningInfo =
+                (QnsProvisioningListener.QnsProvisioningInfo) field.get(mQnsProvisioningListener);
 
-                Field field = QnsProvisioningListener.class.getDeclaredField("mProvisioningInfo");
-                field.setAccessible(true);
-                QnsProvisioningListener.QnsProvisioningInfo provisioningInfo =
-                        (QnsProvisioningListener.QnsProvisioningInfo)
-                                field.get(mQnsProvisioningListener);
-
-                assertEquals(clearInfo.toString(), provisioningInfo.toString());
-                break;
-            }
-        }
+        assertEquals(clearInfo.toString(), provisioningInfo.toString());
 
         mQnsProvisioningListener.mQnsProvisioningHandler.handleMessage(
                 Message.obtain(
@@ -355,7 +355,7 @@ public class QnsProvisioningListenerTest extends QnsTest {
                         eventImsStateChanged,
                         new QnsAsyncResult(null, available, null)));
 
-        waitFor(1000);
+        waitForLastHandlerAction(mQnsProvisioningListener.mQnsProvisioningHandler);
 
         ArgumentCaptor<ProvisioningManager.Callback> arg =
                 ArgumentCaptor.forClass(ProvisioningManager.Callback.class);

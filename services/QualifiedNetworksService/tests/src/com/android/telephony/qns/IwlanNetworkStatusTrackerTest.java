@@ -56,6 +56,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     private IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     private IwlanNetworkStatusTracker.IwlanAvailabilityInfo mIwlanAvailabilityInfo;
     private final TestHandler[] mHandlers = new TestHandler[2];
+    private Handler mEventHandler;
     private final HandlerThread[] mHandlerThreads = new HandlerThread[2];
     @Mock private Network mMockNetwork;
     private MockitoSession mMockSession;
@@ -139,8 +140,10 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testHandleMessage_InvalidSubID() throws InterruptedException {
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mHandlers[0].mLatch = new CountDownLatch(1);
-        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
 
         // If sim is invalid, no event is notified because of already info was notified.
@@ -154,16 +157,18 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testHandleMessage_ValidSubID() throws InterruptedException {
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mHandlers[0].mLatch = new CountDownLatch(1);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
         lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, false /* isVcn */);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
         mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
     }
@@ -173,15 +178,17 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         // Verifies that DDS can also establish cross-sim over nDDS, as long as nDDS is the current
         // active data sub.
         mHandlers[0].mLatch = new CountDownLatch(1);
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
         lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, false /* isVcn */);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
         mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
     }
@@ -189,15 +196,17 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     @Test
     public void testHandleMessage_VcnWithValidSubID() throws InterruptedException {
         mHandlers[0].mLatch = new CountDownLatch(1);
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         lenient().when(QnsUtils.getSubId(sMockContext, CURRENT_SLOT_ID)).thenReturn(CURRENT_SUB_ID);
         lenient().when(QnsUtils.isCrossSimCallingEnabled(mMockQnsImsManager)).thenReturn(true);
         lenient().when(QnsUtils.isDefaultDataSubs(CURRENT_SLOT_ID)).thenReturn(false);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         prepareNetworkCapabilitiesForTest(ACTIVE_DATA_SUB_ID, true /* isVcn */);
         mIwlanNetworkStatusTracker.onCrossSimEnabledEvent(true, CURRENT_SLOT_ID);
         mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(CURRENT_SLOT_ID, true);
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
         assertNotNull(mIwlanAvailabilityInfo);
         assertTrue(mIwlanAvailabilityInfo.isCrossWfc());
     }
@@ -252,7 +261,9 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     public void testDefaultNetworkCallback(boolean isWifi, boolean isIwlanRegistered)
             throws InterruptedException {
         mHandlers[0].mLatch = new CountDownLatch(1);
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(200, TimeUnit.MILLISECONDS));
         ConnectivityManager.NetworkCallback networkCallback = setupNetworkCallback();
         TelephonyNetworkSpecifier tns = new TelephonyNetworkSpecifier(0);
@@ -270,12 +281,12 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         if (isWifi) {
             mIwlanNetworkStatusTracker.onIwlanServiceStateChanged(0, isIwlanRegistered);
         }
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
         verifyIwlanAvailabilityInfo(isWifi, isIwlanRegistered);
 
         networkCallback.onCapabilitiesChanged(mMockNetwork, mNetworkCapabilities);
         // no callback is expected since onAvailable already reported information
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
         verifyIwlanAvailabilityInfo(isWifi, isIwlanRegistered);
     }
 
@@ -302,8 +313,10 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testRegisterIwlanNetworksChanged() throws Exception {
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mHandlers[0].mLatch = new CountDownLatch(1);
         mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
         assertNotNull(mIwlanAvailabilityInfo);
         assertFalse(mIwlanAvailabilityInfo.getIwlanAvailable());
@@ -312,11 +325,13 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
 
     @Test
     public void testUnregisterIwlanNetworksChanged() throws InterruptedException {
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mHandlers[0].mLatch = new CountDownLatch(1);
-        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
         assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
         ConnectivityManager.NetworkCallback networkCallback = setupNetworkCallback();
-        TelephonyNetworkSpecifier tns = new TelephonyNetworkSpecifier(0);
+        TelephonyNetworkSpecifier tns = new TelephonyNetworkSpecifier(CURRENT_SLOT_ID);
         mNetworkCapabilities =
                 new NetworkCapabilities.Builder()
                         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -325,7 +340,8 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         when(mMockConnectivityManager.getNetworkCapabilities(mMockNetwork))
                 .thenReturn(mNetworkCapabilities);
         mHandlers[0].mLatch = new CountDownLatch(1);
-        mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(0, mHandlers[0]);
+        mIwlanNetworkStatusTracker.unregisterIwlanNetworksChanged(CURRENT_SLOT_ID, mHandlers[0]);
+        waitForLastHandlerAction(mEventHandler);
         networkCallback.onAvailable(mMockNetwork);
         assertFalse(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
     }
@@ -333,6 +349,7 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     @Test
     public void testIsInternationalRoaming() {
         boolean isInternationalRoaming;
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         when(mMockTelephonyManager.getSimCountryIso()).thenReturn("CA");
         ArgumentCaptor<Consumer<Country>> capture = ArgumentCaptor.forClass(Consumer.class);
         verify(mMockCountryDetector)
@@ -340,13 +357,13 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
         Consumer<Country> countryConsumer = capture.getValue();
 
         countryConsumer.accept(new Country("US", Country.COUNTRY_SOURCE_LOCATION));
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
 
         isInternationalRoaming = mIwlanNetworkStatusTracker.isInternationalRoaming(anyInt());
         assertTrue(isInternationalRoaming);
 
         countryConsumer.accept(new Country("CA", Country.COUNTRY_SOURCE_LOCATION));
-        waitFor(100);
+        waitForLastHandlerAction(mEventHandler);
 
         isInternationalRoaming = mIwlanNetworkStatusTracker.isInternationalRoaming(anyInt());
         assertFalse(isInternationalRoaming);
