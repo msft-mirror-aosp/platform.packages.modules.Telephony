@@ -79,7 +79,7 @@ class IwlanNetworkStatusTracker {
 
     // The current active data subscription. May not be the default data subscription.
     private int mConnectedDataSub = INVALID_SUB_ID;
-    private SparseArray<IwlanEventHandler> mHandlerSparseArray = new SparseArray<>();
+    @VisibleForTesting SparseArray<IwlanEventHandler> mHandlerSparseArray = new SparseArray<>();
     private SparseArray<IwlanAvailabilityInfo> mLastIwlanAvailabilityInfo = new SparseArray<>();
     private CountryDetector mCountryDetector;
 
