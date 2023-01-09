@@ -317,7 +317,8 @@ class QnsTelephonyListener {
                             NetworkRegistrationInfo.DOMAIN_PS,
                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
             if (lastIwlanNrs != null) {
-                r.notifyRegistrant(new QnsAsyncResult(null, lastIwlanNrs.isRegistered(), null));
+                r.notifyRegistrant(
+                        new QnsAsyncResult(null, lastIwlanNrs.isNetworkRegistered(), null));
             }
         }
     }
@@ -467,9 +468,10 @@ class QnsTelephonyListener {
 
         if (newIwlanNrs != null
                 && (oldIwlanNrs == null
-                        || newIwlanNrs.isRegistered() != oldIwlanNrs.isRegistered())) {
-            log("Iwlan is in service: " + newIwlanNrs.isRegistered());
-            notifyIwlanServiceStateInfo(newIwlanNrs.isRegistered());
+                        || newIwlanNrs.isNetworkRegistered()
+                                != oldIwlanNrs.isNetworkRegistered())) {
+            log("Iwlan is in service: " + newIwlanNrs.isNetworkRegistered());
+            notifyIwlanServiceStateInfo(newIwlanNrs.isNetworkRegistered());
         }
 
         NetworkRegistrationInfo newWwanNrs =
@@ -495,7 +497,7 @@ class QnsTelephonyListener {
         if (newWwanNrs != null) {
             newInfo.setDataNetworkType(newWwanNrs.getAccessNetworkTechnology());
             newInfo.setDataRegState(
-                    registrationStateToServiceState(newWwanNrs.getRegistrationState()));
+                    registrationStateToServiceState(newWwanNrs.getNetworkRegistrationState()));
 
             // Event for cellular data roaming registration state changed.
             // Refer roaming state which is not overridden by configs.
@@ -514,12 +516,12 @@ class QnsTelephonyListener {
         boolean hasAirplaneModeOnChanged =
                 mLastServiceState.getState() != ServiceState.STATE_POWER_OFF
                         && serviceState.getState() == ServiceState.STATE_POWER_OFF;
-        if ((oldWwanNrs == null || !oldWwanNrs.isRegistered() || hasAirplaneModeOnChanged)
-                && (newWwanNrs != null && newWwanNrs.isRegistered())) {
+        if ((oldWwanNrs == null || !oldWwanNrs.isNetworkRegistered() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isNetworkRegistered())) {
             newInfo.setCellularAvailable(true);
         }
-        if ((oldWwanNrs != null && oldWwanNrs.isRegistered())
-                && (newWwanNrs == null || !newWwanNrs.isRegistered())) {
+        if ((oldWwanNrs != null && oldWwanNrs.isNetworkRegistered())
+                && (newWwanNrs == null || !newWwanNrs.isNetworkRegistered())) {
             newInfo.setCellularAvailable(false);
         }
 
@@ -760,6 +762,7 @@ class QnsTelephonyListener {
         /** Notify the Call state changed. */
         void onCallStatesChanged(List<CallState> callStateList);
     }
+
     protected static class Archiving<V> {
         protected HashMap<String, V> mArchiving = new HashMap<>();
 
