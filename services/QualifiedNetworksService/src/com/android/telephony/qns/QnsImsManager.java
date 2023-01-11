@@ -32,16 +32,23 @@ import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsException;
 import android.telephony.ims.ImsManager;
 import android.telephony.ims.ImsMmTelManager;
+import android.telephony.ims.ImsRcsManager;
 import android.telephony.ims.ImsReasonInfo;
 import android.telephony.ims.ImsRegistrationAttributes;
 import android.telephony.ims.ImsStateCallback;
 import android.telephony.ims.ProvisioningManager;
 import android.telephony.ims.RegistrationManager;
-import android.telephony.ims.compat.feature.ImsFeature;
+import android.telephony.ims.SipDelegateManager;
+import android.telephony.ims.SipDialogState;
+import android.telephony.ims.SipDialogStateCallback;
+import android.telephony.ims.feature.ImsFeature;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -64,39 +71,30 @@ class QnsImsManager {
     private final Context mContext;
     private final int mSlotId;
     private final Executor mExecutor;
+    private final Handler mHandler;
+    private final HandlerThread mHandlerThread;
+    private int mSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    private final SubscriptionManager mSubscriptionManager;
     private boolean mQnsImsManagerInitialized;
     private CarrierConfigManager mConfigManager;
     private ImsManager mImsManager;
     private ImsMmTelManager mImsMmTelManager;
-    private QnsImsStateCallback mQnsImsStateCallback;
-    private final QnsRegistrantList mQnsImsStateListener;
-    private final Handler mHandler;
-    private final HandlerThread mHandlerThread;
-    private QnsImsRegistrationCallback mQnsImsRegistrationCallback;
-    private final QnsRegistrantList mImsRegistrationStatusListeners;
-    private ImsRegistrationState mLastImsRegistrationState;
-    private final SubscriptionManager mSubscriptionManager;
-    private int mSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    private ImsRcsManager mImsRcsManager;
+    private SipDelegateManager mSipDelegateManager;
+    QnsImsStateCallback mMmTelStateCallback;
+    QnsImsStateCallback mRcsStateCallback;
+    QnsImsRegistrationCallback mMmtelImsRegistrationCallback;
+    QnsImsRegistrationCallback mRcsImsRegistrationCallback;
+    QnsSipDialogStateCallback mRcsSipDialogSessionStateCallback;
+
+    final QnsRegistrantList mMmTelImsStateListener;
+    final QnsRegistrantList mRcsImsStateListener;
+    final QnsRegistrantList mMmTelImsRegistrationListener;
+    final QnsRegistrantList mRcsImsRegistrationListener;
+    final QnsRegistrantList mRcsSipDialogSessionStateListener;
 
     @VisibleForTesting
-    final SubscriptionManager.OnSubscriptionsChangedListener mSubscriptionsChangeListener =
-            new SubscriptionManager.OnSubscriptionsChangedListener() {
-                @Override
-                public void onSubscriptionsChanged() {
-                    int newSubId = QnsUtils.getSubId(mContext, mSlotId);
-                    if (newSubId != mSubId) {
-                        mSubId = newSubId;
-                        if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                            clearQnsImsManager();
-                        } else {
-                            clearQnsImsManager();
-                            initQnsImsManager();
-                            registerImsStateCallback();
-                            registerImsRegistrationCallback();
-                        }
-                    }
-                }
-            };
+    final SubscriptionManager.OnSubscriptionsChangedListener mSubscriptionsChangeListener;
 
     /** QnsImsManager default constructor */
     QnsImsManager(Context context, int slotId) {
@@ -109,20 +107,31 @@ class QnsImsManager {
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
 
-        mQnsImsStateListener = new QnsRegistrantList();
-        mImsRegistrationStatusListeners = new QnsRegistrantList();
+        mMmTelImsStateListener = new QnsRegistrantList();
+        mRcsImsStateListener = new QnsRegistrantList();
+        mMmTelImsRegistrationListener = new QnsRegistrantList();
+        mRcsImsRegistrationListener = new QnsRegistrantList();
+        mRcsSipDialogSessionStateListener = new QnsRegistrantList();
 
-        if (!mQnsImsManagerInitialized) {
-            initQnsImsManager();
-        }
-        if (mQnsImsStateCallback == null) {
-            registerImsStateCallback();
-        }
-        if (mQnsImsRegistrationCallback == null) {
-            registerImsRegistrationCallback();
-        }
+        initQnsImsManager();
 
         mSubscriptionManager = mContext.getSystemService(SubscriptionManager.class);
+        mSubscriptionsChangeListener =
+                new SubscriptionManager.OnSubscriptionsChangedListener(mHandlerThread.getLooper()) {
+                    @Override
+                    public void onSubscriptionsChanged() {
+                        int newSubId = QnsUtils.getSubId(mContext, mSlotId);
+                        if (newSubId != mSubId) {
+                            mSubId = newSubId;
+                            if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                                clearQnsImsManager();
+                            } else {
+                                clearQnsImsManager();
+                                initQnsImsManager();
+                            }
+                        }
+                    }
+                };
         if (mSubscriptionManager != null) {
             mSubscriptionManager.addOnSubscriptionsChangedListener(
                     new QnsUtils.QnsExecutor(mHandler), mSubscriptionsChangeListener);
@@ -131,6 +140,11 @@ class QnsImsManager {
 
     @VisibleForTesting
     protected synchronized void initQnsImsManager() {
+        if (mQnsImsManagerInitialized) {
+            return;
+        }
+        log("initQnsImsManager.");
+
         if (mConfigManager == null) {
             mConfigManager = mContext.getSystemService(CarrierConfigManager.class);
             if (mConfigManager == null) {
@@ -161,76 +175,184 @@ class QnsImsManager {
             return;
         }
 
+        mImsRcsManager = mImsManager.getImsRcsManager(subId);
+        if (mImsRcsManager == null) {
+            loge("initQnsImsManager: couldn't initialize. failed to get ImsRcsManager.");
+            clearQnsImsManager();
+            return;
+        }
+
+        mSipDelegateManager = mImsManager.getSipDelegateManager(subId);
+        if (mSipDelegateManager == null) {
+            loge("initQnsImsManager: couldn't initialize. failed to get mSipDelegateManager.");
+            clearQnsImsManager();
+            return;
+        }
+
         mQnsImsManagerInitialized = true;
 
-        log("initQnsImsManager: initialized.");
+        startTrackingImsState(ImsFeature.FEATURE_MMTEL);
+        startTrackingImsState(ImsFeature.FEATURE_RCS);
+        startTrackingImsRegistration(ImsFeature.FEATURE_MMTEL);
+        startTrackingImsRegistration(ImsFeature.FEATURE_RCS);
+        startTrackingSipDialogSessionState(ImsFeature.FEATURE_RCS);
     }
 
     @VisibleForTesting
-    protected synchronized void registerImsStateCallback() {
-        if (!mQnsImsManagerInitialized) {
-            initQnsImsManager();
-            if (mImsMmTelManager == null) {
-                return;
+    protected synchronized void startTrackingImsState(int feature) {
+        if (feature == ImsFeature.FEATURE_MMTEL
+                && mImsMmTelManager != null
+                && mMmTelStateCallback == null) {
+            try {
+                QnsImsStateCallback imsStateCallback = new QnsImsStateCallback(feature);
+                mImsMmTelManager.registerImsStateCallback(mExecutor, imsStateCallback);
+                log("startTrackingImsState: registered ImsFeature.MMTEL State Callback.");
+                mMmTelStateCallback = imsStateCallback;
+            } catch (ImsException e) {
+                loge("startTrackingImsState: couldn't register MMTEL state callback, " + e);
             }
         }
 
-        if (mQnsImsStateCallback != null) {
-            loge("registerImsStateCallback: already registered");
-            return;
-        }
-
-        try {
-            QnsImsStateCallback stateCallback = new QnsImsStateCallback();
-            mImsMmTelManager.registerImsStateCallback(mExecutor, stateCallback);
-            log("registerImsStateCallback: registered Ims State Callback.");
-            mQnsImsStateCallback = stateCallback;
-        } catch (ImsException e) {
-            loge("registerImsStateCallback: couldn't register callback, " + e);
+        if (feature == ImsFeature.FEATURE_RCS
+                && mImsRcsManager != null
+                && mRcsStateCallback == null) {
+            try {
+                QnsImsStateCallback rcsStateCallback = new QnsImsStateCallback(feature);
+                mImsRcsManager.registerImsStateCallback(mExecutor, rcsStateCallback);
+                log("startTrackingImsState: registered ImsFeature.RCS State Callback.");
+                mRcsStateCallback = rcsStateCallback;
+            } catch (ImsException e) {
+                loge("startTrackingImsState: couldn't register RCS state callback, " + e);
+            }
         }
     }
 
     @VisibleForTesting
-    protected synchronized void registerImsRegistrationCallback() {
-        if (!mQnsImsManagerInitialized) {
-            initQnsImsManager();
-            if (mImsMmTelManager == null) {
-                return;
+    protected synchronized void startTrackingImsRegistration(int feature) {
+        if (feature == ImsFeature.FEATURE_MMTEL
+                && mImsMmTelManager != null
+                && mMmtelImsRegistrationCallback == null) {
+            try {
+                QnsImsRegistrationCallback imsRegistrationCallback =
+                        new QnsImsRegistrationCallback(feature);
+                mImsMmTelManager.registerImsRegistrationCallback(
+                        mExecutor, imsRegistrationCallback);
+                log("startTrackingImsRegistration: registered MMTEL registration callback");
+                mMmtelImsRegistrationCallback = imsRegistrationCallback;
+            } catch (ImsException e) {
+                loge("startTrackingImsRegistration: couldn't register MMTEL callback, " + e);
             }
         }
 
-        if (mQnsImsRegistrationCallback != null) {
-            loge("registerImsRegistrationCallback: already registered");
-            return;
+        if (feature == ImsFeature.FEATURE_RCS
+                && mImsRcsManager != null
+                && mRcsImsRegistrationCallback == null) {
+            try {
+                QnsImsRegistrationCallback rcsRegistrationCallback =
+                        new QnsImsRegistrationCallback(feature);
+                mImsRcsManager.registerImsRegistrationCallback(mExecutor, rcsRegistrationCallback);
+                log("startTrackingImsRegistration: registered RCS registration callback");
+                mRcsImsRegistrationCallback = rcsRegistrationCallback;
+            } catch (ImsException e) {
+                loge("startTrackingImsRegistration: couldn't register RCS callback, " + e);
+            }
         }
+    }
 
-        try {
-            QnsImsRegistrationCallback registrationCallback = new QnsImsRegistrationCallback();
-            mImsMmTelManager.registerImsRegistrationCallback(mExecutor, registrationCallback);
-            log("registerImsRegistrationCallback: registered Ims Registration Callback.");
-            mQnsImsRegistrationCallback = registrationCallback;
-        } catch (ImsException e) {
-            loge("registerImsRegistrationCallback: couldn't register callback, " + e);
+    @VisibleForTesting
+    protected synchronized void startTrackingSipDialogSessionState(int feature) {
+        if (feature == ImsFeature.FEATURE_RCS
+                && mImsRcsManager != null
+                && mRcsStateCallback != null
+                && mRcsStateCallback.isImsAvailable()
+                && mRcsSipDialogSessionStateCallback == null) {
+            try {
+                QnsSipDialogStateCallback rcsSipDialogStateCallback =
+                        new QnsSipDialogStateCallback();
+                mSipDelegateManager.registerSipDialogStateCallback(
+                        mExecutor, rcsSipDialogStateCallback);
+                log("startTrackingSipDialogSessionState: registered SipDialogState callback.");
+                mRcsSipDialogSessionStateCallback = rcsSipDialogStateCallback;
+            } catch (ImsException e) {
+                loge("startTrackingSipDialogSessionState: couldn't register callback, " + e);
+            }
+        }
+    }
+
+    protected synchronized void stopTrackingImsState(int feature) {
+        if (feature == ImsFeature.FEATURE_MMTEL
+                && mImsMmTelManager != null
+                && mMmTelStateCallback != null) {
+            try {
+                mImsMmTelManager.unregisterImsStateCallback(mMmTelStateCallback);
+            } catch (Exception e) {
+                // do-nothing
+            }
+        }
+        if (feature == ImsFeature.FEATURE_RCS
+                && mImsRcsManager != null
+                && mRcsStateCallback != null) {
+            try {
+                mImsRcsManager.unregisterImsStateCallback(mRcsStateCallback);
+            } catch (Exception e) {
+                // do-nothing
+            }
+        }
+    }
+
+    protected synchronized void stopTrackingImsRegistration(int feature) {
+        if (feature == ImsFeature.FEATURE_MMTEL
+                && mImsMmTelManager != null
+                && mMmtelImsRegistrationCallback != null) {
+            try {
+                mImsMmTelManager.unregisterImsRegistrationCallback(mMmtelImsRegistrationCallback);
+            } catch (Exception e) {
+                // do-nothing
+            }
+        }
+        if (feature == ImsFeature.FEATURE_RCS
+                && mImsRcsManager != null
+                && mRcsImsRegistrationCallback != null) {
+            try {
+                mImsRcsManager.unregisterImsRegistrationCallback(mRcsImsRegistrationCallback);
+            } catch (Exception e) {
+                // do-nothing
+            }
+        }
+    }
+
+    protected synchronized void stopTrackingSipDialogSessionState(int feature) {
+        if (feature == ImsFeature.FEATURE_RCS
+                && mSipDelegateManager != null
+                && mRcsSipDialogSessionStateCallback != null) {
+            try {
+                mSipDelegateManager.unregisterSipDialogStateCallback(
+                        mRcsSipDialogSessionStateCallback);
+            } catch (Exception e) {
+                // do-nothing
+            }
         }
     }
 
     @VisibleForTesting
     protected synchronized void clearQnsImsManager() {
         log("clearQnsImsManager");
-        if (mImsMmTelManager != null && mQnsImsStateCallback != null) {
-            mImsMmTelManager.unregisterImsStateCallback(mQnsImsStateCallback);
-        }
-        if (mImsMmTelManager != null && mQnsImsRegistrationCallback != null) {
-            try {
-                mImsMmTelManager.unregisterImsRegistrationCallback(mQnsImsRegistrationCallback);
-            } catch (RuntimeException e) {
-                loge(e.getMessage());
-            }
-        }
+
+        stopTrackingImsState(ImsFeature.FEATURE_MMTEL);
+        stopTrackingImsState(ImsFeature.FEATURE_RCS);
+        stopTrackingImsRegistration(ImsFeature.FEATURE_MMTEL);
+        stopTrackingImsRegistration(ImsFeature.FEATURE_RCS);
+        stopTrackingSipDialogSessionState(ImsFeature.FEATURE_RCS);
+
         mImsManager = null;
         mImsMmTelManager = null;
-        mQnsImsStateCallback = null;
-        mQnsImsRegistrationCallback = null;
+        mImsRcsManager = null;
+        mSipDelegateManager = null;
+        mMmTelStateCallback = null;
+        mMmtelImsRegistrationCallback = null;
+        mRcsStateCallback = null;
+        mRcsImsRegistrationCallback = null;
+        mRcsSipDialogSessionStateCallback = null;
         mQnsImsManagerInitialized = false;
     }
 
@@ -241,7 +363,12 @@ class QnsImsManager {
         }
         mHandlerThread.quitSafely();
         clearQnsImsManager();
-        mImsRegistrationStatusListeners.removeAll();
+
+        mMmTelImsStateListener.removeAll();
+        mRcsImsStateListener.removeAll();
+        mMmTelImsRegistrationListener.removeAll();
+        mRcsImsRegistrationListener.removeAll();
+        mRcsSipDialogSessionStateListener.removeAll();
     }
 
     int getSlotIndex() {
@@ -250,19 +377,8 @@ class QnsImsManager {
 
     private synchronized ImsMmTelManager getImsMmTelManagerOrThrowExceptionIfNotReady()
             throws ImsException {
-        if (!mQnsImsManagerInitialized) {
-            initQnsImsManager();
-        }
-        if (mQnsImsStateCallback == null) {
-            registerImsStateCallback();
-        }
-        if (mQnsImsRegistrationCallback == null) {
-            registerImsRegistrationCallback();
-        }
-        if (mImsManager == null
-                || mImsMmTelManager == null
-                || mQnsImsStateCallback == null
-                || mQnsImsRegistrationCallback == null) {
+        initQnsImsManager();
+        if (mImsManager == null || mImsMmTelManager == null || mMmTelStateCallback == null) {
             throw new ImsException(
                     "IMS service is down.", ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
         }
@@ -419,7 +535,16 @@ class QnsImsManager {
     }
 
     private class QnsImsStateCallback extends ImsStateCallback {
+        int mImsFeature;
         boolean mImsAvailable;
+
+        public boolean isImsAvailable() {
+            return mImsAvailable;
+        }
+
+        QnsImsStateCallback(int imsFeature) {
+            mImsFeature = imsFeature;
+        }
 
         @Override
         public void onUnavailable(int reason) {
@@ -439,7 +564,7 @@ class QnsImsManager {
         private void changeImsState(boolean imsAvailable) {
             if (mImsAvailable != imsAvailable) {
                 mImsAvailable = imsAvailable;
-                onImsStateChanged(imsAvailable);
+                onImsStateChanged(mImsFeature, imsAvailable);
             }
         }
     }
@@ -457,14 +582,21 @@ class QnsImsManager {
         }
     }
 
-    private void onImsStateChanged(boolean imsAvailable) {
-        log("onImsStateChanged " + imsAvailable);
-        if (imsAvailable && mQnsImsRegistrationCallback == null) {
-            registerImsRegistrationCallback();
+    private void onImsStateChanged(int imsFeature, boolean imsAvailable) {
+        if (imsFeature == ImsFeature.FEATURE_MMTEL) {
+            log("onImsStateChanged ImsFeature.MMTEL:" + imsAvailable);
+        }
+        if (imsFeature == ImsFeature.FEATURE_RCS) {
+            log("onImsStateChanged ImsFeature.RCS:" + imsAvailable);
+        }
+
+        if (imsAvailable) {
+            startTrackingImsRegistration(imsFeature);
+            startTrackingSipDialogSessionState(imsFeature);
         }
 
         ImsState imsState = new ImsState(imsAvailable);
-        notifyImsStateChanged(imsState);
+        notifyImsStateChanged(imsFeature, imsState);
     }
 
     /**
@@ -475,7 +607,7 @@ class QnsImsManager {
      */
     void registerImsStateChanged(Handler h, int what) {
         QnsRegistrant r = new QnsRegistrant(h, what, null);
-        mQnsImsStateListener.add(r);
+        mMmTelImsStateListener.add(r);
     }
 
     /**
@@ -484,11 +616,35 @@ class QnsImsManager {
      * @param h Handler
      */
     void unregisterImsStateChanged(Handler h) {
-        mQnsImsStateListener.remove(h);
+        mMmTelImsStateListener.remove(h);
     }
 
-    protected void notifyImsStateChanged(ImsState imsState) {
-        mQnsImsStateListener.notifyResult(imsState);
+    /**
+     * Registers to monitor Rcs State
+     *
+     * @param h Handler to get an event
+     * @param what message id.
+     */
+    void registerRcsStateChanged(Handler h, int what) {
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
+        mRcsImsStateListener.add(r);
+    }
+
+    /**
+     * Unregisters rcs state for given handler.
+     *
+     * @param h Handler
+     */
+    void unregisterRcsStateChanged(Handler h) {
+        mRcsImsStateListener.remove(h);
+    }
+
+    protected void notifyImsStateChanged(int imsFeature, ImsState imsState) {
+        if (imsFeature == ImsFeature.FEATURE_MMTEL) {
+            mMmTelImsStateListener.notifyResult(imsState);
+        } else if (imsFeature == ImsFeature.FEATURE_RCS) {
+            mRcsImsStateListener.notifyResult(imsState);
+        }
     }
 
     private static class StateConsumer extends Semaphore implements Consumer<Integer> {
@@ -505,7 +661,7 @@ class QnsImsManager {
             if (tryAcquire(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 return mValue.get();
             }
-            return ImsFeature.STATE_NOT_AVAILABLE;
+            return ImsFeature.STATE_UNAVAILABLE;
         }
 
         public void accept(Integer value) {
@@ -517,13 +673,23 @@ class QnsImsManager {
     }
 
     private class QnsImsRegistrationCallback extends RegistrationManager.RegistrationCallback {
+        int mImsFeature;
+        ImsRegistrationState mImsRegistrationState;
+
+        QnsImsRegistrationCallback(int imsFeature) {
+            mImsFeature = imsFeature;
+            mImsRegistrationState = null;
+        }
 
         @Override
         public void onRegistered(ImsRegistrationAttributes attribute) {
             int transportType = attribute.getTransportType();
             log("on IMS registered on :" + QnsConstants.transportTypeToString(transportType));
+            mImsRegistrationState =
+                    new ImsRegistrationState(
+                            QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, transportType, null);
             notifyImsRegistrationChangedEvent(
-                    QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED, transportType, null);
+                    mImsFeature, new ImsRegistrationState(mImsRegistrationState));
         }
 
         @Override
@@ -533,19 +699,57 @@ class QnsImsManager {
                             + QnsConstants.transportTypeToString(transportType)
                             + "] "
                             + reason.toString());
+            mImsRegistrationState =
+                    new ImsRegistrationState(
+                            QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
+                            transportType,
+                            reason);
             notifyImsRegistrationChangedEvent(
-                    QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
-                    transportType,
-                    reason);
+                    mImsFeature, new ImsRegistrationState(mImsRegistrationState));
         }
 
         @Override
         public void onUnregistered(ImsReasonInfo reason) {
             log("onUnregistered " + reason.toString());
+            mImsRegistrationState =
+                    new ImsRegistrationState(
+                            QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
+                            AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
+                            reason);
             notifyImsRegistrationChangedEvent(
-                    QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
-                    AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
-                    reason);
+                    mImsFeature, new ImsRegistrationState(mImsRegistrationState));
+        }
+    }
+
+    private class QnsSipDialogStateCallback extends SipDialogStateCallback {
+        boolean mIsActive;
+
+        public boolean isActive() {
+            return mIsActive;
+        }
+
+        @Override
+        public void onActiveSipDialogsChanged(@NonNull List<SipDialogState> dialogs) {
+            for (SipDialogState state : dialogs) {
+                if (state.getState() == SipDialogState.STATE_CONFIRMED) {
+                    if (!mIsActive) {
+                        mIsActive = true;
+                        notifySipDialogSessionStateChanged(mIsActive);
+                    }
+                    return;
+                }
+            }
+            if (mIsActive) {
+                mIsActive = false;
+                notifySipDialogSessionStateChanged(mIsActive);
+            }
+        }
+
+        @Override
+        public void onError() {
+            mIsActive = false;
+            notifySipDialogSessionStateChanged(mIsActive);
+            // TODO do nothing?
         }
     }
 
@@ -559,6 +763,12 @@ class QnsImsManager {
             mEvent = event;
             mTransportType = transportType;
             mReasonInfo = reason;
+        }
+
+        ImsRegistrationState(ImsRegistrationState state) {
+            mEvent = state.mEvent;
+            mTransportType = state.mTransportType;
+            mReasonInfo = state.mReasonInfo;
         }
 
         int getEvent() {
@@ -605,10 +815,29 @@ class QnsImsManager {
      * @return true when ims is registered.
      */
     boolean isImsRegistered(int transportType) {
-        return mLastImsRegistrationState != null
-                && mLastImsRegistrationState.getTransportType() == transportType
-                && mLastImsRegistrationState.getEvent()
-                        == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED;
+        if (mMmtelImsRegistrationCallback == null) {
+            return false;
+        }
+        ImsRegistrationState state = mMmtelImsRegistrationCallback.mImsRegistrationState;
+        return state != null
+                && state.getTransportType() == transportType
+                && state.getEvent() == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED;
+    }
+
+    /**
+     * Get the status of whether the Rcs is registered or not for given transport type
+     *
+     * @param transportType Transport Type
+     * @return true when ims is registered.
+     */
+    boolean isRcsRegistered(int transportType) {
+        if (mRcsImsRegistrationCallback == null) {
+            return false;
+        }
+        ImsRegistrationState state = mRcsImsRegistrationCallback.mImsRegistrationState;
+        return state != null
+                && state.getTransportType() == transportType
+                && state.getEvent() == QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED;
     }
 
     /**
@@ -619,7 +848,7 @@ class QnsImsManager {
      */
     void registerImsRegistrationStatusChanged(Handler h, int what) {
         QnsRegistrant r = new QnsRegistrant(h, what, null);
-        mImsRegistrationStatusListeners.add(r);
+        mMmTelImsRegistrationListener.add(r);
     }
 
     /**
@@ -628,14 +857,71 @@ class QnsImsManager {
      * @param h Handler
      */
     void unregisterImsRegistrationStatusChanged(Handler h) {
-        mImsRegistrationStatusListeners.remove(h);
+        mMmTelImsRegistrationListener.remove(h);
+    }
+
+    /**
+     * Registers to monitor Ims registration status
+     *
+     * @param h Handler to get an event
+     * @param what message id.
+     */
+    void registerRcsRegistrationStatusChanged(Handler h, int what) {
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
+        mRcsImsRegistrationListener.add(r);
+    }
+
+    /**
+     * Unregisters ims registration status for given handler.
+     *
+     * @param h Handler
+     */
+    void unregisterRcsRegistrationStatusChanged(Handler h) {
+        mRcsImsRegistrationListener.remove(h);
     }
 
     @VisibleForTesting
-    protected void notifyImsRegistrationChangedEvent(
-            int event, int transportType, ImsReasonInfo reason) {
-        mLastImsRegistrationState = new ImsRegistrationState(event, transportType, reason);
-        mImsRegistrationStatusListeners.notifyResult(mLastImsRegistrationState);
+    protected void notifyImsRegistrationChangedEvent(int imsFeature, ImsRegistrationState state) {
+        if (imsFeature == ImsFeature.FEATURE_MMTEL) {
+            mMmTelImsRegistrationListener.notifyResult(state);
+        } else if (imsFeature == ImsFeature.FEATURE_RCS) {
+            mRcsImsRegistrationListener.notifyResult(state);
+        }
+    }
+
+    /**
+     * Get the active status of SipDialogState
+     *
+     * @return true when one of Sip Dialogs is active.
+     */
+    boolean isSipDialogSessionActive() {
+        return mRcsSipDialogSessionStateCallback != null
+                && mRcsSipDialogSessionStateCallback.isActive();
+    }
+
+    /**
+     * Registers to monitor SipDialogSession State
+     *
+     * @param h Handler to get an event
+     * @param what message id.
+     */
+    void registerSipDialogSessionStateChanged(Handler h, int what) {
+        QnsRegistrant r = new QnsRegistrant(h, what, null);
+        mRcsSipDialogSessionStateListener.add(r);
+    }
+
+    /**
+     * Unregisters SipDialogState status for given handler.
+     *
+     * @param h Handler
+     */
+    void unregisterSipDialogSessionStateChanged(Handler h) {
+        mRcsSipDialogSessionStateListener.remove(h);
+    }
+
+    @VisibleForTesting
+    protected void notifySipDialogSessionStateChanged(boolean isActive) {
+        mRcsSipDialogSessionStateListener.notifyResult(isActive);
     }
 
     private static boolean isImsSupportedOnDevice(Context context) {
@@ -648,7 +934,7 @@ class QnsImsManager {
      * <p>This function is a blocking function and there may be a timeout of up to 2 seconds.
      *
      * @return MmTel Feature Status. Returns one of the following: {@link
-     *     ImsFeature#STATE_NOT_AVAILABLE}, {@link ImsFeature#STATE_INITIALIZING}, {@link
+     *     ImsFeature#STATE_UNAVAILABLE}, {@link ImsFeature#STATE_INITIALIZING}, {@link
      *     ImsFeature#STATE_READY}.
      * @throws ImsException if the IMS service associated with this subscription is not available or
      *     the IMS service is not available.

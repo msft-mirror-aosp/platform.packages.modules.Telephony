@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
@@ -74,13 +75,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private static final int EVENT_BASE = 10000;
     private static final int EVENT_IWLAN_NETWORK_STATUS_CHANGED = EVENT_BASE;
     private static final int EVENT_QNS_TELEPHONY_INFO_CHANGED = EVENT_BASE + 1;
-    private static final int EVENT_RESTRICT_INFO_CHANGED = EVENT_BASE + 4;
     private static final int EVENT_SET_CALL_TYPE = EVENT_BASE + 5;
-    private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = EVENT_BASE + 6;
     private static final int EVENT_EMERGENCY_PREFERRED_TRANSPORT_TYPE_CHANGED = EVENT_BASE + 7;
     private static final int EVENT_PROVISIONING_INFO_CHANGED = EVENT_BASE + 8;
     private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
+    private static final int EVENT_SIP_DIALOG_SESSION_STATE_CHANGED = EVENT_BASE + 12;
 
     @Mock private RestrictManager mRestrictManager;
     @Mock private DataConnectionStatusTracker mDataConnectionStatusTracker;
@@ -1560,5 +1560,115 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         assertEquals(accessNetworks, mQualifiedNetworksInfo.getAccessNetworkTypes());
+    }
+
+    @Test
+    public void testEventSipDialogSessionStateChanged() {
+        waitForLastHandlerAction(mAne.mHandler);
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+
+        // #1. check init value
+        assertFalse(mAne.getSipDialogSessionState());
+
+        // #2. check handling message
+        Message.obtain(
+                        mAne.mHandler,
+                        EVENT_SIP_DIALOG_SESSION_STATE_CHANGED,
+                        new QnsAsyncResult(null, true, null))
+                .sendToTarget();
+        waitForLastHandlerAction(mAne.mHandler);
+        assertTrue(mAne.getSipDialogSessionState());
+
+        // #3. check calling direct method.
+        mAne.onSipDialogSessionStateChanged(false);
+        assertFalse(mAne.getSipDialogSessionState());
+        mAne.onSipDialogSessionStateChanged(true);
+        assertTrue(mAne.getSipDialogSessionState());
+    }
+
+    @Test
+    public void testEventSipDialogSessionStateChangedByPolicy() {
+        // #1. Check by config.
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE);
+        mAne.onSipDialogSessionStateChanged(false);
+        mAne.onSipDialogSessionStateChanged(true);
+        // if policy is SIP_DIALOG_SESSION_POLICY_NONE, ANE.mSipDialogSessionState should be false.
+        assertFalse(mAne.getSipDialogSessionState());
+
+        // #2. Check applying SipDialogSessionState by SipDialogSessionPolicy config. (VOICE)
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+        mAne.onSipDialogSessionStateChanged(false);
+        mAne.onSipDialogSessionStateChanged(true);
+        assertTrue(mAne.getSipDialogSessionState());
+
+        // #3. Check applying SipDialogSessionState by SipDialogSessionPolicy config. (VIDEO)
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL);
+        mAne.onSipDialogSessionStateChanged(false);
+        mAne.onSipDialogSessionStateChanged(true);
+        assertTrue(mAne.getSipDialogSessionState());
+    }
+
+    @Test
+    public void testEventSipDialogSessionStateChanged_verifyWithAnspVoice() {
+        when(mMockQnsConfigManager.getPolicy(anyInt(), any())).thenReturn(null);
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+        mAne.onSipDialogSessionStateChanged(true);
+
+        List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
+        satisfiedAccessNetworkTypes.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
+        mAne.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+        ArrayList<AccessNetworkSelectionPolicy> matchedAnsp;
+
+        // #1. SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL
+        matchedAnsp = null;
+        try {
+            Field field =
+                    AccessNetworkEvaluator.class.getDeclaredField(
+                            "mAccessNetworkSelectionPolicies");
+            field.setAccessible(true);
+            matchedAnsp = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAne);
+        } catch (Exception e) {
+        }
+        assertNotNull(matchedAnsp);
+        assertFalse(matchedAnsp.isEmpty());
+        assertEquals(
+                QnsConstants.CALL_TYPE_VOICE, matchedAnsp.get(0).getPreCondition().getCallType());
+    }
+
+    @Test
+    public void testEventSipDialogSessionStateChanged_verifyWithAnspVideo() {
+        when(mMockQnsConfigManager.getPolicy(anyInt(), any())).thenReturn(null);
+        when(mMockQnsConfigManager.getSipDialogSessionPolicy())
+                .thenReturn(QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL);
+        mAne.onSipDialogSessionStateChanged(true);
+
+        List<Integer> satisfiedAccessNetworkTypes = new ArrayList<>();
+        satisfiedAccessNetworkTypes.add(AccessNetworkConstants.AccessNetworkType.EUTRAN);
+        when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
+        mAne.reportSatisfiedAccessNetworkTypesByState(satisfiedAccessNetworkTypes, true);
+        mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+        ArrayList<AccessNetworkSelectionPolicy> matchedAnsp;
+
+        // #1. SIP_DIALOG_SESSION_POLICY_FOLLOW_VIDEO_CALL
+        matchedAnsp = null;
+        try {
+            Field field =
+                    AccessNetworkEvaluator.class.getDeclaredField(
+                            "mAccessNetworkSelectionPolicies");
+            field.setAccessible(true);
+            matchedAnsp = (ArrayList<AccessNetworkSelectionPolicy>) field.get(mAne);
+        } catch (Exception e) {
+        }
+        assertNotNull(matchedAnsp);
+        assertFalse(matchedAnsp.isEmpty());
+        assertEquals(
+                QnsConstants.CALL_TYPE_VIDEO, matchedAnsp.get(0).getPreCondition().getCallType());
     }
 }
