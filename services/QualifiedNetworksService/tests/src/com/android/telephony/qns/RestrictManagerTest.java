@@ -16,6 +16,9 @@
 
 package com.android.telephony.qns;
 
+import static android.telephony.ims.stub.ImsRegistrationImplBase.REGISTRATION_TECH_IWLAN;
+import static android.telephony.ims.stub.ImsRegistrationImplBase.REGISTRATION_TECH_LTE;
+
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.telephony.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED;
 import static com.android.telephony.qns.DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED;
@@ -57,6 +60,10 @@ import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsRegistrationAttributes;
+import android.telephony.ims.RegistrationManager;
+
+import com.google.android.collect.Sets;
 
 import org.junit.After;
 import org.junit.Before;
@@ -993,6 +1000,43 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_RESTRICT_IWLAN_CS_CALL));
     }
 
+    private void triggerMmTelCallback_onRegistered(QnsImsManager qnsImsMgr, int transportType) {
+        RegistrationManager.RegistrationCallback mmtelImsRegistrationCallback =
+                qnsImsMgr.mMmtelImsRegistrationCallback;
+        @ImsRegistrationAttributes.ImsAttributeFlag int imsAttributeFlags = 0;
+        ImsRegistrationAttributes attributes;
+        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_IWLAN,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                            imsAttributeFlags,
+                            Sets.newArraySet());
+        } else {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_LTE,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                            imsAttributeFlags,
+                            Sets.newArraySet());
+        }
+        mmtelImsRegistrationCallback.onRegistered(attributes);
+    }
+
+    private void triggerMmTelCallback_onUnregistered(
+            QnsImsManager qnsImsMgr, ImsReasonInfo reason) {
+        RegistrationManager.RegistrationCallback mmtelImsRegistrationCallback =
+                qnsImsMgr.mMmtelImsRegistrationCallback;
+        mmtelImsRegistrationCallback.onUnregistered(reason);
+    }
+
+    private void triggerMmTelCallback_onTechnologyChangeFailed(
+            QnsImsManager qnsImsMgr, int transportType, ImsReasonInfo reason) {
+        RegistrationManager.RegistrationCallback mmtelImsRegistrationCallback =
+                qnsImsMgr.mMmtelImsRegistrationCallback;
+        mmtelImsRegistrationCallback.onTechnologyChangeFailed(transportType, reason);
+    }
+
     @Test
     public void testImsRegistrationUnregistered() {
         when(mMockQnsConfigManager.allowImsOverIwlanCellularLimitedCase()).thenReturn(false);
@@ -1014,10 +1058,8 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
-                null);
+        triggerMmTelCallback_onRegistered(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mTestLooper.dispatchAll();
         assertFalse(
                 mRestrictManager.hasRestrictionType(
@@ -1025,10 +1067,7 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
-                reason);
+        triggerMmTelCallback_onUnregistered(mQnsImsManager, reason);
         mTestLooper.dispatchAll();
         assertTrue(
                 mRestrictManager.hasRestrictionType(
@@ -1083,10 +1122,8 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE;
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
-                reason);
+        triggerMmTelCallback_onTechnologyChangeFailed(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WLAN, reason);
         mTestLooper.dispatchAll();
         assertTrue(
                 mRestrictManager.hasRestrictionType(
@@ -1137,10 +1174,8 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
-                null);
+        triggerMmTelCallback_onRegistered(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mTestLooper.dispatchAll();
         assertFalse(
                 mRestrictManager.hasRestrictionType(
@@ -1148,10 +1183,7 @@ public class RestrictManagerTest extends QnsTest {
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_INVALID,
-                reason);
+        triggerMmTelCallback_onUnregistered(mQnsImsManager, reason);
         mTestLooper.dispatchAll();
         assertTrue(
                 mRestrictManager.hasRestrictionType(
@@ -1161,10 +1193,8 @@ public class RestrictManagerTest extends QnsTest {
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
                         RESTRICT_TYPE_FALLBACK_TO_WWAN_IMS_REGI_FAIL));
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
-                reason);
+        triggerMmTelCallback_onRegistered(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         mTestLooper.dispatchAll();
         assertFalse(
                 mRestrictManager.hasRestrictionType(
@@ -2288,10 +2318,8 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                null);
+        triggerMmTelCallback_onRegistered(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mTestLooper.dispatchAll();
         Mockito.verify(mMockWifiBm).registerForRttStatusChange(mRestrictManager.mHandler, 3011);
     }
@@ -2311,18 +2339,14 @@ public class RestrictManagerTest extends QnsTest {
                         DataConnectionStatusTracker.STATE_CONNECTED,
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mRestrictManager.onDataConnectionChanged(dcInfo);
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                null);
+        triggerMmTelCallback_onRegistered(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
         mTestLooper.dispatchAll();
         when(mMockWifiBm.isRttCheckEnabled()).thenReturn(false);
         ImsReasonInfo reason = new ImsReasonInfo();
         reason.mCode = ImsReasonInfo.CODE_SIP_TEMPRARILY_UNAVAILABLE;
-        mQnsImsManager.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_ACCESS_NETWORK_CHANGE_FAILED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                reason);
+        triggerMmTelCallback_onTechnologyChangeFailed(
+                mQnsImsManager, AccessNetworkConstants.TRANSPORT_TYPE_WWAN, reason);
         mTestLooper.dispatchAll();
         Mockito.verify(mMockWifiBm).unRegisterForRttStatusChange(mRestrictManager.mHandler);
     }

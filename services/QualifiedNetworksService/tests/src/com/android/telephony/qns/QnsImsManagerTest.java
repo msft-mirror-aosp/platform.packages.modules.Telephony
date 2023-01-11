@@ -23,11 +23,16 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSess
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.annotation.NonNull;
@@ -43,8 +48,17 @@ import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsException;
+import android.telephony.ims.ImsManager;
+import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsRegistrationAttributes;
 import android.telephony.ims.ImsStateCallback;
 import android.telephony.ims.ProvisioningManager;
+import android.telephony.ims.RegistrationManager;
+import android.telephony.ims.SipDialogState;
+import android.telephony.ims.SipDialogStateCallback;
+import android.telephony.ims.feature.ImsFeature;
+
+import com.google.android.collect.Sets;
 
 import org.junit.After;
 import org.junit.Before;
@@ -60,7 +74,10 @@ import org.mockito.quality.Strictness;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
@@ -89,6 +106,11 @@ public class QnsImsManagerTest extends QnsTest {
         when(ProvisioningManager.createForSubscriptionId(anyInt()))
                 .thenReturn(mProvisioningManager);
         when(SubscriptionManager.isValidSubscriptionId(anyInt())).thenReturn(true);
+        doAnswer(invocation -> null)
+                .when(mMockSubscriptionManager)
+                .addOnSubscriptionsChangedListener(
+                        any(Executor.class),
+                        any(SubscriptionManager.OnSubscriptionsChangedListener.class));
 
         mQnsImsMgr = new QnsImsManager(sMockContext, 0);
     }
@@ -338,10 +360,80 @@ public class QnsImsManagerTest extends QnsTest {
         assertTrue(qnsImsManagerInitialized);
 
         Mockito.clearInvocations(mMockImsManager);
-        when(mMockImsManager.getImsMmTelManager(anyInt())).thenReturn(null);
-        mQnsImsMgr = new QnsImsManager(sMockContext, 1);
+        when(mMockImsManager.getSipDelegateManager(anyInt())).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
         qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
         assertFalse(qnsImsManagerInitialized);
+
+        Mockito.clearInvocations(mMockImsManager);
+        when(mMockImsManager.getImsRcsManager(anyInt())).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
+        qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertFalse(qnsImsManagerInitialized);
+
+        Mockito.clearInvocations(mMockImsManager);
+        when(mMockImsManager.getImsMmTelManager(anyInt())).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
+        qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertFalse(qnsImsManagerInitialized);
+
+        Mockito.clearInvocations(mMockImsManager);
+        when(sMockContext.getSystemService(ImsManager.class)).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
+        qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertFalse(qnsImsManagerInitialized);
+
+        Mockito.clearInvocations(mMockImsManager);
+        when(sMockContext.getSystemService(CarrierConfigManager.class)).thenReturn(null);
+        mQnsImsMgr = new QnsImsManager(sMockContext, 0);
+        qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertFalse(qnsImsManagerInitialized);
+    }
+
+    @Test
+    public void testQnsImsManagerGetSlotIndex() {
+        assertEquals(0, mQnsImsMgr.getSlotIndex());
+        QnsImsManager qnsImsManager1 = new QnsImsManager(sMockContext, 1);
+        assertEquals(1, qnsImsManager1.getSlotIndex());
+    }
+
+    @Test
+    public void testQnsImsManagerClear()
+            throws NoSuchFieldException, IllegalAccessException, ImsException {
+        Field initializedField = QnsImsManager.class.getDeclaredField("mQnsImsManagerInitialized");
+        initializedField.setAccessible(true);
+        boolean qnsImsManagerInitialized = (boolean) initializedField.get(mQnsImsMgr);
+        assertTrue(qnsImsManagerInitialized);
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+        rcsStateCallback.onAvailable();
+
+        mQnsImsMgr.clearQnsImsManager();
+        verify(mMockImsMmTelManager, times(1)).unregisterImsStateCallback(any());
+        verify(mMockImsMmTelManager, times(1))
+                .unregisterImsRegistrationCallback(
+                        any(RegistrationManager.RegistrationCallback.class));
+        verify(mMockImsRcsManager, times(1)).unregisterImsStateCallback(any());
+        verify(mMockImsRcsManager, times(1))
+                .unregisterImsRegistrationCallback(
+                        any(RegistrationManager.RegistrationCallback.class));
+        verify(mMockSipDelegateManager, times(1)).unregisterSipDialogStateCallback(any());
+    }
+
+    @Test
+    public void testQnsImsManagerSubscriptionChanged() {
+        SubscriptionManager.OnSubscriptionsChangedListener subListener =
+                mQnsImsMgr.mSubscriptionsChangeListener;
+
+        when(mMockSubscriptionInfo.getSubscriptionId()).thenReturn(1);
+        subListener.onSubscriptionsChanged();
+        assertNotNull(mQnsImsMgr.mMmTelStateCallback);
+        assertNotNull(mQnsImsMgr.mRcsStateCallback);
+
+        when(mMockSubscriptionInfo.getSubscriptionId())
+                .thenReturn(SubscriptionManager.INVALID_SUBSCRIPTION_ID);
+        subListener.onSubscriptionsChanged();
+        assertNull(mQnsImsMgr.mMmTelStateCallback);
+        assertNull(mQnsImsMgr.mRcsStateCallback);
     }
 
     @Test
@@ -389,26 +481,138 @@ public class QnsImsManagerTest extends QnsTest {
         assertTrue(stateAccessNetworkChangeFail.toString().contains("IMS_ACCESS"));
     }
 
-    @Test
-    public void testQnsImsManagerQnsIsImsRegistered() {
-        mQnsImsMgr.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_REGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                null);
-        assertTrue(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
-        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+    private void triggerMmTelCallback_onRegistered(QnsImsManager qnsImsMgr, int transportType) {
+        RegistrationManager.RegistrationCallback mmtelImsRegistrationCallback =
+                qnsImsMgr.mMmtelImsRegistrationCallback;
+        ImsRegistrationAttributes attributes;
+        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_IWLAN,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                            0,
+                            Sets.newArraySet());
+        } else {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_LTE,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                            0,
+                            Sets.newArraySet());
+        }
+        mmtelImsRegistrationCallback.onRegistered(attributes);
+    }
 
-        mQnsImsMgr.notifyImsRegistrationChangedEvent(
-                QnsConstants.IMS_REGISTRATION_CHANGED_UNREGISTERED,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
-                null);
-        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
-        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+    private void triggerMmTelCallback_onUnregistered(QnsImsManager qnsImsMgr) {
+        ImsReasonInfo reason = new ImsReasonInfo();
+        reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
+        triggerMmTelCallback_onUnregistered(qnsImsMgr, reason);
+    }
+
+    private void triggerMmTelCallback_onUnregistered(
+            QnsImsManager qnsImsMgr, ImsReasonInfo reason) {
+        RegistrationManager.RegistrationCallback mmtelImsRegistrationCallback =
+                qnsImsMgr.mMmtelImsRegistrationCallback;
+        mmtelImsRegistrationCallback.onUnregistered(reason);
     }
 
     @Test
-    public void testImsStateEvents()
-            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+    public void testQnsImsManagerQnsIsImsRegistered() {
+        triggerMmTelCallback_onRegistered(mQnsImsMgr, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertTrue(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        triggerMmTelCallback_onRegistered(mQnsImsMgr, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertTrue(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        triggerMmTelCallback_onUnregistered(mQnsImsMgr);
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        mQnsImsMgr.mMmtelImsRegistrationCallback = null;
+        assertFalse(mQnsImsMgr.isImsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+    }
+
+    private void triggerRcsCallback_onRegistered(QnsImsManager qnsImsMgr, int transportType) {
+        RegistrationManager.RegistrationCallback rcsImsRegistrationCallback =
+                qnsImsMgr.mRcsImsRegistrationCallback;
+        ImsRegistrationAttributes attributes;
+        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_IWLAN,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                            0,
+                            Sets.newArraySet());
+        } else {
+            attributes =
+                    new ImsRegistrationAttributes(
+                            REGISTRATION_TECH_LTE,
+                            AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                            0,
+                            Sets.newArraySet());
+        }
+        rcsImsRegistrationCallback.onRegistered(attributes);
+    }
+
+    private void triggerRcsCallback_onUnregistered(QnsImsManager qnsImsMgr) {
+        ImsReasonInfo reason = new ImsReasonInfo();
+        reason.mCode = ImsReasonInfo.CODE_SIP_BUSY;
+        triggerRcsCallback_onUnregistered(qnsImsMgr, reason);
+    }
+
+    private void triggerRcsCallback_onUnregistered(QnsImsManager qnsImsMgr, ImsReasonInfo reason) {
+        RegistrationManager.RegistrationCallback rcsImsRegistrationCallback =
+                qnsImsMgr.mRcsImsRegistrationCallback;
+        rcsImsRegistrationCallback.onUnregistered(reason);
+    }
+
+    @Test
+    public void testQnsImsManagerQnsIsRcsRegistered() {
+        triggerRcsCallback_onRegistered(mQnsImsMgr, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertTrue(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        triggerRcsCallback_onRegistered(mQnsImsMgr, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertTrue(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        triggerRcsCallback_onUnregistered(mQnsImsMgr);
+        assertFalse(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertFalse(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+
+        mQnsImsMgr.mRcsImsRegistrationCallback = null;
+        assertFalse(mQnsImsMgr.isRcsRegistered(AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+    }
+
+    @Test
+    public void testQnsImsManagerQnsIsSipDialogSessionActive() {
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+        rcsStateCallback.onAvailable();
+        SipDialogStateCallback sipDialogStateCallback =
+                mQnsImsMgr.mRcsSipDialogSessionStateCallback;
+        List<SipDialogState> dialogs = new ArrayList<>();
+        dialogs.add(new SipDialogState.Builder(SipDialogState.STATE_EARLY).build());
+        sipDialogStateCallback.onActiveSipDialogsChanged(dialogs);
+        assertFalse(mQnsImsMgr.isSipDialogSessionActive());
+
+        dialogs.clear();
+        dialogs.add(new SipDialogState.Builder(SipDialogState.STATE_CONFIRMED).build());
+        sipDialogStateCallback.onActiveSipDialogsChanged(dialogs);
+        assertTrue(mQnsImsMgr.isSipDialogSessionActive());
+
+        dialogs.clear();
+        dialogs.add(new SipDialogState.Builder(SipDialogState.STATE_CLOSED).build());
+        sipDialogStateCallback.onActiveSipDialogsChanged(dialogs);
+        assertFalse(mQnsImsMgr.isSipDialogSessionActive());
+
+        sipDialogStateCallback.onError();
+        assertFalse(mQnsImsMgr.isSipDialogSessionActive());
+    }
+
+    @Test
+    public void testImsStateEvents() throws InterruptedException {
         final int eventImsStateChanged = 11005;
         CountDownLatch imsAvailableLatch = new CountDownLatch(2);
         CountDownLatch imsUnavailableLatch = new CountDownLatch(2);
@@ -435,27 +639,193 @@ public class QnsImsManagerTest extends QnsTest {
                     }
                 };
 
-        Field callbackField = QnsImsManager.class.getDeclaredField("mQnsImsStateCallback");
-        callbackField.setAccessible(true);
-        ImsStateCallback imsStateCallback = (ImsStateCallback) callbackField.get(mQnsImsMgr);
+        ImsStateCallback imsStateCallback = mQnsImsMgr.mMmTelStateCallback;
 
         mQnsImsMgr.registerImsStateChanged(handler, eventImsStateChanged);
-        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(true));
-        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(false));
+        mQnsImsMgr.notifyImsStateChanged(
+                ImsFeature.FEATURE_MMTEL, new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(
+                ImsFeature.FEATURE_MMTEL, new QnsImsManager.ImsState(false));
 
         imsStateCallback.onAvailable();
         imsStateCallback.onAvailable();
         imsStateCallback.onUnavailable(100);
-        imsStateCallback.onUnavailable(100);
+        imsStateCallback.onError();
 
         assertTrue(imsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(imsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
 
         mQnsImsMgr.unregisterImsStateChanged(handler);
-        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(true));
-        mQnsImsMgr.notifyImsStateChanged(new QnsImsManager.ImsState(false));
+        mQnsImsMgr.notifyImsStateChanged(
+                ImsFeature.FEATURE_MMTEL, new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(
+                ImsFeature.FEATURE_MMTEL, new QnsImsManager.ImsState(false));
 
         assertTrue(imsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(imsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testRcsStateEvents() throws InterruptedException {
+        final int eventRcsStateChanged = 11006;
+        CountDownLatch rcsAvailableLatch = new CountDownLatch(2);
+        CountDownLatch rcsUnavailableLatch = new CountDownLatch(2);
+        HandlerThread handlerThread = new HandlerThread("testRcsStateEvent");
+        handlerThread.start();
+        Handler handler =
+                new Handler(handlerThread.getLooper()) {
+                    @Override
+                    public void handleMessage(@NonNull Message msg) {
+                        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
+                        switch (msg.what) {
+                            case eventRcsStateChanged:
+                                if (ar != null) {
+                                    QnsImsManager.ImsState state =
+                                            (QnsImsManager.ImsState) ar.mResult;
+                                    if (state.isImsAvailable()) {
+                                        rcsAvailableLatch.countDown();
+                                    } else {
+                                        rcsUnavailableLatch.countDown();
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                };
+
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+
+        mQnsImsMgr.registerRcsStateChanged(handler, eventRcsStateChanged);
+        mQnsImsMgr.notifyImsStateChanged(ImsFeature.FEATURE_RCS, new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(ImsFeature.FEATURE_RCS, new QnsImsManager.ImsState(false));
+
+        rcsStateCallback.onAvailable();
+        rcsStateCallback.onAvailable();
+        rcsStateCallback.onUnavailable(100);
+        rcsStateCallback.onError();
+
+        assertTrue(rcsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(rcsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
+
+        mQnsImsMgr.unregisterRcsStateChanged(handler);
+        mQnsImsMgr.notifyImsStateChanged(ImsFeature.FEATURE_RCS, new QnsImsManager.ImsState(true));
+        mQnsImsMgr.notifyImsStateChanged(ImsFeature.FEATURE_RCS, new QnsImsManager.ImsState(false));
+
+        assertTrue(rcsAvailableLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(rcsUnavailableLatch.await(100, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testSipDialogSessionStateEvents() throws InterruptedException {
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+        rcsStateCallback.onAvailable();
+
+        final int eventSipDialogSessionStateChanged = 11007;
+        CountDownLatch sipDialogSessionActiveStateLatch = new CountDownLatch(2);
+        CountDownLatch sipDialogSessionInactiveStateLatch = new CountDownLatch(2);
+        HandlerThread handlerThread = new HandlerThread("testSipDialogSessionStateEvent");
+        handlerThread.start();
+        Handler handler =
+                new Handler(handlerThread.getLooper()) {
+                    @Override
+                    public void handleMessage(@NonNull Message msg) {
+                        QnsAsyncResult ar = (QnsAsyncResult) msg.obj;
+                        switch (msg.what) {
+                            case eventSipDialogSessionStateChanged:
+                                if (ar != null) {
+                                    boolean isActive = (boolean) ar.mResult;
+                                    if (isActive) {
+                                        sipDialogSessionActiveStateLatch.countDown();
+                                    } else {
+                                        sipDialogSessionInactiveStateLatch.countDown();
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                };
+
+        mQnsImsMgr.registerSipDialogSessionStateChanged(handler, eventSipDialogSessionStateChanged);
+        mQnsImsMgr.notifySipDialogSessionStateChanged(true);
+        mQnsImsMgr.notifySipDialogSessionStateChanged(false);
+
+        SipDialogStateCallback sipDialogStateCallback =
+                mQnsImsMgr.mRcsSipDialogSessionStateCallback;
+        List<SipDialogState> dialogs = new ArrayList<>();
+        dialogs.add(new SipDialogState.Builder(SipDialogState.STATE_CONFIRMED).build());
+        sipDialogStateCallback.onActiveSipDialogsChanged(dialogs);
+
+        dialogs.clear();
+        dialogs.add(new SipDialogState.Builder(SipDialogState.STATE_CLOSED).build());
+        sipDialogStateCallback.onActiveSipDialogsChanged(dialogs);
+
+        assertTrue(sipDialogSessionActiveStateLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(sipDialogSessionInactiveStateLatch.await(100, TimeUnit.MILLISECONDS));
+
+        mQnsImsMgr.unregisterSipDialogSessionStateChanged(handler);
+    }
+
+    @Test
+    public void testQnsImsManagerRegistrant() throws InterruptedException {
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+        rcsStateCallback.onAvailable();
+
+        HandlerThread handlerThread = new HandlerThread("testQnsImsManagerClose");
+        handlerThread.start();
+        Handler handler = new Handler(handlerThread.getLooper());
+
+        mQnsImsMgr.registerImsStateChanged(handler, 1);
+        mQnsImsMgr.registerImsRegistrationStatusChanged(handler, 2);
+        mQnsImsMgr.registerRcsStateChanged(handler, 3);
+        mQnsImsMgr.registerRcsRegistrationStatusChanged(handler, 4);
+        mQnsImsMgr.registerSipDialogSessionStateChanged(handler, 5);
+
+        assertEquals(1, mQnsImsMgr.mMmTelImsStateListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsImsStateListener.size());
+        assertEquals(1, mQnsImsMgr.mMmTelImsRegistrationListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsImsRegistrationListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsSipDialogSessionStateListener.size());
+
+        mQnsImsMgr.unregisterImsStateChanged(handler);
+        mQnsImsMgr.unregisterImsRegistrationStatusChanged(handler);
+        mQnsImsMgr.unregisterRcsStateChanged(handler);
+        mQnsImsMgr.unregisterRcsRegistrationStatusChanged(handler);
+        mQnsImsMgr.unregisterSipDialogSessionStateChanged(handler);
+
+        assertEquals(0, mQnsImsMgr.mMmTelImsStateListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsImsStateListener.size());
+        assertEquals(0, mQnsImsMgr.mMmTelImsRegistrationListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsImsRegistrationListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsSipDialogSessionStateListener.size());
+    }
+
+    @Test
+    public void testQnsImsManagerClose() throws InterruptedException {
+        ImsStateCallback rcsStateCallback = mQnsImsMgr.mRcsStateCallback;
+        rcsStateCallback.onAvailable();
+
+        HandlerThread handlerThread = new HandlerThread("testQnsImsManagerClose");
+        handlerThread.start();
+        Handler handler = new Handler(handlerThread.getLooper());
+
+        mQnsImsMgr.registerImsStateChanged(handler, 1);
+        mQnsImsMgr.registerImsRegistrationStatusChanged(handler, 2);
+        mQnsImsMgr.registerRcsStateChanged(handler, 3);
+        mQnsImsMgr.registerRcsRegistrationStatusChanged(handler, 4);
+        mQnsImsMgr.registerSipDialogSessionStateChanged(handler, 5);
+
+        assertEquals(1, mQnsImsMgr.mMmTelImsStateListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsImsStateListener.size());
+        assertEquals(1, mQnsImsMgr.mMmTelImsRegistrationListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsImsRegistrationListener.size());
+        assertEquals(1, mQnsImsMgr.mRcsSipDialogSessionStateListener.size());
+
+        mQnsImsMgr.close();
+
+        assertEquals(0, mQnsImsMgr.mMmTelImsStateListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsImsStateListener.size());
+        assertEquals(0, mQnsImsMgr.mMmTelImsRegistrationListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsImsRegistrationListener.size());
+        assertEquals(0, mQnsImsMgr.mRcsSipDialogSessionStateListener.size());
     }
 }

@@ -30,6 +30,7 @@ import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSI
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_UNKNOWN;
 
 import static com.android.telephony.qns.QnsCarrierConfigManager.KEY_QNS_ALLOW_VIDEO_OVER_IWLAN_WITH_CELLULAR_LIMITED_CASE_BOOL;
+import static com.android.telephony.qns.QnsCarrierConfigManager.KEY_SIP_DIALOG_SESSION_POLICY_INT;
 import static com.android.telephony.qns.QnsConstants.CALL_TYPE_IDLE;
 import static com.android.telephony.qns.QnsConstants.CALL_TYPE_VIDEO;
 import static com.android.telephony.qns.QnsConstants.CALL_TYPE_VOICE;
@@ -2306,6 +2307,23 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         bundle.putInt(KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT, 60000);
         mConfigManager.loadWfcConfigurations(null, bundle);
         Assert.assertEquals(60000, mConfigManager.getVowifiRegistrationTimerForVowifiActivation());
+    }
+
+    @Test
+    public void testGetSipDialogSessionPolicy() {
+        // Test for the default setting
+        int defaultPolicy = mConfigManager.getSipDialogSessionPolicy();
+        Assert.assertEquals(QnsConstants.SIP_DIALOG_SESSION_POLICY_NONE, defaultPolicy);
+
+        // Test for a new setting
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putInt(
+                KEY_SIP_DIALOG_SESSION_POLICY_INT,
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL);
+        mConfigManager.loadQnsAneSupportConfigurations(null, bundle);
+        int SipDialogSessionPolicy = mConfigManager.getSipDialogSessionPolicy();
+        Assert.assertEquals(
+                QnsConstants.SIP_DIALOG_SESSION_POLICY_FOLLOW_VOICE_CALL, SipDialogSessionPolicy);
     }
 
     @After
