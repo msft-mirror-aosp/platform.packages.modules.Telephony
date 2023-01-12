@@ -16,6 +16,8 @@
 
 package com.android.telephony.qns;
 
+import static android.telephony.CellInfo.UNAVAILABLE;
+
 import static com.android.telephony.qns.QualityMonitor.EVENT_CELLULAR_QNS_TELEPHONY_INFO_CHANGED;
 
 import static org.junit.Assert.assertEquals;
@@ -716,6 +718,162 @@ public final class CellularQualityMonitorTest extends QnsTest {
                 .sendToTarget();
         verify(mMockTelephonyManager, never())
                 .clearSignalStrengthUpdateRequest(isA(SignalStrengthUpdateRequest.class));
+    }
+
+    @Test
+    public void testNrThresholdsValidity() throws InterruptedException {
+        mTh1 =
+                new Threshold[] {
+                    new Threshold(
+                            AccessNetworkConstants.AccessNetworkType.NGRAN,
+                            SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP,
+                            -117,
+                            QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                            QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER)
+                };
+        mCellularQualityMonitor.registerThresholdChange(
+                mThresholdListener, mApnType1, mTh1, mSlotIndex);
+        ArgumentCaptor<TelephonyCallback> capture =
+                ArgumentCaptor.forClass(TelephonyCallback.class);
+        verify(mMockTelephonyManager)
+                .registerTelephonyCallback(isA(Executor.class), capture.capture());
+        TelephonyCallback.SignalStrengthsListener callback =
+                (TelephonyCallback.SignalStrengthsListener) capture.getValue();
+        assertNotNull(callback);
+
+        ArrayList<Byte> NrCqiReport = new ArrayList<>(Arrays.asList((byte) 3, (byte) 2, (byte) 1));
+
+        // Valid thresholds - All NR signal params are valid.
+        SignalStrength ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthGsm(UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthWcdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthTdscdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE), // not using Tdscdma
+                        new CellSignalStrengthLte(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE),
+                        new CellSignalStrengthNr(-91, -6, 3, 1, NrCqiReport, -80, -7, 4, 1));
+
+        mLatch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        // signal strength is valid, so CQM should notify SignalStrength.
+        assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
+
+        // Valid thresholds - Only SSRSRP, SSRSRQ and SSSINR for NR are valid.
+        ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthGsm(UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthWcdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthTdscdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE), // not using Tdscdma
+                        new CellSignalStrengthLte(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE),
+                        new CellSignalStrengthNr(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                NrCqiReport,
+                                -80,
+                                -7,
+                                4,
+                                1));
+
+        mLatch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        // signal strength is valid, so CQM should notify SignalStrength.
+        assertTrue(mLatch.await(200, TimeUnit.MILLISECONDS));
+
+        // Invalid thresholds - All NR signal params UNAVAILABLE
+        ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthGsm(UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthWcdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthTdscdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE), // not using Tdscdma
+                        new CellSignalStrengthLte(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE),
+                        new CellSignalStrengthNr(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                NrCqiReport,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                1));
+
+        mLatch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        // signal strength is not valid, so CQM should not notify SignalStrength.
+        assertFalse(mLatch.await(200, TimeUnit.MILLISECONDS));
+
+        // Invalid thresholds - Only CSI signal params are valid. SSRSRP, SSRSRQ and SSSINR for NR
+        // are invalid.
+        ss =
+                new SignalStrength(
+                        new CellSignalStrengthCdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthGsm(UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthWcdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE),
+                        new CellSignalStrengthTdscdma(
+                                UNAVAILABLE, UNAVAILABLE, UNAVAILABLE), // not using Tdscdma
+                        new CellSignalStrengthLte(
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE),
+                        new CellSignalStrengthNr(
+                                -91,
+                                -6,
+                                3,
+                                1,
+                                NrCqiReport,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                UNAVAILABLE,
+                                1));
+
+        mLatch = new CountDownLatch(1);
+        mOutputThs = null;
+        callback.onSignalStrengthsChanged(ss);
+        // signal strength is not valid, so CQM should not notify SignalStrength.
+        assertFalse(mLatch.await(200, TimeUnit.MILLISECONDS));
     }
 
     @After
