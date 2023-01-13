@@ -16,12 +16,15 @@
 
 package com.android.telephony.qns;
 
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import android.net.LinkProperties;
@@ -30,12 +33,17 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
+import android.telephony.CallQuality;
 import android.telephony.CallState;
 import android.telephony.PreciseCallState;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.telephony.ims.ImsCallProfile;
+import android.telephony.ims.MediaQualityStatus;
+
+import com.android.telephony.qns.QnsCallStatusTracker.ActiveCallTracker.TransportQuality;
+import com.android.telephony.qns.QnsCallStatusTracker.CallQualityBlock;
 
 import org.junit.After;
 import org.junit.Before;
@@ -44,35 +52,51 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 @RunWith(JUnit4.class)
 public class QnsCallStatusTrackerTest extends QnsTest {
 
     QnsCallStatusTracker mCallTracker;
     TestLooper mTestLooper;
+    TestLooper mTestLooperListener;
+    TestLooper mLowQualityListenerLooper;
     private Handler mImsHandler;
     private Handler mEmergencyHandler;
-    CountDownLatch mLatch;
-    int[] mThresholds;
+    private Handler mLowQualityHandler;
+    private MockitoSession mMockSession;
     List<CallState> mTestCallStateList = new ArrayList<>();
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         super.setUp();
+        mMockSession = mockitoSession().mockStatic(QnsUtils.class).startMocking();
         mTestLooper = new TestLooper();
+        mTestLooperListener = new TestLooper();
+        mLowQualityListenerLooper = new TestLooper();
         Mockito.when(sMockContext.getMainLooper()).thenReturn(mTestLooper.getLooper());
-        mImsHandler = new Handler(mTestLooper.getLooper());
-        mEmergencyHandler = new Handler(mTestLooper.getLooper());
-        mCallTracker = new QnsCallStatusTracker(mMockQnsTelephonyListener, 0);
+        mImsHandler = new Handler(mTestLooperListener.getLooper());
+        mEmergencyHandler = new Handler(mTestLooperListener.getLooper());
+        mLowQualityHandler = new Handler(mLowQualityListenerLooper.getLooper());
+        mCallTracker = new QnsCallStatusTracker(
+                mMockQnsTelephonyListener, mMockQnsConfigManager, 0, mTestLooper.getLooper());
         mCallTracker.registerCallTypeChangedListener(
                 NetworkCapabilities.NET_CAPABILITY_IMS, mImsHandler, 1, null);
         mCallTracker.registerCallTypeChangedListener(
                 NetworkCapabilities.NET_CAPABILITY_EIMS, mEmergencyHandler, 1, null);
+        mCallTracker.getActiveCallTracker()
+                .registerLowMediaQualityListener(mLowQualityHandler, 1, null);
+        lenient().when(QnsUtils.getOtherTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        lenient().when(QnsUtils.getOtherTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        lenient()
+                .when(QnsUtils.getOtherTransportType(AccessNetworkConstants.TRANSPORT_TYPE_INVALID))
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_INVALID);
     }
 
     @After
@@ -82,6 +106,12 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 NetworkCapabilities.NET_CAPABILITY_IMS, mImsHandler);
         mCallTracker.unregisterCallTypeChangedListener(
                 NetworkCapabilities.NET_CAPABILITY_EIMS, mEmergencyHandler);
+        mCallTracker.getActiveCallTracker()
+                .unregisterLowMediaQualityListener(mLowQualityHandler);
+        if (mMockSession != null) {
+            mMockSession.finishMocking();
+            mMockSession = null;
+        }
     }
 
     @Test
@@ -92,7 +122,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
 
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertEquals(mImsHandler, msg.getTarget());
         assertNotEquals(mEmergencyHandler, msg.getTarget());
         assertNotNull(msg);
@@ -107,14 +137,14 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         // Should not notify if call type is not changed
         assertNull(msg);
 
         // Test3:
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
@@ -129,7 +159,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
 
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertEquals(mImsHandler, msg.getTarget());
         assertNotNull(msg);
         QnsAsyncResult result = (QnsAsyncResult) msg.obj;
@@ -142,7 +172,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         // Should not notify if call type is not changed
         assertNull(msg);
 
@@ -155,7 +185,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mEmergencyHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -168,7 +198,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -181,13 +211,13 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mEmergencyHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.mResult);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -205,7 +235,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
@@ -220,7 +250,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
@@ -235,7 +265,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
         assertFalse(mCallTracker.isCallIdle()); // for IMS calls only
 
@@ -244,7 +274,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -260,7 +290,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
         assertFalse(mCallTracker.isCallIdle());
 
@@ -269,7 +299,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -282,7 +312,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -292,7 +322,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
 
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
         assertTrue(mCallTracker.isCallIdle());
     }
@@ -306,7 +336,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
@@ -320,14 +350,14 @@ public class QnsCallStatusTrackerTest extends QnsTest {
 
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
 
         mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
     }
 
@@ -370,7 +400,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         QnsAsyncResult result = (QnsAsyncResult) msg.obj;
@@ -383,7 +413,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         // Should not notify if call type is not changed
         assertNull(msg);
 
@@ -407,7 +437,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
 
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mImsHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -452,7 +482,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mEmergencyHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
@@ -461,12 +491,792 @@ public class QnsCallStatusTrackerTest extends QnsTest {
 
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mEmergencyHandler, msg.getTarget());
         result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.mResult);
+    }
+
+
+    @Test
+    public void testActiveCallTrackerOnOff() {
+        // Test1:
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_INCOMING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test2:
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test3:
+        mTestCallStateList.clear();
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(0, activeCallTracker.getNetCapability());
+
+        // Test4:
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DIALING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+
+        // Test5:
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+
+        // Test6:
+        mTestCallStateList.clear();
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(0, activeCallTracker.getNetCapability());
+    }
+
+    @Test
+    public void testActiveCallTrackerCallTypeUpdate() {
+        // Test1:
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_INCOMING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test2:
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test3:
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VIDEO, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test4:
+        mTestCallStateList.clear();
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(0, activeCallTracker.getNetCapability());
+    }
+
+    @Test
+    public void testForActiveCallTrackerGetQualityLevel() {
+        PreciseDataConnectionState imsDataStatusOnWwan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+
+        PreciseDataConnectionState imsDataStatusOnWlan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatusOnWlan);
+
+        // Test1:
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_INCOMING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        // Test2:
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+        assertEquals(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, activeCallTracker.getTransportType());
+        // check TransportQuality is assigned for the current transport type.
+        TransportQuality transportQuality =
+                activeCallTracker.getLastTransportQuality(activeCallTracker.getTransportType());
+        assertEquals(activeCallTracker.getTransportType(), transportQuality.mTransportType);
+        assertNotNull(transportQuality.mCallQualityBlockList);
+        transportQuality.mLowRtpQualityReportedTime = -1;
+
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL)
+                .setCallQuality(new CallQuality.Builder()
+                        .setUplinkCallQualityLevel(CallQuality.CALL_QUALITY_FAIR)
+                        .setDownlinkCallQualityLevel(CallQuality.CALL_QUALITY_GOOD).build())
+                .build());
+        long firstCallQaulityUpdateTime = 10000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(firstCallQaulityUpdateTime);
+        mCallTracker.updateCallState(mTestCallStateList);
+        mTestLooper.dispatchAll();
+
+        transportQuality =
+                activeCallTracker.getLastTransportQuality(activeCallTracker.getTransportType());
+        assertNull(activeCallTracker
+                .getLastTransportQuality(AccessNetworkConstants.TRANSPORT_TYPE_WWAN));
+        assertEquals(1, transportQuality.mCallQualityBlockList.size());
+        CallQualityBlock qualityBlock = transportQuality.mCallQualityBlockList.get(0);
+        assertEquals(firstCallQaulityUpdateTime, qualityBlock.mCreatedElapsedTime);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, qualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, qualityBlock.mDownLinkLevel);
+
+        long testTime = 15000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(testTime);
+        assertEquals((testTime - firstCallQaulityUpdateTime) * qualityBlock.mUpLinkLevel,
+                qualityBlock.getUpLinkQualityVolume());
+        assertEquals((testTime - firstCallQaulityUpdateTime) * qualityBlock.mDownLinkLevel,
+                qualityBlock.getDownLinkQualityVolume());
+
+        long handoverTime = 20000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(handoverTime);
+        activeCallTracker.onDataConnectionStatusChanged(imsDataStatusOnWwan);
+        TransportQuality oldTransportQuality =
+                activeCallTracker.getLastTransportQuality(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        TransportQuality newTransportQuality =
+                activeCallTracker.getLastTransportQuality(activeCallTracker.getTransportType());
+        assertEquals(1, oldTransportQuality.mCallQualityBlockList.size());
+        CallQualityBlock oldQualityBlock = oldTransportQuality.getLastCallQualityBlock();
+        CallQualityBlock newQualityBlock = newTransportQuality.getLastCallQualityBlock();
+        assertEquals(firstCallQaulityUpdateTime, oldQualityBlock.mCreatedElapsedTime);
+        assertEquals(
+                handoverTime - firstCallQaulityUpdateTime, oldQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, oldQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, oldQualityBlock.mDownLinkLevel);
+
+        assertEquals(1, newTransportQuality.mCallQualityBlockList.size());
+        assertEquals(handoverTime, newQualityBlock.mCreatedElapsedTime);
+        assertEquals(0, newQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, newQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, newQualityBlock.mDownLinkLevel);
+
+        long testTime2 = 22000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(testTime2);
+        assertEquals((handoverTime - firstCallQaulityUpdateTime)
+                * oldQualityBlock.mUpLinkLevel, oldQualityBlock.getUpLinkQualityVolume());
+        assertEquals((handoverTime - firstCallQaulityUpdateTime)
+                * oldQualityBlock.mDownLinkLevel, oldQualityBlock.getDownLinkQualityVolume());
+        assertEquals((testTime2 - handoverTime) * newQualityBlock.mUpLinkLevel,
+                newQualityBlock.getUpLinkQualityVolume());
+        assertEquals((testTime2 - handoverTime) * newQualityBlock.mDownLinkLevel,
+                newQualityBlock.getDownLinkQualityVolume());
+
+        long secondCallQualityUpdateTime = 25000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(secondCallQualityUpdateTime);
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL)
+                .setCallQuality(new CallQuality.Builder()
+                        .setUplinkCallQualityLevel(CallQuality.CALL_QUALITY_GOOD)
+                        .setDownlinkCallQualityLevel(CallQuality.CALL_QUALITY_FAIR).build())
+                .build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        mTestLooper.dispatchAll();
+        TransportQuality testTransportQuality =
+                activeCallTracker.getLastTransportQuality(activeCallTracker.getTransportType());
+        assertEquals(2, newTransportQuality.mCallQualityBlockList.size());
+        CallQualityBlock prev = testTransportQuality.mCallQualityBlockList.get(0);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, prev.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, prev.mDownLinkLevel);
+        assertEquals(handoverTime, prev.mCreatedElapsedTime);
+        assertEquals(secondCallQualityUpdateTime - handoverTime, prev.mDurationMillis);
+
+        newQualityBlock = testTransportQuality.getLastCallQualityBlock();
+        assertEquals(secondCallQualityUpdateTime, newQualityBlock.mCreatedElapsedTime);
+        assertEquals(0, newQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, newQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, newQualityBlock.mDownLinkLevel);
+
+        long handoverTime2 = 30000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(handoverTime2);
+        activeCallTracker.onDataConnectionStatusChanged(imsDataStatusOnWlan);
+
+        oldTransportQuality =
+                activeCallTracker.getLastTransportQuality(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        newTransportQuality =
+                activeCallTracker.getLastTransportQuality(activeCallTracker.getTransportType());
+        assertEquals(2, oldTransportQuality.mCallQualityBlockList.size());
+        oldQualityBlock = oldTransportQuality.getLastCallQualityBlock();
+        newQualityBlock = newTransportQuality.getLastCallQualityBlock();
+        assertEquals(secondCallQualityUpdateTime, oldQualityBlock.mCreatedElapsedTime);
+        assertEquals(
+                handoverTime2 - secondCallQualityUpdateTime, oldQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, oldQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, oldQualityBlock.mDownLinkLevel);
+
+        assertEquals(1, newTransportQuality.mCallQualityBlockList.size());
+        assertEquals(handoverTime2, newQualityBlock.mCreatedElapsedTime);
+        assertEquals(0, newQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, newQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, newQualityBlock.mDownLinkLevel);
+
+        // Test3:
+        long callEndTime = 40000;
+        lenient().when(QnsUtils.getSystemElapsedRealTime()).thenReturn(callEndTime);
+        mTestCallStateList.clear();
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(0, activeCallTracker.getNetCapability());
+
+        oldTransportQuality = activeCallTracker.getLastTransportQuality(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertEquals(1, oldTransportQuality.mCallQualityBlockList.size());
+        oldQualityBlock = oldTransportQuality.getLastCallQualityBlock();
+        assertEquals(handoverTime2, oldQualityBlock.mCreatedElapsedTime);
+        assertEquals(
+                callEndTime - handoverTime2, oldQualityBlock.mDurationMillis);
+        assertEquals(CallQuality.CALL_QUALITY_GOOD, oldQualityBlock.mUpLinkLevel);
+        assertEquals(CallQuality.CALL_QUALITY_FAIR, oldQualityBlock.mDownLinkLevel);
+
+        List<TransportQuality> wlanTransportQualityList =
+                activeCallTracker.getTransportQualityList(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        List<TransportQuality> wwanTransportQualityList =
+                activeCallTracker.getTransportQualityList(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        assertEquals(2, wlanTransportQualityList.size());
+        assertEquals(1, wwanTransportQualityList.size());
+        long expectedUplinkQualityLevelWlan =
+                ((handoverTime - firstCallQaulityUpdateTime) * CallQuality.CALL_QUALITY_FAIR
+                + (callEndTime - handoverTime2) * CallQuality.CALL_QUALITY_GOOD)
+                / ((handoverTime - firstCallQaulityUpdateTime)
+                    + (callEndTime - handoverTime2));
+        assertEquals(expectedUplinkQualityLevelWlan, activeCallTracker
+                .getUpLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+        long expectedDownLinkQualityLevelWlan =
+                ((handoverTime - firstCallQaulityUpdateTime) * CallQuality.CALL_QUALITY_GOOD
+                        + (callEndTime - handoverTime2) * CallQuality.CALL_QUALITY_FAIR)
+                        / ((handoverTime - firstCallQaulityUpdateTime)
+                        + (callEndTime - handoverTime2));
+        assertEquals(expectedDownLinkQualityLevelWlan, activeCallTracker
+                .getDownLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WLAN));
+    }
+
+    @Test
+    public void testMediaQualityBreachedWithJitter() {
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(120, 30, 5, 10);
+        when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
+
+        PreciseDataConnectionState imsDataStatusOnWlan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_IMS)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatusOnWlan);
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_INCOMING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        MediaQualityStatus status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(130)
+                        .setRtpPacketLossRate(10)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        Message msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(1 << QnsConstants.RTP_LOW_QUALITY_REASON_JITTER, (int) result.mResult);
+    }
+
+    @Test
+    public void testMediaQualityBreachedWithNoRtp() {
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(120, 30, 5, 10000);
+        when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
+
+        PreciseDataConnectionState emergencyDataStatusOnWwan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("sos")
+                                        .setEntryName("sos")
+                                        .build())
+                        .build();
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_EIMS))
+                .thenReturn(emergencyDataStatusOnWwan);
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ALERTING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+
+        MediaQualityStatus status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(10)
+                        .setRtpInactivityMillis(11000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        Message msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP, (int) result.mResult);
+    }
+
+    @Test
+    public void testMediaQualityBreachedWithPacketLoss() {
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(120, 30, 5000, 10000);
+        when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
+
+        PreciseDataConnectionState emergencyDataStatusOnWwan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("sos")
+                                        .setEntryName("sos")
+                                        .build())
+                        .build();
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_EIMS))
+                .thenReturn(emergencyDataStatusOnWwan);
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ALERTING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+
+        MediaQualityStatus status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(35)
+                        .setRtpInactivityMillis(7000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        Message msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(config.mPktLossTime - 1000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(2000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(
+                1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS, (int) result.mResult);
+    }
+
+    @Test
+    public void testMediaQualityBreachedWithPacketLossAdvanced() {
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(120, 30, 12000, 10000);
+        when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
+
+        PreciseDataConnectionState emergencyDataStatusOnWwan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("sos")
+                                        .setEntryName("sos")
+                                        .build())
+                        .build();
+
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_EIMS))
+                .thenReturn(emergencyDataStatusOnWwan);
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ALERTING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+
+        MediaQualityStatus status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(35)
+                        .setRtpInactivityMillis(7000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        Message msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(config.mPktLossTime / 3);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(10)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(4000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(0, (int) result.mResult);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(33)
+                        .setRtpInactivityMillis(7000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(config.mPktLossTime / 3);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(10)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(2000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(33)
+                        .setRtpInactivityMillis(7000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(config.mPktLossTime * 2 / 3);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(
+                1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS, (int) result.mResult);
+    }
+
+    @Test
+    public void testHandlingLowQualityEventAtHandover() {
+        QnsCarrierConfigManager.RtpMetricsConfig config =
+                new QnsCarrierConfigManager.RtpMetricsConfig(120, 30, 12000, 10000);
+        when(mMockQnsConfigManager.getRTPMetricsData()).thenReturn(config);
+        PreciseDataConnectionState imsDataStatusOnWlan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_IWLAN)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+        PreciseDataConnectionState imsDataStatusOnWwan =
+                new PreciseDataConnectionState.Builder()
+                        .setTransportType(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setState(TelephonyManager.DATA_CONNECTED)
+                        .setNetworkType(TelephonyManager.NETWORK_TYPE_LTE)
+                        .setApnSetting(
+                                new ApnSetting.Builder()
+                                        .setApnTypeBitmask(ApnSetting.TYPE_EMERGENCY)
+                                        .setApnName("ims")
+                                        .setEntryName("ims")
+                                        .build())
+                        .build();
+        when(mMockQnsTelephonyListener.getLastPreciseDataConnectionState(
+                NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(imsDataStatusOnWwan);
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DIALING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
+                mCallTracker.getActiveCallTracker();
+        assertNotNull(activeCallTracker);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+        mTestCallStateList.clear();
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mCallTracker.updateCallState(mTestCallStateList);
+        assertEquals(QnsConstants.CALL_TYPE_VOICE, activeCallTracker.getCallType());
+        assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
+
+        MediaQualityStatus status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
+                        .setRtpJitterMillis(70)
+                        .setRtpPacketLossRate(35)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        Message msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(4000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        activeCallTracker.onDataConnectionStatusChanged(imsDataStatusOnWlan);
+
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        mTestLooper.moveTimeForward(2500);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        QnsAsyncResult result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(
+                1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS, (int) result.mResult);
+
+        mTestLooper.moveTimeForward(1000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        activeCallTracker.onDataConnectionStatusChanged(imsDataStatusOnWlan);
+        mTestLooper.moveTimeForward(1000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(20)
+                        .setRtpPacketLossRate(5)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(2100);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(3100);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(0, (int) result.mResult);
+
+        mTestLooper.moveTimeForward(10000);
+        mTestLooper.dispatchAll();
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(20)
+                        .setRtpPacketLossRate(100)
+                        .setRtpInactivityMillis(11000).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals((1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP)
+                + (1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS), (int) result.mResult);
+
+        status =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(20)
+                        .setRtpPacketLossRate(12)
+                        .setRtpInactivityMillis(0).build();
+        activeCallTracker.onMediaQualityStatusChanged(status);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(2000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+
+        activeCallTracker.onDataConnectionStatusChanged(imsDataStatusOnWwan);
+        mTestLooper.moveTimeForward(2000);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNull(msg);
+        mTestLooper.moveTimeForward(1100);
+        mTestLooper.dispatchAll();
+        msg = mLowQualityListenerLooper.nextMessage();
+        assertNotNull(msg);
+        assertEquals(mLowQualityHandler, msg.getTarget());
+        result = (QnsAsyncResult) msg.obj;
+        assertNotNull(result.mResult);
+        assertEquals(0, (int) result.mResult);
     }
 
     @Test
@@ -475,21 +1285,21 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        Message msg = mTestLooper.nextMessage();
+        Message msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         assertEquals(mEmergencyHandler, msg.getTarget());
         QnsAsyncResult result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
         assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, (int) result.mResult);
         mCallTracker.onSrvccStateChangedInternal(TelephonyManager.SRVCC_STATE_HANDOVER_COMPLETED);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNotNull(msg);
         result = (QnsAsyncResult) msg.obj;
         assertNotNull(result.mResult);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, (int) result.mResult);
 
         mCallTracker.onSrvccStateChangedInternal(TelephonyManager.SRVCC_STATE_HANDOVER_STARTED);
-        msg = mTestLooper.nextMessage();
+        msg = mTestLooperListener.nextMessage();
         assertNull(msg);
     }
 

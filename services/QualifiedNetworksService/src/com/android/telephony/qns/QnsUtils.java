@@ -264,6 +264,17 @@ class QnsUtils {
         return false;
     }
 
+    @AccessNetworkConstants.TransportType
+    static int getTransportTypeFromAccessNetwork(
+            @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork) {
+        if (accessNetwork == AccessNetworkConstants.AccessNetworkType.IWLAN) {
+            return AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
+        } else if (accessNetwork != AccessNetworkConstants.AccessNetworkType.UNKNOWN) {
+            return AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
+        }
+        return AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+    }
+
     /**
      * Get Set of network capabilities from string joined by {@code |}, space is ignored. If input
      * string contains unknown capability or malformatted(e.g. empty string), -1 is included in the
@@ -282,6 +293,21 @@ class QnsUtils {
                 .map(String::trim)
                 .map(QnsUtils::getNetworkCapabilityFromString)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns another transport type.
+     * @param transportType transport type
+     * @return another transport type of input parameter
+     */
+    @AccessNetworkConstants.TransportType
+    static int getOtherTransportType(@AccessNetworkConstants.TransportType int transportType) {
+        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+            return AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
+        } else if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
+            return AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
+        }
+        return AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
     }
 
     /**
@@ -610,6 +636,13 @@ class QnsUtils {
                 return (T) Integer.valueOf(QnsConstants.RAT_PREFERENCE_DEFAULT);
             case KEY_QNS_VOWIFI_REGISTATION_TIMER_FOR_VOWIFI_ACTIVATION_INT:
                 return (T) Integer.valueOf(CONFIG_DEFAULT_VOWIFI_REGISTATION_TIMER);
+            case CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_JITTER_THRESHOLD_MILLIS_INT:
+            case CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_PACKET_LOSS_RATE_THRESHOLD_INT:
+                return (T) Integer.valueOf(QnsConstants.INVALID_VALUE);
+            case QnsCarrierConfigManager.KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT:
+                return (T) Integer.valueOf(QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS);
+            case CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_INACTIVITY_TIME_THRESHOLD_MILLIS_LONG:
+                return (T) Long.valueOf(QnsConstants.INVALID_VALUE);
             case QnsCarrierConfigManager
                     .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY:
                 return (T)
@@ -641,14 +674,6 @@ class QnsUtils {
                         };
             case QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT:
                 return (T) Integer.valueOf(QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER);
-            case QnsCarrierConfigManager.KEY_QNS_RTP_METRICS_INT_ARRAY:
-                return (T)
-                        new int[] {
-                            QnsConstants.KEY_DEFAULT_JITTER,
-                            QnsConstants.KEY_DEFAULT_PACKET_LOSS_RATE,
-                            QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS,
-                            QnsConstants.KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS
-                        };
             case QnsCarrierConfigManager
                     .KEY_CHOOSE_WFC_PREFERRED_TRANSPORT_IN_BOTH_BAD_CONDITION_INT_ARRAY:
                 return (T) new int[] {};

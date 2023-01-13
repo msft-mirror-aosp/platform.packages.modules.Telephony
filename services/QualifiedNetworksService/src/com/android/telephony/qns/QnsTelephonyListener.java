@@ -37,6 +37,7 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
+import android.telephony.ims.MediaQualityStatus;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -69,6 +70,7 @@ class QnsTelephonyListener {
     QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
     List<Consumer<List<CallState>>> mCallStatesConsumerList = new ArrayList<>();
     List<Consumer<Integer>> mSrvccStateConsumerList = new ArrayList<>();
+    List<Consumer<MediaQualityStatus>> mMediaQualityConsumerList = new ArrayList<>();
     protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
     protected HashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
@@ -1025,7 +1027,8 @@ class QnsTelephonyListener {
                     TelephonyCallback.BarringInfoListener,
                     TelephonyCallback.CallStateListener,
                     TelephonyCallback.SrvccStateListener,
-                    TelephonyCallback.CallAttributesListener {
+                    TelephonyCallback.CallAttributesListener,
+                    TelephonyCallback.MediaQualityStatusChangedListener {
         private final Executor mExecutor;
         private OnServiceStateListener mServiceStateListener;
         private OnPreciseDataConnectionStateListener mPreciseDataConnectionStateListener;
@@ -1149,6 +1152,13 @@ class QnsTelephonyListener {
                 mCallStatesCallback.onCallStatesChanged(callStateList);
             }
         }
+
+        @Override
+        public void onMediaQualityStatusChanged(MediaQualityStatus status) {
+            for (Consumer<MediaQualityStatus> consumer : mMediaQualityConsumerList) {
+                consumer.accept(status);
+            }
+        }
     }
 
     void addCallStatesChangedCallback(Consumer<List<CallState>> consumer) {
@@ -1165,6 +1175,14 @@ class QnsTelephonyListener {
 
     void removeSrvccStateChangedCallback(Consumer<Integer> consumer) {
         mSrvccStateConsumerList.remove(consumer);
+    }
+
+    void addMediaQualityStatusCallback(Consumer<MediaQualityStatus> consumer) {
+        mMediaQualityConsumerList.add(consumer);
+    }
+
+    void removeMediaQualityStatusCallback(Consumer<MediaQualityStatus> consumer) {
+        mMediaQualityConsumerList.remove(consumer);
     }
 
     /**
