@@ -27,7 +27,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.CellSignalStrength;
-import android.telephony.CellSignalStrengthCdma;
 import android.telephony.CellSignalStrengthGsm;
 import android.telephony.CellSignalStrengthLte;
 import android.telephony.CellSignalStrengthNr;
@@ -163,69 +162,13 @@ class CellularQualityMonitor extends QualityMonitor {
     private void onSignalStrengthsChanged(SignalStrength signalStrength) {
         List<CellSignalStrength> ss = signalStrength.getCellSignalStrengths();
         if (!ss.isEmpty()) {
-            int accessNetwork;
             for (CellSignalStrength cs : ss) {
-                accessNetwork = getAccessNetworkForSignalStrength(cs);
-                if (accessNetwork != AccessNetworkType.UNKNOWN) {
-                    checkAndNotifySignalStrength(cs, accessNetwork);
-                }
+                checkAndNotifySignalStrength(cs);
             }
         }
     }
 
-    private int getAccessNetworkForSignalStrength(CellSignalStrength cs) {
-        int accessNetwork = AccessNetworkType.UNKNOWN;
-        if (cs instanceof CellSignalStrengthNr) {
-            CellSignalStrengthNr ss = (CellSignalStrengthNr) cs;
-            if (ss.getCsiRsrp() != UNAVAILABLE
-                    && ss.getCsiRsrq() != UNAVAILABLE
-                    && ss.getCsiSinr() != UNAVAILABLE
-                    && ss.getSsRsrp() != UNAVAILABLE
-                    && ss.getSsRsrq() != UNAVAILABLE
-                    && ss.getSsSinr() != UNAVAILABLE
-                    && ss.getCsiCqiTableIndex() != UNAVAILABLE) {
-                accessNetwork = AccessNetworkType.NGRAN;
-            }
-        } else if (cs instanceof CellSignalStrengthLte) {
-            CellSignalStrengthLte ss = (CellSignalStrengthLte) cs;
-            if (ss.getRssi() != UNAVAILABLE
-                    && ss.getRsrp() != UNAVAILABLE
-                    && ss.getRsrq() != UNAVAILABLE
-                    && ss.getRssnr() != UNAVAILABLE
-                    && ss.getCqiTableIndex() != UNAVAILABLE
-                    && ss.getCqi() != UNAVAILABLE
-                    && ss.getTimingAdvance() != UNAVAILABLE) {
-                accessNetwork = AccessNetworkType.EUTRAN;
-            }
-        } else if (cs instanceof CellSignalStrengthWcdma) {
-            CellSignalStrengthWcdma ss = (CellSignalStrengthWcdma) cs;
-            if (ss.getDbm() != UNAVAILABLE && ss.getEcNo() != UNAVAILABLE) {
-                accessNetwork = AccessNetworkType.UTRAN;
-            }
-        } else if (cs instanceof CellSignalStrengthCdma) {
-            CellSignalStrengthCdma ss = (CellSignalStrengthCdma) cs;
-            if (ss.getCdmaDbm() != UNAVAILABLE
-                    && ss.getCdmaEcio() != UNAVAILABLE
-                    && ss.getEvdoDbm() != UNAVAILABLE
-                    && ss.getEvdoEcio() != UNAVAILABLE
-                    && ss.getEvdoSnr() != UNAVAILABLE) {
-                accessNetwork = AccessNetworkType.CDMA2000;
-            }
-        } else if (cs instanceof CellSignalStrengthGsm) {
-            CellSignalStrengthGsm ss = (CellSignalStrengthGsm) cs;
-            if (ss.getRssi() != UNAVAILABLE
-                    && ss.getBitErrorRate() != UNAVAILABLE
-                    && ss.getTimingAdvance() != UNAVAILABLE) {
-                accessNetwork = AccessNetworkType.GERAN;
-            }
-        } else {
-            Log.d(mTag, "Unknown signal strength :" + cs);
-        }
-        return accessNetwork;
-    }
-
-    private void checkAndNotifySignalStrength(
-            CellSignalStrength cellSignalStrength, int accessNetwork) {
+    private void checkAndNotifySignalStrength(CellSignalStrength cellSignalStrength) {
         Log.d(mTag, "CellSignalStrength Changed: " + cellSignalStrength);
 
         int signalStrength;
@@ -238,11 +181,10 @@ class CellularQualityMonitor extends QualityMonitor {
             List<Threshold> matchedThresholds = new ArrayList<>();
             Threshold threshold;
             for (Threshold th : entry.getValue()) {
-                if (th.getAccessNetwork() != accessNetwork) continue;
                 signalStrength =
                         getSignalStrength(
                                 th.getAccessNetwork(), th.getMeasurementType(), cellSignalStrength);
-                if (th.isMatching(signalStrength)) {
+                if (signalStrength != UNAVAILABLE && th.isMatching(signalStrength)) {
                     threshold = th.copy();
                     threshold.setThreshold(signalStrength);
                     matchedThresholds.add(threshold);
@@ -451,7 +393,7 @@ class CellularQualityMonitor extends QualityMonitor {
     }
 
     private int getSignalStrength(int accessNetwork, int measurementType, CellSignalStrength css) {
-        int signalStrength = SignalStrength.INVALID;
+        int signalStrength = UNAVAILABLE;
         switch (measurementType) {
             case SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI:
                 if (accessNetwork == AccessNetworkType.GERAN

@@ -1011,9 +1011,10 @@ class QnsCarrierConfigManager {
                         "Need to specify both source and target. " + "\"" + ruleString + "\"");
             }
 
-            if (source.contains(AccessNetworkConstants.AccessNetworkType.UNKNOWN)) {
-                throw new IllegalArgumentException(
-                        "Source access networks contains unknown. " + "\"" + ruleString + "\"");
+            if (source.contains(AccessNetworkConstants.AccessNetworkType.UNKNOWN)
+                    && type != RULE_TYPE_DISALLOWED) {
+                throw new IllegalArgumentException("Unknown access network can be only specified in"
+                        + " the disallowed rule. \"" + ruleString + "\"");
             }
 
             if (target.contains(AccessNetworkConstants.AccessNetworkType.UNKNOWN)) {
