@@ -669,24 +669,27 @@ class AccessNetworkEvaluator {
         if (mNetCapability != NetworkCapabilities.NET_CAPABILITY_EIMS) {
             return;
         }
-        log(
-                "onEmergencyPreferredTransportTypeChanged transport:"
-                        + QnsConstants.transportTypeToString(transport));
-        if (mDataConnectionStatusTracker.isInactiveState()) {
-            int accessNetwork;
-            List<Integer> accessNetworkTypes = new ArrayList<>();
-            if (transport == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
-                accessNetwork = AccessNetworkType.IWLAN;
-                accessNetworkTypes.add(accessNetwork);
-            } else {
-                accessNetwork = mCellularAccessNetworkType;
-                if (accessNetwork != AccessNetworkType.UNKNOWN) {
-                    accessNetworkTypes.add(accessNetwork);
+        mHandler.post(() -> {
+                    log(
+                            "onEmergencyPreferredTransportTypeChanged transport:"
+                                    + QnsConstants.transportTypeToString(transport));
+                    if (mDataConnectionStatusTracker.isInactiveState()) {
+                        int accessNetwork;
+                        List<Integer> accessNetworkTypes = new ArrayList<>();
+                        if (transport == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+                            accessNetwork = AccessNetworkType.IWLAN;
+                            accessNetworkTypes.add(accessNetwork);
+                        } else {
+                            accessNetwork = mCellularAccessNetworkType;
+                            if (accessNetwork != AccessNetworkType.UNKNOWN) {
+                                accessNetworkTypes.add(accessNetwork);
+                            }
+                        }
+                        updateLastNotifiedQualifiedNetwork(accessNetworkTypes);
+                        notifyForQualifiedNetworksChanged(accessNetworkTypes);
+                    }
                 }
-            }
-            updateLastNotifiedQualifiedNetwork(accessNetworkTypes);
-            notifyForQualifiedNetworksChanged(accessNetworkTypes);
-        }
+        );
     }
 
     private void onDataConnectionStateChanged(

@@ -978,6 +978,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         mLatch = new CountDownLatch(1);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        waitForLastHandlerAction(mAne.mHandler);
         assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
 
         when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(true);
@@ -994,6 +995,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         mLatch = new CountDownLatch(1);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        waitForLastHandlerAction(mAne.mHandler);
         assertTrue(mLatch.await(500, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
@@ -1003,6 +1005,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         // UNKNOWN
         mLatch = new CountDownLatch(1);
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        waitForLastHandlerAction(mAne.mHandler);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(mQualifiedNetworksInfo.getAccessNetworkTypes().isEmpty());
 
@@ -1021,6 +1024,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
 
         mLatch = new CountDownLatch(1);
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        waitForLastHandlerAction(mAne.mHandler);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
                 mQualifiedNetworksInfo
