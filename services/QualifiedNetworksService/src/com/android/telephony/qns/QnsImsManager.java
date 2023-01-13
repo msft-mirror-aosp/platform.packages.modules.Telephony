@@ -116,25 +116,31 @@ class QnsImsManager {
         initQnsImsManager();
 
         mSubscriptionManager = mContext.getSystemService(SubscriptionManager.class);
-        mSubscriptionsChangeListener =
-                new SubscriptionManager.OnSubscriptionsChangedListener(mHandlerThread.getLooper()) {
-                    @Override
-                    public void onSubscriptionsChanged() {
-                        int newSubId = QnsUtils.getSubId(mContext, mSlotId);
-                        if (newSubId != mSubId) {
-                            mSubId = newSubId;
-                            if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                                clearQnsImsManager();
-                            } else {
-                                clearQnsImsManager();
-                                initQnsImsManager();
-                            }
-                        }
-                    }
-                };
+        mSubscriptionsChangeListener = new QnsSubscriptionsChangedListener();
         if (mSubscriptionManager != null) {
             mSubscriptionManager.addOnSubscriptionsChangedListener(
                     new QnsUtils.QnsExecutor(mHandler), mSubscriptionsChangeListener);
+        }
+    }
+
+    class QnsSubscriptionsChangedListener
+            extends SubscriptionManager.OnSubscriptionsChangedListener {
+
+        /**
+         * Callback invoked when there is any change to any SubscriptionInfo.
+         */
+        @Override
+        public void onSubscriptionsChanged() {
+            int newSubId = QnsUtils.getSubId(mContext, mSlotId);
+            if (newSubId != mSubId) {
+                mSubId = newSubId;
+                if (mSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    clearQnsImsManager();
+                } else {
+                    clearQnsImsManager();
+                    initQnsImsManager();
+                }
+            }
         }
     }
 
