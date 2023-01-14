@@ -262,6 +262,38 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
     }
 
     @Test
+    public void testOnEmergencyDataNetworkPreferenceChangedWlan() {
+        createNap();
+        mProvider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_EIMS, mMockAne);
+        mProvider.reportEmergencyDataNetworkPreferredTransportChanged(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        verify(mMockAne)
+                .onEmergencyPreferredTransportTypeChanged(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+    }
+
+    @Test
+    public void testOnEmergencyDataNetworkPreferenceChangedWwan() {
+        createNap();
+        mProvider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_EIMS, mMockAne);
+        mProvider.reportEmergencyDataNetworkPreferredTransportChanged(
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        verify(mMockAne)
+                .onEmergencyPreferredTransportTypeChanged(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+    }
+
+    @Test
+    public void testOnEmergencyDataNetworkPreferenceChangedWrongAne() {
+        createNap();
+        mProvider.mEvaluators.put(NetworkCapabilities.NET_CAPABILITY_IMS, mMockAne);
+        mProvider.reportEmergencyDataNetworkPreferredTransportChanged(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        verify(mMockAne, never()).onEmergencyPreferredTransportTypeChanged(anyInt());
+    }
+
+    @Test
     public void testOnConfigurationLoaded() {
         createNap();
         Message.obtain(mProvider.mConfigHandler, TEST_QNS_CONFIGURATION_LOADED, null)

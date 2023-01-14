@@ -324,6 +324,30 @@ public class IwlanNetworkStatusTrackerTest extends QnsTest {
     }
 
     @Test
+    public void testRegisterIwlanNetworksChanged_Validate() throws Exception {
+        mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(0);
+        when(mMockQnsConfigManager.blockIpv6OnlyWifi()).thenReturn(false);
+        mHandlers[0].mLatch = new CountDownLatch(2);
+        mHandlers[1].mLatch = new CountDownLatch(1);
+
+        // Count down 1 mHandlers[0].mLatch
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[0], 1);
+        waitForLastHandlerAction(mEventHandler);
+
+        mIwlanNetworkStatusTracker.mLastIwlanAvailabilityInfo.put(0,
+                mIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false));
+
+        // When registering a new handler, if the IwlanAvailabilityInfo information is updated,
+        // the existing one is also notified.
+        // Count down 1 mHandlers[1].mLatch and Count down 1 mHandlers[0].mLatch as well
+        mIwlanNetworkStatusTracker.registerIwlanNetworksChanged(0, mHandlers[1], 1);
+        waitForLastHandlerAction(mEventHandler);
+
+        assertTrue(mHandlers[0].mLatch.await(100, TimeUnit.MILLISECONDS));
+        assertTrue(mHandlers[1].mLatch.await(100, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
     public void testUnregisterIwlanNetworksChanged() throws InterruptedException {
         mEventHandler = mIwlanNetworkStatusTracker.mHandlerSparseArray.get(CURRENT_SLOT_ID);
         mHandlers[0].mLatch = new CountDownLatch(1);

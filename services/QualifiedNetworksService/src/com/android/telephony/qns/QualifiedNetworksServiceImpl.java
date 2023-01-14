@@ -20,10 +20,12 @@ import static android.telephony.data.ThrottleStatus.THROTTLE_TYPE_ELAPSED_TIME;
 
 import android.annotation.NonNull;
 import android.content.Context;
+import android.net.NetworkCapabilities;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.telephony.AccessNetworkConstants;
 import android.telephony.data.QualifiedNetworksService;
 import android.telephony.data.ThrottleStatus;
 import android.util.Log;
@@ -279,6 +281,20 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
                 boolean isThrottle = ts.getThrottleType() == THROTTLE_TYPE_ELAPSED_TIME;
                 evaluator.updateThrottleStatus(
                         isThrottle, ts.getThrottleExpiryTimeMillis(), ts.getTransportType());
+            }
+        }
+
+        @Override
+        public void reportEmergencyDataNetworkPreferredTransportChanged(
+                @AccessNetworkConstants.TransportType int transportType) {
+            log("reportEmergencyDataNetworkPreferredTransportChanged: "
+                    + AccessNetworkConstants.transportTypeToString(transportType));
+            AccessNetworkEvaluator evaluator =
+                    mEvaluators.get(NetworkCapabilities.NET_CAPABILITY_EIMS);
+            if (evaluator != null) {
+                evaluator.onEmergencyPreferredTransportTypeChanged(transportType);
+            } else {
+                log("There is no Emergency ANE");
             }
         }
 

@@ -34,9 +34,11 @@ import android.os.Message;
 import android.os.test.TestLooper;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.BarringInfo;
+import android.telephony.CallState;
 import android.telephony.LteVopsSupportInfo;
 import android.telephony.NetworkRegistrationInfo;
 import android.telephony.NrVopsSupportInfo;
+import android.telephony.PreciseCallState;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.ServiceState;
 import android.telephony.SubscriptionManager;
@@ -44,6 +46,8 @@ import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
 import android.telephony.data.ApnSetting;
+import android.telephony.ims.ImsCallProfile;
+import android.telephony.ims.MediaQualityStatus;
 import android.util.SparseArray;
 
 import org.junit.After;
@@ -59,6 +63,7 @@ import org.mockito.MockitoSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 @RunWith(JUnit4.class)
 public final class QnsTelephonyListenerTest extends QnsTest {
@@ -72,6 +77,18 @@ public final class QnsTelephonyListenerTest extends QnsTest {
 
     Handler mHandler;
     TestLooper mTestLooper;
+    private MediaQualityStatus mTestMediaQuality;
+    private List<CallState> mTestCallStateList;
+    private Consumer<List<CallState>> mTestCallStateConsumer =
+            callStateList -> onTestCallStateChanged(callStateList);
+    void onTestCallStateChanged(List<CallState> callStateList) {
+        mTestCallStateList = callStateList;
+    }
+    private Consumer<MediaQualityStatus> mTestMediaQualityConsumer =
+            status -> onTestMediaQualityStatusChanged(status);
+    void onTestMediaQualityStatusChanged(MediaQualityStatus status) {
+        mTestMediaQuality = status;
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -91,7 +108,8 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     @After
     public void tearDown() {
         mStaticMockSession.finishMocking();
-
+        mTestCallStateList = null;
+        mTestMediaQuality = null;
         if (mQtListener != null) mQtListener.close();
     }
 
@@ -981,6 +999,41 @@ public final class QnsTelephonyListenerTest extends QnsTest {
         assertFalse(qtInfoIms.getVopsSupport());
         assertFalse(qtInfoIms.getVoiceBarring());
         assertTrue(qtInfoIms.getVopsEmergencySupport());
+    }
+
+    @Test
+    public void testOnCallStateListChanged() {
+        mQtListener.addCallStatesChangedCallback(mTestCallStateConsumer);
+        List<CallState> testCallStates = new ArrayList<>();
+        testCallStates.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VT)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        testCallStates.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_HOLDING)
+                .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
+                .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
+        mQtListener.mTelephonyListener.onCallStatesChanged(testCallStates);
+
+        assertEquals(2, mTestCallStateList.size());
+        int index = 0;
+        for (CallState cs : testCallStates) {
+            assertEquals(cs, mTestCallStateList.get(index));
+            index++;
+        }
+    }
+
+    @Test
+    public void testOnMediaQualityStatusChanged() {
+        mQtListener.addMediaQualityStatusCallback(mTestMediaQualityConsumer);
+        MediaQualityStatus testMediaQuality =
+                new MediaQualityStatus.Builder(
+                        "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                        .setRtpJitterMillis(130)
+                        .setRtpPacketLossRate(10)
+                        .setRtpInactivityMillis(7000).build();
+        mQtListener.mTelephonyListener.onMediaQualityStatusChanged(testMediaQuality);
+
+        assertEquals(testMediaQuality, mTestMediaQuality);
     }
 
     @Test
