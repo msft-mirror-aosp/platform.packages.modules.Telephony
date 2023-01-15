@@ -495,28 +495,13 @@ class QnsCarrierConfigManager {
             "qns.minimum_handover_guarding_timer_ms_int";
 
     /**
-     * List of 4 items indicating the RTP media metrics criteria to be set ,to make HO decision
-     * during Call. The three items part of integer array is jitter , Packet loss rate & RTP
-     * interval.
+     * This indicates time duration for packet loss rate sustained.
      *
-     * <p>{@link QnsConstants}. The values are set as below:
-     *
-     * <ul>
-     *   <li>0: {@link QnsConstants#KEY_DEFAULT_JITTER}
-     *   <li>1: {@link QnsConstants#KEY_DEFAULT_PACKET_LOSS_RATE}
-     *   <li>2: {@link QnsConstants#KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS}
-     *   <li>3: {@link QnsConstants#KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS}
-     * </ul>
-     *
-     * {@code QnsConstants#KEY_DEFAULT_JITTER , QnsConstants#KEY_DEFAULT_PACKET_LOSS_RATE ,
-     * QnsConstants#KEY_DEFAULT_NO_RTP_INTERVAL }: If set , indicates the jitter : Indicating the
-     * latentcy , Packet loss rate : Indicating the percentage loss & RTP interval indicating the
-     * interval in secs criteria to determine the HO decision . The default value for this key is
-     * {@code QnsConstants#KEY_DEFAULT_JITTER, QnsConstants#KEY_DEFAULT_PACKET_LOSS_RATE,
-     * QnsConstants#KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS,
-     * QnsConstants#KEY_DEFAULT_NO_RTP_INTERVAL_MILLIS}
+     * <p/> The default value for this key is {@code
+     * QnsConstants#KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS}
      */
-    static final String KEY_QNS_RTP_METRICS_INT_ARRAY = "qns.rtp_metrics_int_array";
+    static final String KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT =
+            "qns.media_threshold_rtp_packet_loss_time_millis";
 
     /**
      * Specify a list of the waiting time(millisecond) for the preferred transport type when power
@@ -770,7 +755,7 @@ class QnsCarrierConfigManager {
     private int[] mWlanHysteresisTimer;
     private int[] mNonImsWwanHysteresisTimer;
     private int[] mNonImsWlanHysteresisTimer;
-    private int[] mRTPMetricsData;
+    private int[] mRTPMetricsData = new int[4];
     private int[] mWaitingTimerForPreferredTransport;
     private int[] mAllowMaxIwlanHoCountOnReason;
     private int[] mHoRestrictTimeOnRtpQuality;
@@ -1192,6 +1177,8 @@ class QnsCarrierConfigManager {
         loadDirectFromCarrierConfigManagerKey(carrierConfigBundle);
 
         loadWfcConfigurations(carrierConfigBundle, assetConfigBundle);
+
+        loadMediaThreshold(carrierConfigBundle, assetConfigBundle);
     }
 
     /**
@@ -1383,7 +1370,6 @@ class QnsCarrierConfigManager {
                         bundleCarrier,
                         bundleAsset,
                         KEY_QNS_HO_RESTRICT_TIME_WITH_LOW_RTP_QUALITY_MILLIS_INT_ARRAY);
-        mRTPMetricsData = getConfig(bundleCarrier, bundleAsset, KEY_QNS_RTP_METRICS_INT_ARRAY);
         mWlanRttBackhaulCheckConfigsOnPing =
                 getConfig(
                         bundleCarrier,
@@ -1545,6 +1531,26 @@ class QnsCarrierConfigManager {
                 }
             }
         }
+    }
+
+    void loadMediaThreshold(PersistableBundle bundleCarrier, PersistableBundle assetConfigBundle) {
+        //read Jitter
+        mRTPMetricsData[0] = getConfig(
+                bundleCarrier, null,
+                CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_JITTER_THRESHOLD_MILLIS_INT);
+        //read Packet Loss Rate
+        mRTPMetricsData[1] = getConfig(
+                bundleCarrier, null,
+                CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_PACKET_LOSS_RATE_THRESHOLD_INT);
+        //read Inactivity Time
+        long inactivityTime = getConfig(
+                bundleCarrier, null,
+                CarrierConfigManager.ImsVoice.KEY_VOICE_RTP_INACTIVITY_TIME_THRESHOLD_MILLIS_LONG);
+        mRTPMetricsData[3] = (int) inactivityTime;
+        //read Packet Loss Duration
+        mRTPMetricsData[2] = getConfig(
+                bundleCarrier, assetConfigBundle,
+                KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT);
     }
 
     /** Updated handover rules from carrier config. */
@@ -2718,10 +2724,10 @@ class QnsCarrierConfigManager {
         /** RTP packet loss rate in percentage */
         final int mPktLossRate;
 
-        /** Time interval of RTP packet loss rate */
+        /** Time interval(milliseconds) of RTP packet loss rate */
         final int mPktLossTime;
 
-        /** No RTP interval in seconds */
+        /** No RTP interval in milliseconds */
         final int mNoRtpInterval;
 
         RtpMetricsConfig(int jitter, int pktLossRate, int pktLossTime, int noRtpInterval) {

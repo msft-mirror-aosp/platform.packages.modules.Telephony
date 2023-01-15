@@ -19,12 +19,20 @@ package com.android.telephony.qns;
 import android.annotation.NonNull;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Message;
+import android.telephony.AccessNetworkConstants;
+import android.telephony.Annotation;
+import android.telephony.CallQuality;
 import android.telephony.CallState;
 import android.telephony.PreciseCallState;
 import android.telephony.PreciseDataConnectionState;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsCallProfile;
+import android.telephony.ims.MediaQualityStatus;
 import android.util.Log;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -38,19 +46,695 @@ import java.util.function.Consumer;
 public class QnsCallStatusTracker {
     private final String mLogTag;
     private QnsTelephonyListener mTelephonyListener;
+    private QnsCarrierConfigManager mConfigManager;
     private List<CallState> mCallStates = new ArrayList<>();
     private QnsRegistrant mCallTypeChangedEventListener;
     private QnsRegistrant mEmergencyCallTypeChangedEventListener;
     private int mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
     private int mLastEmergencyCallType = QnsConstants.CALL_TYPE_IDLE;
     private boolean mEmergencyOverIms;
+    private ActiveCallTracker mActiveCallTracker;
     private Consumer<List<CallState>> mCallStatesConsumer =
             callStateList -> updateCallState(callStateList);
     private Consumer<Integer> mSrvccStateConsumer = state -> onSrvccStateChangedInternal(state);
+    private Consumer<MediaQualityStatus> mMediaQualityStatusConsumer =
+            status -> mActiveCallTracker.onMediaQualityStatusChanged(status);
 
-    QnsCallStatusTracker(QnsTelephonyListener telephonyListener, int slotIndex) {
+    static class CallQualityBlock {
+        int mUpLinkLevel;
+        int mDownLinkLevel;
+        long mCreatedElapsedTime;
+        long mDurationMillis;
+        CallQualityBlock(int uplinkLevel, int downLinkLevel, long createdElapsedTime) {
+            mUpLinkLevel = uplinkLevel;
+            mDownLinkLevel = downLinkLevel;
+            mCreatedElapsedTime = createdElapsedTime;
+        }
+
+        long getUpLinkQualityVolume() {
+            if (mDurationMillis > 0) {
+                return mUpLinkLevel * mDurationMillis;
+            } else {
+                long now = QnsUtils.getSystemElapsedRealTime();
+                return (now - mCreatedElapsedTime) * mUpLinkLevel;
+            }
+        }
+
+        long getDownLinkQualityVolume() {
+            if (mDurationMillis > 0) {
+                return mDownLinkLevel * mDurationMillis;
+            } else {
+                long now = QnsUtils.getSystemElapsedRealTime();
+                return (now - mCreatedElapsedTime) * mDownLinkLevel;
+            }
+        }
+    }
+
+    class ActiveCallTracker {
+        private static final int EVENT_DATA_CONNECTION_STATUS_CHANGED = 3300;
+
+        @QnsConstants.QnsCallType
+        private int mCallType = QnsConstants.CALL_TYPE_IDLE;
+        @Annotation.NetCapability
+        private int mNetCapability = QnsConstants.INVALID_VALUE;
+        private QnsRegistrantList mLowMediaQualityListeners = new QnsRegistrantList();
+        private int mAccessNetwork = AccessNetworkConstants.AccessNetworkType.UNKNOWN;
+        private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+        private SparseArray<CallQuality> mCallQualities = new SparseArray();
+        private TransportQuality mCurrentQuality;
+        /** A list of TransportQuality for each Transport type */
+        private SparseArray<List<TransportQuality>> mTransportQualityArray = new SparseArray<>();
+        private boolean mWwanAvailable = false;
+        private boolean mWlanAvailable = false;
+
+        private boolean mMediaThresholdBreached = false;
+        private HandlerThread mHandlerThread;
+        private ActiveCallTrackerHandler mActiveCallHandler;
+        private MediaLowQualityHandler mLowQualityHandler;
+        private String mLogTag;
+
+        private class ActiveCallTrackerHandler extends Handler {
+            ActiveCallTrackerHandler(Looper l) {
+                super(l);
+            }
+
+            @Override
+            public void handleMessage(Message message) {
+                QnsAsyncResult ar;
+                int transportType;
+                Log.d(mLogTag, "handleMessage : " + message.what);
+                switch (message.what) {
+                    case EVENT_DATA_CONNECTION_STATUS_CHANGED:
+                        ar = (QnsAsyncResult) message.obj;
+                        onDataConnectionStatusChanged(
+                                (PreciseDataConnectionState) ar.mResult);
+                        break;
+
+                    default:
+                        Log.d(mLogTag, "unHandleMessage : " + message.what);
+                        break;
+                }
+
+            }
+        }
+
+        /** Tracking low quality status */
+        private class MediaLowQualityHandler extends Handler {
+            private static final int EVENT_MEDIA_QUALITY_CHANGED = 3401;
+            private static final int EVENT_PACKET_LOSS_TIMER_EXPIRED = 3402;
+            private static final int EVENT_HYSTERESIS_FOR_NORMAL_QUALITY = 3403;
+            private static final int EVENT_POLLING_CHECK_LOW_QUALITY = 3404;
+            private static final int EVENT_LOW_QUALITY_HANDLER_MAX = 3405;
+
+            private static final int STATE_NORMAL_QUALITY = 0;
+            private static final int STATE_SUSPECT_LOW_QUALITY = 1;
+            private static final int STATE_LOW_QUALITY = 2;
+
+            private static final int HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS = 3000;
+            private static final int LOW_QUALITY_CHECK_INTERVAL_MILLIS = 15000;
+            private static final int LOW_QUALITY_CHECK_AFTER_HO_MILLIS = 3000;
+            private static final int LOW_QUALITY_REPORTED_TIME_INITIAL_VALUE = -1;
+
+            private int mState = STATE_NORMAL_QUALITY;
+            private MediaQualityStatus mMediaQualityStatus;
+            private String mTag;
+
+            MediaLowQualityHandler(Looper l) {
+                super(l);
+                mTag = mLogTag + "_LQH";
+            }
+
+            @Override
+            public void handleMessage(Message message) {
+                Log.d(mTag, "handleMessage : " + message.what);
+                switch (message.what) {
+                    case EVENT_MEDIA_QUALITY_CHANGED:
+                        MediaQualityStatus status = (MediaQualityStatus) message.obj;
+                        onMediaQualityChanged(status);
+                        break;
+
+                    case EVENT_PACKET_LOSS_TIMER_EXPIRED:
+                        onPacketLossTimerExpired(message.arg1);
+                        break;
+
+                    case EVENT_HYSTERESIS_FOR_NORMAL_QUALITY:
+                        exitLowQualityState();
+                        break;
+
+                    case EVENT_POLLING_CHECK_LOW_QUALITY:
+                        checkLowQuality();
+                        break;
+
+                    default:
+                        Log.d(mLogTag, "unHandleMessage : " + message.what);
+                        break;
+                }
+            }
+
+            private void onMediaQualityChanged(MediaQualityStatus status) {
+                Log.d(mTag, "onMediaQualityChanged " + status);
+                int reason = thresholdBreached(status);
+                boolean needNotify = false;
+                if (reason == 0) {
+                    // Threshold not breached.
+                    mMediaQualityStatus = status;
+                    if (mState == STATE_NORMAL_QUALITY) {
+                        Log.d(mTag, "keeps normal quality.");
+                        mMediaQualityStatus = status;
+                        return;
+                    } else {
+                        // check normal quality is stable or not.
+                        this.sendEmptyMessageDelayed(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY,
+                                HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
+                    }
+                } else {
+                    // Threshold breached.
+                    this.removeMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY);
+                    switch (mState) {
+                        case STATE_NORMAL_QUALITY:
+                        case STATE_SUSPECT_LOW_QUALITY:
+                            if (reason == (1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS)) {
+                                int delayMillis = (mConfigManager.getRTPMetricsData()).mPktLossTime;
+                                if (delayMillis > 0) {
+                                    if (mState == STATE_NORMAL_QUALITY) {
+                                        enterSuspectLowQualityState(delayMillis);
+                                    }
+                                } else if (delayMillis == 0) {
+                                    needNotify = true;
+                                }
+                            } else {
+                                removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
+                                enterLowQualityState(status);
+                                needNotify = true;
+                            }
+                            break;
+
+                        case STATE_LOW_QUALITY:
+                            if (mMediaQualityStatus.getTransportType() == status.getTransportType()
+                                    && thresholdBreached(mMediaQualityStatus)
+                                    != thresholdBreached(status)) {
+                                needNotify = true;
+                            }
+                            break;
+                    }
+                    mMediaQualityStatus = status;
+                }
+                if (needNotify) {
+                    enterLowQualityState(status);
+                    notifyLowMediaQuality(reason);
+                }
+
+            }
+
+            @VisibleForTesting
+            void enterLowQualityState(MediaQualityStatus status) {
+                Log.d(mTag, "enterLowQualityState " + status);
+                mState = STATE_LOW_QUALITY;
+                this.sendEmptyMessageDelayed(
+                        EVENT_POLLING_CHECK_LOW_QUALITY, LOW_QUALITY_CHECK_INTERVAL_MILLIS);
+            }
+
+            void enterSuspectLowQualityState(int delayMillis) {
+                Log.d(mTag, "enterSuspectLowQualityState.");
+                if (!this.hasMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED)) {
+                    this.removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
+                }
+                Log.d(mTag, "Packet loss timer start. " + delayMillis);
+                Message msg = this.obtainMessage(
+                        EVENT_PACKET_LOSS_TIMER_EXPIRED, mTransportType, 0);
+                this.sendMessageDelayed(msg, delayMillis);
+                mState = STATE_SUSPECT_LOW_QUALITY;
+            }
+
+            void exitLowQualityState() {
+                mState = STATE_NORMAL_QUALITY;
+                for (int i = EVENT_PACKET_LOSS_TIMER_EXPIRED;
+                        i < EVENT_LOW_QUALITY_HANDLER_MAX; i++) {
+                    this.removeMessages(i);
+                }
+                notifyLowMediaQuality(0);
+            }
+
+            void checkLowQuality() {
+                if (mState == STATE_NORMAL_QUALITY) {
+                    Log.w(mTag, "checkLowQuality on unexpected state(normal state).");
+                } else {
+                    Log.d(mTag, "checkLowQuality");
+                    int reason = thresholdBreached(mMediaQualityStatus);
+                    if (reason > 0) {
+                        notifyLowMediaQuality(thresholdBreached(mMediaQualityStatus));
+                    } else if (this.hasMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY)) {
+                        // hysteresis time to be normal state is running. let's check after that.
+                        this.sendEmptyMessageDelayed(EVENT_POLLING_CHECK_LOW_QUALITY,
+                                HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
+                    } else {
+                        Log.w(mTag, "Unexpected case.");
+                    }
+                }
+            }
+
+            void updateForHandover(int transportType) {
+                // restart timers that they need to be restarted on new transport type.
+                if (mState == STATE_SUSPECT_LOW_QUALITY) {
+                    this.removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
+                    Message msg = this.obtainMessage(
+                            EVENT_PACKET_LOSS_TIMER_EXPIRED, transportType, 0);
+                    this.sendMessageDelayed(msg, (mConfigManager.getRTPMetricsData()).mPktLossTime);
+                }
+                if (this.hasMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY)) {
+                    this.removeMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY);
+                    this.sendEmptyMessageDelayed(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY,
+                            HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
+                }
+                if (mState == STATE_LOW_QUALITY) {
+                    this.removeMessages(EVENT_POLLING_CHECK_LOW_QUALITY);
+                    this.sendEmptyMessageDelayed(EVENT_POLLING_CHECK_LOW_QUALITY,
+                            LOW_QUALITY_CHECK_AFTER_HO_MILLIS);
+                }
+            }
+
+            private void onPacketLossTimerExpired(int transportType) {
+                if (mTransportType != transportType) {
+                    Log.d(mTag, "onPacketLossTimerExpired transport type mismatched.");
+                    if (mState == STATE_SUSPECT_LOW_QUALITY) {
+                        mState = STATE_NORMAL_QUALITY;
+                    }
+                    return;
+                }
+                if (thresholdBreached(mMediaQualityStatus)
+                        == (1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS)) {
+                    enterLowQualityState(mMediaQualityStatus);
+                    notifyLowMediaQuality(1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS);
+                }
+            }
+
+            private void notifyLowMediaQuality(int reason) {
+                long now = QnsUtils.getSystemElapsedRealTime();
+                TransportQuality tq = getLastTransportQuality(mTransportType);
+                if (tq != null) {
+                    if (reason > 0) {
+                        tq.mLowRtpQualityReportedTime = now;
+                    } else {
+                        tq.mLowRtpQualityReportedTime = LOW_QUALITY_REPORTED_TIME_INITIAL_VALUE;
+                    }
+                }
+                Log.d(mTag, "notifyLowMediaQuality reason:" + reason + " transport type:"
+                        + AccessNetworkConstants.transportTypeToString(mTransportType));
+                mLowMediaQualityListeners.notifyResult(reason);
+            }
+        }
+
+        class TransportQuality {
+            int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+            long mLowRtpQualityReportedTime =
+                    MediaLowQualityHandler.LOW_QUALITY_REPORTED_TIME_INITIAL_VALUE;
+            List<CallQualityBlock> mCallQualityBlockList;
+
+            TransportQuality(int transportType) {
+                mTransportType = transportType;
+                mCallQualityBlockList = new ArrayList<>();
+            }
+
+            boolean isLowRtpQualityReported() {
+                return mLowRtpQualityReportedTime
+                        != MediaLowQualityHandler.LOW_QUALITY_REPORTED_TIME_INITIAL_VALUE;
+            }
+
+            CallQualityBlock getLastCallQualityBlock() {
+                int length = mCallQualityBlockList.size();
+                if (length > 0) {
+                    return mCallQualityBlockList.get(length - 1);
+                } else {
+                    return null;
+                }
+            }
+        }
+
+        ActiveCallTracker(int slotIndex, Looper looper) {
+            mLogTag = ActiveCallTracker.class.getSimpleName() + "_" + slotIndex;
+            if (looper == null) {
+                mHandlerThread = new HandlerThread(ActiveCallTracker.class.getSimpleName());
+                mHandlerThread.start();
+                mActiveCallHandler = new ActiveCallTrackerHandler(mHandlerThread.getLooper());
+                mLowQualityHandler = new MediaLowQualityHandler(mHandlerThread.getLooper());
+            } else {
+                mActiveCallHandler = new ActiveCallTrackerHandler(looper);
+                mLowQualityHandler = new MediaLowQualityHandler(looper);
+            }
+            mTelephonyListener.addMediaQualityStatusCallback(mMediaQualityStatusConsumer);
+            mTransportQualityArray.put(
+                    AccessNetworkConstants.TRANSPORT_TYPE_WLAN, new ArrayList<>());
+            mTransportQualityArray.put(
+                    AccessNetworkConstants.TRANSPORT_TYPE_WWAN, new ArrayList<>());
+        }
+
+        void close() {
+            mTelephonyListener.removeMediaQualityStatusCallback(mMediaQualityStatusConsumer);
+            mTelephonyListener.unregisterPreciseDataConnectionStateChanged(
+                    mNetCapability, mActiveCallHandler);
+            if (mHandlerThread != null) {
+                mHandlerThread.quitSafely();
+            }
+        }
+
+        @VisibleForTesting
+        void onDataConnectionStatusChanged(PreciseDataConnectionState state) {
+            if (state == null) {
+                Log.d(mLogTag, "onDataConnectionStatusChanged with null info");
+                return;
+            }
+            if (state.getState() == TelephonyManager.DATA_CONNECTED) {
+                int transportType = state.getTransportType();
+                if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
+                    Log.w(mLogTag, "Unexpected transport type on connected DataNetwork.");
+                    return;
+                }
+                if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
+                    Log.d(mLogTag, "Call started with "
+                            + AccessNetworkConstants.transportTypeToString(transportType));
+                    mTransportType = transportType;
+                    startTrackingTransportQuality(transportType);
+                } else if (mTransportType != transportType) {
+                    Log.d(mLogTag, "Call Handed over to "
+                            + AccessNetworkConstants.transportTypeToString(transportType));
+                    mTransportType = transportType;
+                    onHandoverCompleted(transportType);
+                }
+            }
+        }
+
+        private void onHandoverCompleted(
+                @AccessNetworkConstants.TransportType int dstTransportType) {
+            long now = QnsUtils.getSystemElapsedRealTime();
+            // complete to update TransportQuality for prev transport type
+            CallQualityBlock last = null;
+            int prevTransportType = QnsUtils.getOtherTransportType(dstTransportType);
+            TransportQuality prev = getLastTransportQuality(prevTransportType);
+            if (prev != null) {
+                last = prev.getLastCallQualityBlock();
+            }
+            // add a new TransportQuality for new transport type
+            mTransportQualityArray.get(dstTransportType)
+                    .add(new TransportQuality(dstTransportType));
+            TransportQuality current = getLastTransportQuality(dstTransportType);
+            if (last != null) {
+                last.mDurationMillis = now - last.mCreatedElapsedTime;
+                current.mCallQualityBlockList
+                        .add(new CallQualityBlock(last.mUpLinkLevel, last.mDownLinkLevel, now));
+            }
+            mLowQualityHandler.updateForHandover(dstTransportType);
+        }
+
+        private void startTrackingTransportQuality(int transportType) {
+            mTransportQualityArray.get(AccessNetworkConstants.TRANSPORT_TYPE_WLAN).clear();
+            mTransportQualityArray.get(AccessNetworkConstants.TRANSPORT_TYPE_WWAN).clear();
+            mTransportQualityArray.get(transportType)
+                    .add(new TransportQuality(transportType));
+        }
+
+        void callStarted(@QnsConstants.QnsCallType int callType, int netCapability) {
+            if (mCallType != QnsConstants.CALL_TYPE_IDLE) {
+                if (mCallType != callType) {
+                    callTypeUpdated(callType);
+                } else {
+                    Log.w(mLogTag, "call type:" + callType + " already started.");
+                }
+            }
+            Log.d(mLogTag, "callStarted callType: " + callType + " netCapa:"
+                    + QnsUtils.getNameOfNetCapability(netCapability));
+            mCallType = callType;
+            mNetCapability = netCapability;
+            //Transport type will be updated when EVENT_DATA_CONNECTION_STATUS_CHANGED occurs.
+            PreciseDataConnectionState dataState =
+                    mTelephonyListener.getLastPreciseDataConnectionState(netCapability);
+            if (dataState != null && dataState.getTransportType()
+                    != AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
+                mTransportType = dataState.getTransportType();
+                startTrackingTransportQuality(mTransportType);
+            }
+            mTelephonyListener.registerPreciseDataConnectionStateChanged(mNetCapability,
+                    mActiveCallHandler, EVENT_DATA_CONNECTION_STATUS_CHANGED, null, true);
+        }
+
+        private void callTypeUpdated(@QnsConstants.QnsCallType int callType) {
+            Log.d(mLogTag, "callTypeUpdated from " + mCallType + " to " + callType);
+            mCallType = callType;
+        }
+
+        void callEnded() {
+            mLowQualityHandler.exitLowQualityState();
+            long now = QnsUtils.getSystemElapsedRealTime();
+            // complete to update TransportQuality for prev transport type
+            CallQualityBlock last = null;
+            TransportQuality prev = getLastTransportQuality(mTransportType);
+            if (prev != null) {
+                last = prev.getLastCallQualityBlock();
+            }
+            if (last != null) {
+                last.mDurationMillis = now - last.mCreatedElapsedTime;
+            }
+            long upLinkQualityOverWwan = mActiveCallTracker
+                    .getUpLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+            long upLinkQualityOverWlan = mActiveCallTracker
+                    .getUpLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+            long downLinkQualityOverWwan = mActiveCallTracker
+                    .getDownLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+            long downLinkQualityOverWlan = mActiveCallTracker
+                    .getDownLinkQualityLevelDuringCall(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+            StringBuilder sb = new StringBuilder();
+            sb.append("CallQuality [WWAN:");
+            if (upLinkQualityOverWwan == QnsConstants.INVALID_VALUE
+                    || downLinkQualityOverWwan == QnsConstants.INVALID_VALUE) {
+                sb.append("Not available] ");
+            } else {
+                sb.append("upLinkQualityOverWwan = ").append(upLinkQualityOverWwan)
+                        .append(", downLinkQualityOverWwan = ").append(downLinkQualityOverWwan)
+                        .append("] ");
+            }
+            sb.append("[WLAN:");
+            if (upLinkQualityOverWlan == QnsConstants.INVALID_VALUE
+                    || downLinkQualityOverWlan == QnsConstants.INVALID_VALUE) {
+                sb.append("Not available] ");
+            } else {
+                sb.append("upLinkQualityOverWlan = ").append(upLinkQualityOverWwan)
+                        .append(", downLinkQualityOverWlan = ").append(downLinkQualityOverWwan)
+                        .append("] ");
+            }
+            Log.d(mLogTag, "callEnded callType: " + mCallType + " netCapa:"
+                    + QnsUtils.getNameOfNetCapability(mNetCapability) + " " + sb.toString());
+            mCallType = QnsConstants.CALL_TYPE_IDLE;
+            mNetCapability = 0;
+            mAccessNetwork = AccessNetworkConstants.AccessNetworkType.UNKNOWN;
+            mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
+            mTelephonyListener.unregisterPreciseDataConnectionStateChanged(
+                    mNetCapability, mActiveCallHandler);
+        }
+
+        void onMediaQualityStatusChanged(MediaQualityStatus status) {
+            if (status == null) {
+                Log.e(mLogTag, "null MediaQualityStatus received.");
+                return;
+            }
+            Message msg = mLowQualityHandler
+                    .obtainMessage(MediaLowQualityHandler.EVENT_MEDIA_QUALITY_CHANGED, status);
+            mLowQualityHandler.sendMessage(msg);
+        }
+
+        int getTransportType() {
+            return this.mTransportType;
+        }
+
+        int getCallType() {
+            return this.mCallType;
+        }
+
+        int getNetCapability() {
+            return this.mNetCapability;
+        }
+
+        @VisibleForTesting
+        TransportQuality getLastTransportQuality(int transportType) {
+            if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
+                Log.w(mLogTag, "getLastTransportQuality with invalid transport type.");
+                return null;
+            }
+            int size = mTransportQualityArray.get(transportType).size();
+            if (size > 0) {
+                return mTransportQualityArray.get(transportType).get(size - 1);
+            } else {
+                return null;
+            }
+        }
+
+        @VisibleForTesting
+        List<TransportQuality> getTransportQualityList(int transportType) {
+            return mTransportQualityArray.get(transportType);
+        }
+
+        long getUpLinkQualityLevelDuringCall(int transportType) {
+            List<TransportQuality> tqList = getTransportQualityList(transportType);
+            long sumUplinkQualityLevelVolume = 0;
+            long totalDuration = 0;
+            for (int i = 0; i < tqList.size(); i++) {
+                List<CallQualityBlock> callQualityBlockList = tqList.get(i).mCallQualityBlockList;
+                for (int j = 0; j < callQualityBlockList.size(); j++) {
+                    CallQualityBlock cq = callQualityBlockList.get(j);
+                    sumUplinkQualityLevelVolume += cq.getUpLinkQualityVolume();
+                    long durationMillis = cq.mDurationMillis;
+                    if (i == tqList.size() - 1 && j == callQualityBlockList.size() - 1) {
+                        if (durationMillis == 0) {
+                            durationMillis = QnsUtils.getSystemElapsedRealTime()
+                                    - cq.mCreatedElapsedTime;
+                        }
+                    }
+                    if (durationMillis > 0) {
+                        totalDuration += durationMillis;
+                    } else {
+                        return -1;
+                    }
+                }
+            }
+            if (totalDuration <= 0) {
+                return QnsConstants.INVALID_VALUE;
+            }
+            long qualityLevel = sumUplinkQualityLevelVolume / totalDuration;
+            Log.d(mLogTag, "getUplinkQualityLevel for [" + AccessNetworkConstants
+                    .transportTypeToString(transportType) + "] totalQualityVolume: "
+                    + sumUplinkQualityLevelVolume + ", totalDuration: " + totalDuration
+                    + " level:" + qualityLevel);
+            return qualityLevel;
+        }
+
+        long getDownLinkQualityLevelDuringCall(int transportType) {
+            List<TransportQuality> tqList = getTransportQualityList(transportType);
+            long sumDownLinkQualityLevelVolume = 0;
+            long totalDuration = 0;
+            for (int i = 0; i < tqList.size(); i++) {
+                List<CallQualityBlock> callQualityBlockList = tqList.get(i).mCallQualityBlockList;
+                for (int j = 0; j < callQualityBlockList.size(); j++) {
+                    CallQualityBlock cq = callQualityBlockList.get(j);
+                    sumDownLinkQualityLevelVolume += cq.getDownLinkQualityVolume();
+                    long durationMillis = cq.mDurationMillis;
+                    if (i == tqList.size() - 1 && j == callQualityBlockList.size() - 1) {
+                        if (durationMillis == 0) {
+                            durationMillis = QnsUtils.getSystemElapsedRealTime()
+                                    - cq.mCreatedElapsedTime;
+                        }
+                    }
+                    if (durationMillis > 0) {
+                        totalDuration += durationMillis;
+                    } else {
+                        return QnsConstants.INVALID_VALUE;
+                    }
+                }
+            }
+            if (totalDuration <= 0) {
+                return QnsConstants.INVALID_VALUE;
+            }
+            long qualityLevel = sumDownLinkQualityLevelVolume / totalDuration;
+            Log.d(mLogTag, "getDownLinkQualityLevel for [" + AccessNetworkConstants
+                    .transportTypeToString(transportType) + "] totalQualityVolume: "
+                    + sumDownLinkQualityLevelVolume + ", totalDuration: " + totalDuration
+                    + " level:" + qualityLevel);
+            return qualityLevel;
+        }
+
+        void updateCallQuality(CallState state) {
+            if (state == null) {
+                Log.w(mLogTag, "updateCallQuality Null CallState.");
+                return;
+            }
+            CallQuality cq = state.getCallQuality();
+            if (cq == null || isDummyCallQuality(cq)) {
+                return;
+            }
+            mActiveCallHandler.post(() -> onUpdateCallQuality(cq));
+        }
+
+        private void onUpdateCallQuality(CallQuality cq) {
+            long now = QnsUtils.getSystemElapsedRealTime();
+            CallQualityBlock prev = null;
+            TransportQuality transportQuality = getLastTransportQuality(mTransportType);
+            if (transportQuality != null) {
+                prev = transportQuality.getLastCallQualityBlock();
+            }
+            if (prev != null) {
+                prev.mDurationMillis = now - prev.mCreatedElapsedTime;
+            }
+            transportQuality.mCallQualityBlockList.add(
+                    new CallQualityBlock(
+                            cq.getUplinkCallQualityLevel(), cq.getDownlinkCallQualityLevel(), now));
+        }
+
+        private boolean isDummyCallQuality(CallQuality cq) {
+            return (cq.getNumRtpPacketsTransmitted() == 0
+                    && cq.getNumRtpPacketsReceived() == 0
+                    && cq.getUplinkCallQualityLevel() == 0
+                    && cq.getDownlinkCallQualityLevel() == 0);
+        }
+        /**
+         * Register an event for low media quality report.
+         *
+         * @param h the Handler to get event.
+         * @param what the event.
+         * @param userObj user object.
+         */
+        void registerLowMediaQualityListener(
+                Handler h, int what, Object userObj) {
+            Log.d(mLogTag, "registerLowMediaQualityListener");
+            if (h != null) {
+                QnsRegistrant r = new QnsRegistrant(h, what, userObj);
+                mLowMediaQualityListeners.add(r);
+            }
+        }
+
+        /**
+         * Unregister an event for low media quality report.
+         *
+         * @param h the handler to get event.
+         */
+        void unregisterLowMediaQualityListener(Handler h) {
+            if (h != null) {
+                mLowMediaQualityListeners.remove(h);
+            }
+        }
+
+        int thresholdBreached(MediaQualityStatus status) {
+            int breachedReason = 0;
+            QnsCarrierConfigManager.RtpMetricsConfig rtpConfig = mConfigManager.getRTPMetricsData();
+            if (status.getRtpPacketLossRate() > 0
+                    && status.getRtpPacketLossRate() > rtpConfig.mPktLossRate) {
+                breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS;
+            }
+            if (status.getRtpJitterMillis() > 0
+                    && status.getRtpJitterMillis() > rtpConfig.mJitter) {
+                breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_JITTER;
+            }
+            if (status.getRtpInactivityMillis() > 0
+                    && status.getRtpInactivityMillis() > rtpConfig.mNoRtpInterval) {
+                breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP;
+            }
+            return breachedReason;
+        }
+
+        boolean worseThanBefore(MediaQualityStatus before, MediaQualityStatus now) {
+            return thresholdBreached(now) > thresholdBreached(before);
+        }
+    }
+
+    QnsCallStatusTracker(QnsTelephonyListener telephonyListener,
+            QnsCarrierConfigManager configManager, int slotIndex) {
+        this(telephonyListener, configManager, slotIndex, null);
+    }
+
+    /** Only for test */
+    @VisibleForTesting
+    QnsCallStatusTracker(QnsTelephonyListener telephonyListener,
+            QnsCarrierConfigManager configManager, int slotIndex, Looper looper) {
         mLogTag = QnsCallStatusTracker.class.getSimpleName() + "_" + slotIndex;
         mTelephonyListener = telephonyListener;
+        mConfigManager = configManager;
+        mActiveCallTracker = new ActiveCallTracker(slotIndex, looper);
         mTelephonyListener.addCallStatesChangedCallback(mCallStatesConsumer);
         mTelephonyListener.addSrvccStateChangedCallback(mSrvccStateConsumer);
     }
@@ -58,6 +742,9 @@ public class QnsCallStatusTracker {
     void close() {
         mTelephonyListener.removeCallStatesChangedCallback(mCallStatesConsumer);
         mTelephonyListener.removeSrvccStateChangedCallback(mSrvccStateConsumer);
+        if (mActiveCallTracker != null) {
+            mActiveCallTracker.close();
+        }
     }
 
     void updateCallState(List<CallState> callStateList) {
@@ -82,7 +769,7 @@ public class QnsCallStatusTracker {
             if (mLastNormalCallType != QnsConstants.CALL_TYPE_IDLE) {
                 mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
                 if (mCallTypeChangedEventListener != null) {
-                    mCallTypeChangedEventListener.notifyResult(mLastNormalCallType);
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
                 }
             }
             if (mLastEmergencyCallType != QnsConstants.CALL_TYPE_IDLE) {
@@ -90,11 +777,13 @@ public class QnsCallStatusTracker {
                 if (mEmergencyOverIms) {
                     mEmergencyOverIms = false;
                     if (mCallTypeChangedEventListener != null) {
-                        mCallTypeChangedEventListener.notifyResult(mLastNormalCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
                     }
                 } else {
                     if (mEmergencyCallTypeChangedEventListener != null) {
-                        mEmergencyCallTypeChangedEventListener.notifyResult(mLastEmergencyCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                     }
                 }
             }
@@ -104,7 +793,7 @@ public class QnsCallStatusTracker {
                     && !hasVideoCall() && !hasVoiceCall()) {
                 mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
                 if (mCallTypeChangedEventListener != null) {
-                    mCallTypeChangedEventListener.notifyResult(mLastNormalCallType);
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
                 }
             }
             if (mLastEmergencyCallType != QnsConstants.CALL_TYPE_IDLE && !hasEmergencyCall()) {
@@ -112,11 +801,13 @@ public class QnsCallStatusTracker {
                 if (mEmergencyOverIms) {
                     mEmergencyOverIms = false;
                     if (mCallTypeChangedEventListener != null) {
-                        mCallTypeChangedEventListener.notifyResult(mLastEmergencyCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
                     }
                 } else {
                     if (mEmergencyCallTypeChangedEventListener != null) {
-                        mEmergencyCallTypeChangedEventListener.notifyResult(mLastEmergencyCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                     }
                 }
             }
@@ -126,25 +817,44 @@ public class QnsCallStatusTracker {
                 if (!isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_EIMS)
                         && isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_IMS)) {
                     if (mCallTypeChangedEventListener != null) {
-                        mCallTypeChangedEventListener.notifyResult(mLastEmergencyCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
                         mEmergencyOverIms = true;
                     }
                 } else {
                     if (mEmergencyCallTypeChangedEventListener != null) {
-                        mEmergencyCallTypeChangedEventListener.notifyResult(mLastEmergencyCallType);
+                        notifyCallType(
+                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                     }
                 }
             } else if (hasVideoCall()) {
                 if (mLastNormalCallType != QnsConstants.CALL_TYPE_VIDEO) {
                     mLastNormalCallType = QnsConstants.CALL_TYPE_VIDEO;
-                    mCallTypeChangedEventListener.notifyResult(mLastNormalCallType);
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
                 }
             } else if (hasVoiceCall()) {
                 if (mLastNormalCallType != QnsConstants.CALL_TYPE_VOICE) {
                     mLastNormalCallType = QnsConstants.CALL_TYPE_VOICE;
-                    mCallTypeChangedEventListener.notifyResult(mLastNormalCallType);
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
                 }
             }
+            if (mActiveCallTracker.getCallType() != QnsConstants.CALL_TYPE_IDLE) {
+                mActiveCallTracker.updateCallQuality(getActiveCall());
+            }
+        }
+    }
+
+    private void notifyCallType(int netCapability, int callType) {
+        Log.d(mLogTag, "notifyCallType:" + netCapability + ", callType:" + callType);
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
+            mCallTypeChangedEventListener.notifyResult(callType);
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            mEmergencyCallTypeChangedEventListener.notifyResult(callType);
+        }
+        if (callType == QnsConstants.CALL_TYPE_IDLE) {
+            mActiveCallTracker.callEnded();
+        } else {
+            mActiveCallTracker.callStarted(callType, netCapability);
         }
     }
 
@@ -159,6 +869,15 @@ public class QnsCallStatusTracker {
             }
         }
         return false;
+    }
+
+    CallState getActiveCall() {
+        for (CallState cs : mCallStates) {
+            if (cs.getCallState() == PreciseCallState.PRECISE_CALL_STATE_ACTIVE) {
+                return cs;
+            }
+        }
+        return null;
     }
 
     boolean hasVideoCall() {
@@ -234,6 +953,10 @@ public class QnsCallStatusTracker {
         }
     }
 
+    ActiveCallTracker getActiveCallTracker() {
+        return mActiveCallTracker;
+    }
+
     @VisibleForTesting
     void onSrvccStateChangedInternal(int srvccState) {
         if (srvccState == TelephonyManager.SRVCC_STATE_HANDOVER_COMPLETED) {
@@ -259,6 +982,7 @@ public class QnsCallStatusTracker {
             }
         }
     }
+
 
     private boolean isDataNetworkConnected(int netCapability) {
         PreciseDataConnectionState preciseDataStatus =

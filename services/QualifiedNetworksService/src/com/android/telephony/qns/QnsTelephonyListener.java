@@ -37,6 +37,7 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
+import android.telephony.ims.MediaQualityStatus;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -69,6 +70,7 @@ class QnsTelephonyListener {
     QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
     List<Consumer<List<CallState>>> mCallStatesConsumerList = new ArrayList<>();
     List<Consumer<Integer>> mSrvccStateConsumerList = new ArrayList<>();
+    List<Consumer<MediaQualityStatus>> mMediaQualityConsumerList = new ArrayList<>();
     protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
     protected HashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap = new HashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
@@ -315,7 +317,8 @@ class QnsTelephonyListener {
                             NetworkRegistrationInfo.DOMAIN_PS,
                             AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
             if (lastIwlanNrs != null) {
-                r.notifyRegistrant(new QnsAsyncResult(null, lastIwlanNrs.isRegistered(), null));
+                r.notifyRegistrant(
+                        new QnsAsyncResult(null, lastIwlanNrs.isNetworkRegistered(), null));
             }
         }
     }
@@ -465,9 +468,10 @@ class QnsTelephonyListener {
 
         if (newIwlanNrs != null
                 && (oldIwlanNrs == null
-                        || newIwlanNrs.isRegistered() != oldIwlanNrs.isRegistered())) {
-            log("Iwlan is in service: " + newIwlanNrs.isRegistered());
-            notifyIwlanServiceStateInfo(newIwlanNrs.isRegistered());
+                        || newIwlanNrs.isNetworkRegistered()
+                                != oldIwlanNrs.isNetworkRegistered())) {
+            log("Iwlan is in service: " + newIwlanNrs.isNetworkRegistered());
+            notifyIwlanServiceStateInfo(newIwlanNrs.isNetworkRegistered());
         }
 
         NetworkRegistrationInfo newWwanNrs =
@@ -493,7 +497,7 @@ class QnsTelephonyListener {
         if (newWwanNrs != null) {
             newInfo.setDataNetworkType(newWwanNrs.getAccessNetworkTechnology());
             newInfo.setDataRegState(
-                    registrationStateToServiceState(newWwanNrs.getRegistrationState()));
+                    registrationStateToServiceState(newWwanNrs.getNetworkRegistrationState()));
 
             // Event for cellular data roaming registration state changed.
             // Refer roaming state which is not overridden by configs.
@@ -512,12 +516,12 @@ class QnsTelephonyListener {
         boolean hasAirplaneModeOnChanged =
                 mLastServiceState.getState() != ServiceState.STATE_POWER_OFF
                         && serviceState.getState() == ServiceState.STATE_POWER_OFF;
-        if ((oldWwanNrs == null || !oldWwanNrs.isRegistered() || hasAirplaneModeOnChanged)
-                && (newWwanNrs != null && newWwanNrs.isRegistered())) {
+        if ((oldWwanNrs == null || !oldWwanNrs.isNetworkRegistered() || hasAirplaneModeOnChanged)
+                && (newWwanNrs != null && newWwanNrs.isNetworkRegistered())) {
             newInfo.setCellularAvailable(true);
         }
-        if ((oldWwanNrs != null && oldWwanNrs.isRegistered())
-                && (newWwanNrs == null || !newWwanNrs.isRegistered())) {
+        if ((oldWwanNrs != null && oldWwanNrs.isNetworkRegistered())
+                && (newWwanNrs == null || !newWwanNrs.isNetworkRegistered())) {
             newInfo.setCellularAvailable(false);
         }
 
@@ -758,6 +762,7 @@ class QnsTelephonyListener {
         /** Notify the Call state changed. */
         void onCallStatesChanged(List<CallState> callStateList);
     }
+
     protected static class Archiving<V> {
         protected HashMap<String, V> mArchiving = new HashMap<>();
 
@@ -1025,7 +1030,8 @@ class QnsTelephonyListener {
                     TelephonyCallback.BarringInfoListener,
                     TelephonyCallback.CallStateListener,
                     TelephonyCallback.SrvccStateListener,
-                    TelephonyCallback.CallAttributesListener {
+                    TelephonyCallback.CallAttributesListener,
+                    TelephonyCallback.MediaQualityStatusChangedListener {
         private final Executor mExecutor;
         private OnServiceStateListener mServiceStateListener;
         private OnPreciseDataConnectionStateListener mPreciseDataConnectionStateListener;
@@ -1149,6 +1155,13 @@ class QnsTelephonyListener {
                 mCallStatesCallback.onCallStatesChanged(callStateList);
             }
         }
+
+        @Override
+        public void onMediaQualityStatusChanged(MediaQualityStatus status) {
+            for (Consumer<MediaQualityStatus> consumer : mMediaQualityConsumerList) {
+                consumer.accept(status);
+            }
+        }
     }
 
     void addCallStatesChangedCallback(Consumer<List<CallState>> consumer) {
@@ -1165,6 +1178,14 @@ class QnsTelephonyListener {
 
     void removeSrvccStateChangedCallback(Consumer<Integer> consumer) {
         mSrvccStateConsumerList.remove(consumer);
+    }
+
+    void addMediaQualityStatusCallback(Consumer<MediaQualityStatus> consumer) {
+        mMediaQualityConsumerList.add(consumer);
+    }
+
+    void removeMediaQualityStatusCallback(Consumer<MediaQualityStatus> consumer) {
+        mMediaQualityConsumerList.remove(consumer);
     }
 
     /**

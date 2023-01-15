@@ -96,9 +96,8 @@ class RestrictManager {
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = 3004;
     private static final int EVENT_LOW_RTP_QUALITY_REPORTED = 3006;
     private static final int EVENT_RELEASE_RESTRICTION = 3008;
-    private static final int EVENT_REGISTER_LOW_RTP_QUALITY = 3009;
-    protected static final int EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED = 3010;
-    private static final int EVENT_WIFI_RTT_BACKHAUL_CHECK_STATUS = 3011;
+    protected static final int EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED = 3009;
+    private static final int EVENT_WIFI_RTT_BACKHAUL_CHECK_STATUS = 3010;
 
     @VisibleForTesting static final int GUARDING_TIMER_HANDOVER_INIT = 30000;
 
@@ -159,7 +158,8 @@ class RestrictManager {
     @VisibleForTesting QnsRegistrant mRestrictInfoRegistrant;
     private DataConnectionStatusTracker mDataConnectionStatusTracker;
     private CellularNetworkStatusTracker mCellularNetworkStatusTracker;
-    private AlternativeEventListener mAltEventListener;
+    private QnsCallStatusTracker mQnsCallStatusTracker;
+    private QnsCallStatusTracker.ActiveCallTracker mActiveCallTracker;
     private QnsImsManager mQnsImsManager;
     private WifiBackhaulMonitor mWifiBackhaulMonitor;
     private int mNetCapability;
@@ -215,7 +215,7 @@ class RestrictManager {
                     ar = (QnsAsyncResult) message.obj;
                     int reason = (int) ar.mResult;
                     Log.d(mLogTag, "EVENT_LOW_RTP_QUALITY_REPORTED reason: " + reason);
-                    onLowRtpQualityEvent();
+                    onLowRtpQualityEvent(reason);
                     break;
 
                 case EVENT_IMS_REGISTRATION_STATE_CHANGED:
@@ -241,13 +241,6 @@ class RestrictManager {
                     }
                     break;
 
-                case EVENT_REGISTER_LOW_RTP_QUALITY:
-                    int currTransportType = message.arg1;
-                    if (currTransportType == mTransportType) {
-                        registerLowRtpQualityEvent();
-                    }
-                    break;
-
                 case EVENT_INITIAL_DATA_CONNECTION_FAIL_RETRY_TIMER_EXPIRED:
                     Log.d(
                             mLogTag,
@@ -255,7 +248,7 @@ class RestrictManager {
                                     + mIsTimerRunningOnDataConnectionFail);
 
                     if (mIsTimerRunningOnDataConnectionFail) {
-                        currTransportType = message.arg1;
+                        int currTransportType = message.arg1;
                         fallbackToOtherTransportOnDataConnectionFail(currTransportType);
                     }
                     break;
@@ -313,6 +306,17 @@ class RestrictManager {
                 default:
                     break;
             }
+        }
+    }
+
+    class LowRtpQualityRestriction extends Restriction{
+        private int mReason;
+        LowRtpQualityRestriction(int type, int[] releaseEvents, int restrictTime, int reason) {
+            super(type, releaseEvents, restrictTime);
+            mReason = reason;
+        }
+        int getReason() {
+            return mReason;
         }
     }
 
@@ -444,7 +448,8 @@ class RestrictManager {
         mHandler = new RestrictManagerHandler(loop);
         mNetCapability = netCapability;
         mDataConnectionStatusTracker = dcst;
-        mAltEventListener = qnsComponents.getAlternativeEventListener(mSlotId);
+        mQnsCallStatusTracker = qnsComponents.getQnsCallStatusTracker(mSlotId);
+        mActiveCallTracker = qnsComponents.getQnsCallStatusTracker(mSlotId).getActiveCallTracker();
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
                 mHandler, EVENT_DATA_CONNECTION_CHANGED);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
@@ -500,7 +505,9 @@ class RestrictManager {
         mQnsEventDispatcher.unregisterEvent(mHandler);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
+            if (mActiveCallTracker != null) {
+                mActiveCallTracker.unregisterLowMediaQualityListener(mHandler);
+            }
         }
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             mQnsImsManager.unregisterImsRegistrationStatusChanged(mHandler);
@@ -539,7 +546,7 @@ class RestrictManager {
                     mQnsCarrierConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(
                             transportType);
             if (waitingTimer != QnsConstants.KEY_DEFAULT_VALUE) {
-                int preventTransportType = getOtherTransport(transportType);
+                int preventTransportType = QnsUtils.getOtherTransportType(transportType);
                 Log.d(
                         mLogTag,
                         "prevent "
@@ -628,25 +635,53 @@ class RestrictManager {
     }
 
     @VisibleForTesting
-    void onLowRtpQualityEvent() {
+    void onLowRtpQualityEvent(@QnsConstants.RtpLowQualityReason int reason) {
         int lowRtpQualityRestrictTime =
                 mQnsCarrierConfigManager.getHoRestrictedTimeOnLowRTPQuality(mTransportType);
         if ((mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                         || mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
                 && lowRtpQualityRestrictTime > 0
-                && mImsCallType != QnsConstants.CALL_TYPE_IDLE) {
-            addRestriction(
-                    mTransportType,
-                    RESTRICT_TYPE_RTP_LOW_QUALITY,
-                    sReleaseEventMap.get(RESTRICT_TYPE_RTP_LOW_QUALITY),
-                    lowRtpQualityRestrictTime);
-            unregisterLowRtpQualityEvent();
+                && (mImsCallType == QnsConstants.CALL_TYPE_VOICE
+                    || mImsCallType == QnsConstants.CALL_TYPE_EMERGENCY)) {
+            if (reason > 0) {
+                Restriction restriction =
+                        new LowRtpQualityRestriction(RESTRICT_TYPE_RTP_LOW_QUALITY,
+                                sReleaseEventMap.get(RESTRICT_TYPE_RTP_LOW_QUALITY),
+                                lowRtpQualityRestrictTime,
+                                reason);
+                // If current report has 'no RTP reason' and previous report at previous
+                // transport type doesn't have 'no RTP reason', let's move back to previous
+                // transport type.
+                if ((reason & 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP) != 0) {
+                    HashMap<Integer, Restriction> restrictionMap = mRestrictInfos
+                            .get(QnsUtils.getOtherTransportType(mTransportType))
+                            .getRestrictionMap();
+                    Restriction restrictionOtherSide = restrictionMap.get(
+                            RESTRICT_TYPE_RTP_LOW_QUALITY);
+                    if (restrictionOtherSide != null
+                            && restrictionOtherSide instanceof LowRtpQualityRestriction) {
+                        int reasonOtherSide =
+                                ((LowRtpQualityRestriction) restrictionOtherSide).getReason();
+                        if ((reasonOtherSide & 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP)
+                                == 0) {
+                            releaseRestriction(QnsUtils.getOtherTransportType(mTransportType),
+                                    RESTRICT_TYPE_RTP_LOW_QUALITY, true);
+                        }
+                    }
+                }
+                // If both transport have low RTP quality restriction, let ANE do final decision.
+                addRestriction(mTransportType, restriction, lowRtpQualityRestrictTime);
 
-            if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
-                int fallbackReason = mQnsCarrierConfigManager.getQnsIwlanHoRestrictReason();
-                if (fallbackReason == QnsConstants.FALLBACK_REASON_RTP_OR_WIFI
-                        || fallbackReason == QnsConstants.FALLBACK_REASON_RTP_ONLY) {
-                    increaseCounterToRestrictIwlanInCall();
+                if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+                    int fallbackReason = mQnsCarrierConfigManager.getQnsIwlanHoRestrictReason();
+                    if (fallbackReason == QnsConstants.FALLBACK_REASON_RTP_OR_WIFI
+                            || fallbackReason == QnsConstants.FALLBACK_REASON_RTP_ONLY) {
+                        increaseCounterToRestrictIwlanInCall();
+                    }
+                }
+            } else {
+                if (hasRestrictionType(mTransportType, RESTRICT_TYPE_RTP_LOW_QUALITY)) {
+                    releaseRestriction(mTransportType, RESTRICT_TYPE_RTP_LOW_QUALITY);
                 }
             }
         }
@@ -695,7 +730,7 @@ class RestrictManager {
         checkToCancelInitialPdnConnectionFailFallback();
         clearInitialPdnConnectionFailFallbackRestriction();
 
-        checkIfCancelNonPreferredRestriction(getOtherTransport(transportType));
+        checkIfCancelNonPreferredRestriction(QnsUtils.getOtherTransportType(transportType));
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
             if (mLastEvaluatedTransportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID
                     || transportType == mLastEvaluatedTransportType) {
@@ -794,12 +829,6 @@ class RestrictManager {
             // Return to the transport type restricted by low RTP. It may be singleRAT case, release
             // the restriction.
             releaseRestriction(mTransportType, RESTRICT_TYPE_RTP_LOW_QUALITY);
-            Log.d(mLogTag, "Unregister & Register Low RTP quality for " + mTransportType);
-            unregisterLowRtpQualityEvent();
-
-            Message msg =
-                    mHandler.obtainMessage(EVENT_REGISTER_LOW_RTP_QUALITY, mTransportType, 0, null);
-            mHandler.sendMessageDelayed(msg, (long) QnsConstants.DEFAULT_MSG_DELAY_TIMER);
         }
     }
 
@@ -808,7 +837,7 @@ class RestrictManager {
     }
 
     private void processHandoverGuardingOperation(int transportType) {
-        int guardingTransport = getOtherTransport(transportType);
+        int guardingTransport = QnsUtils.getOtherTransportType(transportType);
         int delayMillis = getGuardingTimeMillis(guardingTransport, mImsCallType);
         int minimumGuardingTimer = mQnsCarrierConfigManager.getMinimumHandoverGuardingTimer();
         if (delayMillis == 0 && minimumGuardingTimer > 0) {
@@ -1031,7 +1060,7 @@ class RestrictManager {
             int transportType, int restrictType, int fallbackTimeMillis) {
         Log.d(mLogTag, "release ignorable restrictions on WWAN to fallback.");
         for (int restriction : ignorableRestrictionsOnSingleRat) {
-            releaseRestriction(getOtherTransport(transportType), restriction, false);
+            releaseRestriction(QnsUtils.getOtherTransportType(transportType), restriction, false);
         }
         addRestriction(
                 transportType,
@@ -1050,7 +1079,8 @@ class RestrictManager {
         }
         mLastEvaluatedTransportType = transportType;
         if (mDataConnectionStatusTracker.isActiveState() && mTransportType != transportType) {
-            startGuarding(GUARDING_TIMER_HANDOVER_INIT, getOtherTransport(transportType));
+            startGuarding(GUARDING_TIMER_HANDOVER_INIT,
+                    QnsUtils.getOtherTransportType(transportType));
         }
     }
 
@@ -1082,7 +1112,7 @@ class RestrictManager {
     }
 
     private void updateGuardingTimerConditionOnCallState(int prevCallType, int newCallType) {
-        int currGuardingTransport = getOtherTransport(mTransportType);
+        int currGuardingTransport = QnsUtils.getOtherTransportType(mTransportType);
         if (mRestrictInfos.get(currGuardingTransport) == null) return;
 
         HashMap<Integer, Restriction> restrictionMap =
@@ -1138,6 +1168,49 @@ class RestrictManager {
                         accessNetwork, mNetCapability)) {
             processReleaseEvent(
                     AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RELEASE_EVENT_IMS_NOT_SUPPORT_RAT);
+        }
+    }
+
+    void addRestriction(int transport, Restriction restrictObj, int timeMillis) {
+        boolean needNotify = false;
+        HashMap<Integer, Restriction> restrictionMap =
+                mRestrictInfos.get(transport).getRestrictionMap();
+        Restriction restriction = restrictionMap.get(restrictObj.mRestrictType);
+        Log.d(
+                mLogTag,
+                "addRestriction["
+                        + QnsConstants.transportTypeToString(transport)
+                        + "] "
+                        + restrictTypeToString(restrictObj.mRestrictType)
+                        + " was restrict:"
+                        + (restriction != null));
+        if (restriction == null) {
+            restriction = restrictObj;
+            restrictionMap.put(restrictObj.mRestrictType, restriction);
+            Log.d(
+                    mLogTag,
+                    "addRestriction["
+                            + QnsConstants.transportTypeToString(transport)
+                            + "] "
+                            + restriction);
+            needNotify = true;
+        } else {
+            if (timeMillis > 0) {
+                restriction.updateRestrictTime(timeMillis);
+                removeReleaseRestrictionMessage(restriction);
+            }
+            Log.d(
+                    mLogTag,
+                    "updateRestriction["
+                            + QnsConstants.transportTypeToString(transport)
+                            + "] "
+                            + restriction);
+        }
+        if (timeMillis > 0) {
+            sendReleaseRestrictionMessage(transport, restriction);
+        }
+        if (needNotify) {
+            notifyRestrictInfoChanged();
         }
     }
 
@@ -1261,14 +1334,6 @@ class RestrictManager {
         mHandler.removeMessages(EVENT_RELEASE_RESTRICTION, restriction);
     }
 
-    protected int getOtherTransport(int transportType) {
-        if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
-            return AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
-        } else {
-            return AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
-        }
-    }
-
     void registerRestrictInfoChanged(Handler h, int what) {
         mRestrictInfoRegistrant = new QnsRegistrant(h, what, null);
     }
@@ -1375,17 +1440,13 @@ class RestrictManager {
                         || mImsCallType == QnsConstants.CALL_TYPE_EMERGENCY)
                 && (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WLAN
                         || mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
-                && mAltEventListener != null) {
+                && mActiveCallTracker != null) {
             int hoRestrictTimeOnLowRtpQuality =
                     mQnsCarrierConfigManager.getHoRestrictedTimeOnLowRTPQuality(mTransportType);
             if (hoRestrictTimeOnLowRtpQuality > 0) {
                 Log.d(mLogTag, "registerLowRtpQualityEvent");
-                mAltEventListener.registerLowRtpQualityEvent(
-                        mNetCapability,
-                        mHandler,
-                        EVENT_LOW_RTP_QUALITY_REPORTED,
-                        null,
-                        mQnsCarrierConfigManager.getRTPMetricsData());
+                mActiveCallTracker.registerLowMediaQualityListener(
+                        mHandler, EVENT_LOW_RTP_QUALITY_REPORTED, null);
             }
         }
     }
@@ -1393,7 +1454,9 @@ class RestrictManager {
     private void unregisterLowRtpQualityEvent() {
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 || mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
-            mAltEventListener.unregisterLowRtpQualityEvent(mNetCapability, mHandler);
+            if (mActiveCallTracker != null) {
+                mActiveCallTracker.unregisterLowMediaQualityListener(mHandler);
+            }
         }
     }
 
@@ -1444,9 +1507,7 @@ class RestrictManager {
             case NetworkCapabilities.NET_CAPABILITY_MMS:
             case NetworkCapabilities.NET_CAPABILITY_XCAP:
             case NetworkCapabilities.NET_CAPABILITY_CBS:
-                callType =
-                        mAltEventListener.isIdleState()
-                                ? QnsConstants.CALL_TYPE_IDLE
+                callType = mQnsCallStatusTracker.isCallIdle() ? QnsConstants.CALL_TYPE_IDLE
                                 : QnsConstants.CALL_TYPE_VOICE;
                 if (transportType == AccessNetworkConstants.TRANSPORT_TYPE_WWAN) {
                     delayMillis =
@@ -1484,14 +1545,15 @@ class RestrictManager {
         // Transport
         // Type
         if (transportType != AccessNetworkConstants.TRANSPORT_TYPE_INVALID
-                && hasRestrictionType(
-                        getOtherTransport(transportType), RestrictManager.RESTRICT_TYPE_GUARDING)) {
+                && hasRestrictionType(QnsUtils.getOtherTransportType(transportType),
+                RestrictManager.RESTRICT_TYPE_GUARDING)) {
             Log.d(
                     mLogTag,
                     "RESTRICT_TYPE_GUARDING cleared from Guarding for:"
                             + QnsConstants.transportTypeToString(mTransportType));
             // addRestriction() will take care to notify the ANE of Restrict Info status
-            releaseRestriction(getOtherTransport(transportType), RESTRICT_TYPE_GUARDING, true);
+            releaseRestriction(
+                    QnsUtils.getOtherTransportType(transportType), RESTRICT_TYPE_GUARDING, true);
         }
 
         addRestriction(
