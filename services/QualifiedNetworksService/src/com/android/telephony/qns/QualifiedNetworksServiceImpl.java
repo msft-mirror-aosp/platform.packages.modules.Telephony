@@ -288,7 +288,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
         public void reportEmergencyDataNetworkPreferredTransportChanged(
                 @AccessNetworkConstants.TransportType int transportType) {
             log("reportEmergencyDataNetworkPreferredTransportChanged: "
-                    + AccessNetworkConstants.transportTypeToString(transportType));
+                    + QnsConstants.transportTypeToString(transportType));
             AccessNetworkEvaluator evaluator =
                     mEvaluators.get(NetworkCapabilities.NET_CAPABILITY_EIMS);
             if (evaluator != null) {
