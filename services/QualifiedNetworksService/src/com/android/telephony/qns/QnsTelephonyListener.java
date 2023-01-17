@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
@@ -71,8 +72,10 @@ class QnsTelephonyListener {
     List<Consumer<List<CallState>>> mCallStatesConsumerList = new ArrayList<>();
     List<Consumer<Integer>> mSrvccStateConsumerList = new ArrayList<>();
     List<Consumer<MediaQualityStatus>> mMediaQualityConsumerList = new ArrayList<>();
-    protected HashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap = new HashMap<>();
-    protected HashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap = new HashMap<>();
+    protected ConcurrentHashMap<Integer, QnsRegistrantList> mQnsTelephonyInfoRegistrantMap =
+            new ConcurrentHashMap<>();
+    protected ConcurrentHashMap<Integer, QnsRegistrantList> mNetCapabilityRegistrantMap =
+            new ConcurrentHashMap<>();
     protected QnsTelephonyInfo mLastQnsTelephonyInfo = new QnsTelephonyInfo();
     protected QnsTelephonyInfoIms mLastQnsTelephonyInfoIms = new QnsTelephonyInfoIms();
     protected ServiceState mLastServiceState = new ServiceState();
