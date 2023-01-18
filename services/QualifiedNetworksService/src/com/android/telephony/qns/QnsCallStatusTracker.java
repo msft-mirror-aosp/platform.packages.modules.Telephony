@@ -339,7 +339,7 @@ public class QnsCallStatusTracker {
                     }
                 }
                 Log.d(mTag, "notifyLowMediaQuality reason:" + reason + " transport type:"
-                        + AccessNetworkConstants.transportTypeToString(mTransportType));
+                        + QnsConstants.transportTypeToString(mTransportType));
                 mLowMediaQualityListeners.notifyResult(reason);
             }
         }
@@ -411,12 +411,12 @@ public class QnsCallStatusTracker {
                 }
                 if (mTransportType == AccessNetworkConstants.TRANSPORT_TYPE_INVALID) {
                     Log.d(mLogTag, "Call started with "
-                            + AccessNetworkConstants.transportTypeToString(transportType));
+                            + QnsConstants.transportTypeToString(transportType));
                     mTransportType = transportType;
                     startTrackingTransportQuality(transportType);
                 } else if (mTransportType != transportType) {
                     Log.d(mLogTag, "Call Handed over to "
-                            + AccessNetworkConstants.transportTypeToString(transportType));
+                            + QnsConstants.transportTypeToString(transportType));
                     mTransportType = transportType;
                     onHandoverCompleted(transportType);
                 }
@@ -598,7 +598,7 @@ public class QnsCallStatusTracker {
                 return QnsConstants.INVALID_VALUE;
             }
             long qualityLevel = sumUplinkQualityLevelVolume / totalDuration;
-            Log.d(mLogTag, "getUplinkQualityLevel for [" + AccessNetworkConstants
+            Log.d(mLogTag, "getUplinkQualityLevel for [" + QnsConstants
                     .transportTypeToString(transportType) + "] totalQualityVolume: "
                     + sumUplinkQualityLevelVolume + ", totalDuration: " + totalDuration
                     + " level:" + qualityLevel);
