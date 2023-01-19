@@ -394,11 +394,11 @@ class IwlanNetworkStatusTracker {
         Log.d(sLogTag, "notifyIwlanNetworkStatus for slot: " + slotId);
         IwlanAvailabilityInfo info = makeIwlanAvailabilityInfo(slotId);
         if (!info.getIwlanAvailable() && notifyIwlanDisabled) {
-            Log.d(sLogTag, "setNotifyIwlanDisabled");
+            Log.d(sLogTag, "setNotifyIwlanDisabled for slot: " + slotId);
             info.setNotifyIwlanDisabled();
         }
         if (!info.equals(mLastIwlanAvailabilityInfo.get(slotId))) {
-            Log.d(sLogTag, "notify updated info");
+            Log.d(sLogTag, "notify updated info for slot: " + slotId);
             if (mIwlanNetworkListenersArray.get(slotId) != null) {
                 mIwlanNetworkListenersArray.get(slotId).notifyResult(info);
             }

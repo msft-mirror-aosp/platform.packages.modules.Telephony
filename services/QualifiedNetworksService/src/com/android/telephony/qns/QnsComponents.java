@@ -275,7 +275,7 @@ class QnsComponents {
         }
         QnsImsManager qnsImsManager = mQnsImsManagers.get(slotId);
         if (qnsImsManager != null) {
-            mQnsTelephonyListeners.remove(slotId);
+            mQnsImsManagers.remove(slotId);
             qnsImsManager.close();
         }
         QnsTelephonyListener qnsTelephonyListener = mQnsTelephonyListeners.get(slotId);
