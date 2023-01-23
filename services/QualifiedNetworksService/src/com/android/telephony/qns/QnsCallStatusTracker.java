@@ -768,23 +768,15 @@ public class QnsCallStatusTracker {
         if (imsCallStateList.size() == 0) {
             if (mLastNormalCallType != QnsConstants.CALL_TYPE_IDLE) {
                 mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
-                if (mCallTypeChangedEventListener != null) {
-                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
-                }
+                notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
             }
             if (mLastEmergencyCallType != QnsConstants.CALL_TYPE_IDLE) {
                 mLastEmergencyCallType = QnsConstants.CALL_TYPE_IDLE;
                 if (mEmergencyOverIms) {
                     mEmergencyOverIms = false;
-                    if (mCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
                 } else {
-                    if (mEmergencyCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                 }
             }
         } else {
@@ -792,23 +784,16 @@ public class QnsCallStatusTracker {
             if (mLastNormalCallType != QnsConstants.CALL_TYPE_IDLE
                     && !hasVideoCall() && !hasVoiceCall()) {
                 mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
-                if (mCallTypeChangedEventListener != null) {
-                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
-                }
+                notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastNormalCallType);
+
             }
             if (mLastEmergencyCallType != QnsConstants.CALL_TYPE_IDLE && !hasEmergencyCall()) {
                 mLastEmergencyCallType = QnsConstants.CALL_TYPE_IDLE;
                 if (mEmergencyOverIms) {
                     mEmergencyOverIms = false;
-                    if (mCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
                 } else {
-                    if (mEmergencyCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                 }
             }
             //2. Notify a new ongoing call type
@@ -816,16 +801,10 @@ public class QnsCallStatusTracker {
                 mLastEmergencyCallType = QnsConstants.CALL_TYPE_EMERGENCY;
                 if (!isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_EIMS)
                         && isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_IMS)) {
-                    if (mCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
-                        mEmergencyOverIms = true;
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
+                    mEmergencyOverIms = true;
                 } else {
-                    if (mEmergencyCallTypeChangedEventListener != null) {
-                        notifyCallType(
-                                NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
-                    }
+                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
                 }
             } else if (hasVideoCall()) {
                 if (mLastNormalCallType != QnsConstants.CALL_TYPE_VIDEO) {
@@ -846,9 +825,11 @@ public class QnsCallStatusTracker {
 
     private void notifyCallType(int netCapability, int callType) {
         Log.d(mLogTag, "notifyCallType:" + netCapability + ", callType:" + callType);
-        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS
+                && mCallTypeChangedEventListener != null) {
             mCallTypeChangedEventListener.notifyResult(callType);
-        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS
+                && mEmergencyCallTypeChangedEventListener != null) {
             mEmergencyCallTypeChangedEventListener.notifyResult(callType);
         }
         if (callType == QnsConstants.CALL_TYPE_IDLE) {
