@@ -364,6 +364,7 @@ class QnsTelephonyListener {
      * @param h the handler to get event.
      */
     void unregisterCallStateChanged(Handler h) {
+        log("unregisterCallStateChanged");
         if (h != null) {
             mCallStateListener.remove(h);
         }
@@ -387,6 +388,7 @@ class QnsTelephonyListener {
      * @param h the handler to get event.
      */
     void unregisterSubscriptionIdChanged(Handler h) {
+        log("unregisterSubscriptionIdChanged");
         if (h != null) {
             mSubscriptionIdListener.remove(h);
         }
@@ -398,6 +400,7 @@ class QnsTelephonyListener {
      * @param h the handler to get event.
      */
     void unregisterIwlanServiceStateChanged(Handler h) {
+        log("unregisterIwlanServiceStateChanged");
         if (h != null) {
             mIwlanServiceStateListener.remove(h);
         }

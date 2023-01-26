@@ -652,18 +652,18 @@ public class QnsCallStatusTracker {
         }
 
         private void onUpdateCallQuality(CallQuality cq) {
-            long now = QnsUtils.getSystemElapsedRealTime();
-            CallQualityBlock prev = null;
             TransportQuality transportQuality = getLastTransportQuality(mTransportType);
             if (transportQuality != null) {
-                prev = transportQuality.getLastCallQualityBlock();
+                long now = QnsUtils.getSystemElapsedRealTime();
+                CallQualityBlock prev = transportQuality.getLastCallQualityBlock();
+                if (prev != null) {
+                    prev.mDurationMillis = now - prev.mCreatedElapsedTime;
+                }
+                transportQuality.mCallQualityBlockList.add(
+                        new CallQualityBlock(
+                                cq.getUplinkCallQualityLevel(), cq.getDownlinkCallQualityLevel(),
+                                now));
             }
-            if (prev != null) {
-                prev.mDurationMillis = now - prev.mCreatedElapsedTime;
-            }
-            transportQuality.mCallQualityBlockList.add(
-                    new CallQualityBlock(
-                            cq.getUplinkCallQualityLevel(), cq.getDownlinkCallQualityLevel(), now));
         }
 
         private boolean isDummyCallQuality(CallQuality cq) {
