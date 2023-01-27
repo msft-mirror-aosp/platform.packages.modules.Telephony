@@ -17,9 +17,11 @@
 package com.android.telephony.qns;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+import static com.android.telephony.qns.QnsConstants.INVALID_ID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.anyInt;
@@ -76,6 +78,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
     private StaticMockitoSession mMockitoSession;
     private LinkProperties mLinkProperties = new LinkProperties();
     private String mServerAddress;
+    private QnsTimer mQnsTimer;
     private int[] mRttConfigs;
 
     HandlerThread mHt =
@@ -85,7 +88,11 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                     super.onLooperPrepared();
                     mWbm =
                             new WifiBackhaulMonitor(
-                                    sMockContext, mMockQnsConfigManager, mMockQnsImsManager, 0);
+                                    sMockContext,
+                                    mMockQnsConfigManager,
+                                    mMockQnsImsManager,
+                                    mQnsTimer,
+                                    0);
                     setReady(true);
                 }
             };
@@ -121,6 +128,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
         mRttConfigs = null;
         mLinkProperties.setInterfaceName("iwlan0");
         mLatch = new CountDownLatch(1);
+        mQnsTimer = new QnsTimer(sMockContext);
 
         mMockitoSession =
                 mockitoSession()
@@ -282,7 +290,7 @@ public class WifiBackhaulMonitorTest extends QnsTest {
                                 null))
                 .sendToTarget();
         waitForDelayedHandlerAction(mRttHandler, 100, 100);
-        assertTrue(mRttHandler.hasMessages(EVENT_START_RTT_CHECK));
+        assertNotEquals(mWbm.getRttTimerId(), INVALID_ID);
     }
 
     @Test

@@ -358,14 +358,7 @@ public class QualifiedNetworksServiceImpl extends QualifiedNetworksService {
             NetworkAvailabilityProviderImpl provider = providerMap.getValue();
             provider.dump(pw, "  ");
         }
-        IwlanNetworkStatusTracker iwlanNst = mQnsComponents.getIwlanNetworkStatusTracker();
-        if (iwlanNst != null) {
-            iwlanNst.dump(pw, "  ");
-        }
-        WifiQualityMonitor wQM = mQnsComponents.getWifiQualityMonitor();
-        if (wQM != null) {
-            wQM.dump(pw, "  ");
-        }
+        mQnsComponents.dump(pw);
         pw.println("==============================");
     }
 }
