@@ -581,9 +581,9 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
                 QnsConstants.KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS, hoRestrictTime);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, hoRestrictTime);
         hoRestrictTime = mConfigManager.getHoRestrictedTimeOnLowRTPQuality(TRANSPORT_TYPE_WWAN);
-        Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, hoRestrictTime);
-        Assert.assertNotEquals(
-                QnsConstants.KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS, hoRestrictTime);
+        Assert.assertEquals(
+                QnsConstants.KEY_DEFAULT_WWAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS, hoRestrictTime);
+        Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, hoRestrictTime);
         hoRestrictTime = mConfigManager.getHoRestrictedTimeOnLowRTPQuality(TRANSPORT_TYPE_INVALID);
         Assert.assertEquals(QnsConstants.KEY_DEFAULT_VALUE, hoRestrictTime);
     }
@@ -876,8 +876,18 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         PersistableBundle bundle = new PersistableBundle();
         bundle.putInt(QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT, -1);
         mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        Assert.assertEquals(0 /*disabled*/, mConfigManager.getMinimumHandoverGuardingTimer());
+
+        bundle.putInt(QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT, 0);
+        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        Assert.assertEquals(0 /*disabled*/, mConfigManager.getMinimumHandoverGuardingTimer());
+
+        bundle.putInt(
+                QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT,
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT);
+        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
         Assert.assertEquals(
-                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER,
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT,
                 mConfigManager.getMinimumHandoverGuardingTimer());
 
         bundle.putInt(
@@ -1071,52 +1081,7 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
                 mConfigManager.getThreshold(an, callType, measurementType);
 
         assert threshold != null;
-
-        if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
-                && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSRP
-                        || measurementType == SIGNAL_MEASUREMENT_TYPE_SSRSRP)) {
-            if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD, threshold.mGood);
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD, threshold.mBad);
-            } else if (an == AccessNetworkConstants.AccessNetworkType.EUTRAN) {
-                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
-                Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD, threshold.mBad);
-            }
-            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
-        } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
-                && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSCP)) {
-            if (an == AccessNetworkConstants.AccessNetworkType.UTRAN) {
-                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
-                Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_BAD, threshold.mBad);
-            }
-            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
-        } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
-                && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSSI)) {
-            if (an == AccessNetworkConstants.AccessNetworkType.GERAN) {
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD, threshold.mGood);
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD, threshold.mBad);
-            }
-            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
-        } else if (an == AccessNetworkConstants.AccessNetworkType.IWLAN) {
-            if (callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE) {
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD, threshold.mGood);
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD, threshold.mBad);
-            } else if (callType == QnsConstants.CALL_TYPE_VIDEO) {
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD, threshold.mGood);
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD, threshold.mBad);
-            }
-        } else {
-            Assert.assertEquals(0x0000FFFF, threshold.mGood);
-            Assert.assertEquals(0x0000FFFF, threshold.mBad);
-            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
-        }
+        validateForThreshold(threshold, an, callType, measurementType);
     }
 
     @Test
@@ -1388,19 +1353,37 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
 
         assert threshold != null;
 
-        if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
-                && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSRP
-                        || measurementType == SIGNAL_MEASUREMENT_TYPE_SSRSRP)) {
+        validateForThreshold(threshold, an, callType, measurementType);
+    }
+
+    private void validateForThreshold(
+            QnsCarrierConfigManager.QnsConfigArray threshold,
+            @AccessNetworkConstants.RadioAccessNetworkType int an,
+            int callType,
+            int measurementType) {
+
+        if ((callType == CALL_TYPE_IDLE
+                        || callType == CALL_TYPE_VOICE
+                        || callType == CALL_TYPE_VIDEO)
+                && measurementType == SIGNAL_MEASUREMENT_TYPE_SSRSRP) {
             if (an == AccessNetworkConstants.AccessNetworkType.NGRAN) {
                 Assert.assertEquals(
                         QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD, threshold.mBad);
-            } else if (an == AccessNetworkConstants.AccessNetworkType.EUTRAN) {
+            }
+            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
+        } else if ((callType == CALL_TYPE_IDLE
+                        || callType == CALL_TYPE_VOICE
+                        || callType == CALL_TYPE_VIDEO)
+                && measurementType == SIGNAL_MEASUREMENT_TYPE_RSRP) {
+            if (an == AccessNetworkConstants.AccessNetworkType.EUTRAN) {
                 Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSRP_GOOD, threshold.mGood);
                 Assert.assertEquals(QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD, threshold.mBad);
             }
             Assert.assertEquals(0x0000FFFF, threshold.mWorst);
-        } else if ((callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE)
+        } else if ((callType == CALL_TYPE_IDLE
+                        || callType == CALL_TYPE_VOICE
+                        || callType == CALL_TYPE_VIDEO)
                 && (measurementType == SIGNAL_MEASUREMENT_TYPE_RSCP)) {
             if (an == AccessNetworkConstants.AccessNetworkType.UTRAN) {
                 Assert.assertEquals(KEY_DEFAULT_THRESHOLD_RSCP_GOOD, threshold.mGood);
@@ -1417,21 +1400,14 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
             }
             Assert.assertEquals(0x0000FFFF, threshold.mWorst);
         } else if (an == AccessNetworkConstants.AccessNetworkType.IWLAN) {
-            if (callType == CALL_TYPE_IDLE || callType == CALL_TYPE_VOICE) {
+            if (callType == CALL_TYPE_IDLE
+                    || callType == CALL_TYPE_VOICE
+                    || callType == QnsConstants.CALL_TYPE_VIDEO) {
                 Assert.assertEquals(
                         QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD, threshold.mGood);
                 Assert.assertEquals(
                         QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD, threshold.mBad);
-            } else if (callType == QnsConstants.CALL_TYPE_VIDEO) {
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD, threshold.mGood);
-                Assert.assertEquals(
-                        QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD, threshold.mBad);
             }
-        } else {
-            Assert.assertEquals(0x0000FFFF, threshold.mGood);
-            Assert.assertEquals(0x0000FFFF, threshold.mBad);
-            Assert.assertEquals(0x0000FFFF, threshold.mWorst);
         }
     }
 
@@ -1485,8 +1461,7 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         Assert.assertEquals(QnsConstants.INVALID_VALUE, rtpMetricsData.mPktLossRate);
         Assert.assertEquals(
                 QnsConstants.KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS, rtpMetricsData.mPktLossTime);
-        Assert.assertEquals(
-                QnsConstants.INVALID_VALUE, rtpMetricsData.mNoRtpInterval);
+        Assert.assertEquals(QnsConstants.INVALID_VALUE, rtpMetricsData.mNoRtpInterval);
 
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, rtpMetricsData.mJitter);
         Assert.assertNotEquals(QnsConstants.KEY_DEFAULT_VALUE, rtpMetricsData.mPktLossRate);

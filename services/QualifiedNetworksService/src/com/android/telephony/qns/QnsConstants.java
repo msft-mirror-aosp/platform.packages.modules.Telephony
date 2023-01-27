@@ -31,28 +31,26 @@ class QnsConstants {
 
     static final int INVALID_VALUE = -1;
     static final int INVALID_ID = -1;
-    static final int INVALID_SUB_ID = -1;
     static final int KEY_DEFAULT_VALUE = 0;
 
     static final int KEY_DEFAULT_HYST_TIMER = 30000;
-    static final int CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER = 0;
+    static final int CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER = 3000;
     static final int CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT = 5000;
 
     static final int KEY_DEFAULT_PACKET_LOSS_TIME_MILLIS = 5000;
     static final int KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS = 60000;
+    static final int KEY_DEFAULT_WWAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS = 60000;
 
-    static final int KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD = -99;
-    static final int KEY_DEFAULT_THRESHOLD_SSRSRP_BAD = -111;
-    static final int KEY_DEFAULT_THRESHOLD_RSRP_GOOD = -99;
-    static final int KEY_DEFAULT_THRESHOLD_RSRP_BAD = -111;
-    static final int KEY_DEFAULT_THRESHOLD_RSCP_GOOD = -90;
-    static final int KEY_DEFAULT_THRESHOLD_RSCP_BAD = -100;
-    static final int KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD = -90;
-    static final int KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD = -100;
-    static final int KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD = -70;
+    static final int KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD = -110;
+    static final int KEY_DEFAULT_THRESHOLD_SSRSRP_BAD = -115;
+    static final int KEY_DEFAULT_THRESHOLD_RSRP_GOOD = -115;
+    static final int KEY_DEFAULT_THRESHOLD_RSRP_BAD = -120;
+    static final int KEY_DEFAULT_THRESHOLD_RSCP_GOOD = -105;
+    static final int KEY_DEFAULT_THRESHOLD_RSCP_BAD = -115;
+    static final int KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD = -100;
+    static final int KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD = -105;
+    static final int KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD = -75;
     static final int KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD = -80;
-    static final int KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD = -65;
-    static final int KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD = -75;
 
     static final int CALL_TYPE_IDLE = 0;
     static final int CALL_TYPE_VOICE = 1;
@@ -184,7 +182,6 @@ class QnsConstants {
     static final int SIGNAL_AVAILABLE = 1;
 
     static final int DEFAULT_WIFI_BACKHAUL_TIMER = 3000;
-    static final int DEFAULT_MSG_DELAY_TIMER = 1000;
 
     static final int TRANSPORT_TYPE_ALLOWED_WWAN = 0;
     static final int TRANSPORT_TYPE_ALLOWED_IWLAN = 1;
