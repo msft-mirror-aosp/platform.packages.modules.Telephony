@@ -2,6 +2,7 @@
 <carrier_config>
     <boolean name="qns.support_vops_notavailable_priority_iwlan_bool" value="false"/>
     <boolean name="qns.prefer_current_transport_type_in_voice_call_bool" value="true"/>
+    <boolean name="qns.allow_video_over_iwlan_with_cellular_limited_case_bool" value="true"/>
     <int name="qns.wifi_rssi_thresholdbackhaul_timer_int" value="0"/>
     <int name="qns.sos_transport_type_int" value="2"/>
     <int name="qns.mms_transport_type_int" value="2"/>
@@ -88,5 +89,21 @@
     <int-array name="qns.in_call_rovein_allowed_and_fallback_reason_int_array" num="2">
         <item value="1"/>
         <item value="2"/>
+    </int-array>
+    <int-array name="qns.video_eutran_rsrp_int_array" num="2">
+        <item value="65535"/>
+        <item value="65535"/>
+    </int-array>
+    <int-array name="qns.video_ngran_ssrsrp_int_array" num="2">
+        <item value="65535"/>
+        <item value="65535"/>
+    </int-array>
+    <int-array name="qns.video_utran_rscp_int_array" num="2">
+        <item value="65535"/>
+        <item value="65535"/>
+    </int-array>
+    <int-array name="qns.video_geran_rssi_int_array" num="2">
+        <item value="65535"/>
+        <item value="65535"/>
     </int-array>
 </carrier_config>
