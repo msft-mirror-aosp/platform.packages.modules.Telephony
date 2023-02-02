@@ -662,7 +662,7 @@ class QnsUtils {
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS,
-                            QnsConstants.KEY_DEFAULT_VALUE
+                            QnsConstants.KEY_DEFAULT_WWAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS,
                         };
             case QnsCarrierConfigManager.KEY_IMS_WWAN_HYSTERESIS_TIMER_MS_INT_ARRAY:
             case QnsCarrierConfigManager.KEY_IMS_WLAN_HYSTERESIS_TIMER_MS_INT_ARRAY:
@@ -681,6 +681,7 @@ class QnsUtils {
                 return (T) new String[] {"LTE", "NR"};
             case QnsCarrierAnspSupportConfig.KEY_IDLE_NGRAN_SSRSRP_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_VOICE_NGRAN_SSRSRP_INT_ARRAY:
+            case QnsCarrierAnspSupportConfig.KEY_VIDEO_NGRAN_SSRSRP_INT_ARRAY:
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD,
@@ -689,6 +690,7 @@ class QnsUtils {
                         };
             case QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRP_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_VOICE_EUTRAN_RSRP_INT_ARRAY:
+            case QnsCarrierAnspSupportConfig.KEY_VIDEO_EUTRAN_RSRP_INT_ARRAY:
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD,
@@ -697,6 +699,7 @@ class QnsUtils {
                         };
             case QnsCarrierAnspSupportConfig.KEY_IDLE_UTRAN_RSCP_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_VOICE_UTRAN_RSCP_INT_ARRAY:
+            case QnsCarrierAnspSupportConfig.KEY_VIDEO_UTRAN_RSCP_INT_ARRAY:
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD,
@@ -705,6 +708,7 @@ class QnsUtils {
                         };
             case QnsCarrierAnspSupportConfig.KEY_IDLE_GERAN_RSSI_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_VOICE_GERAN_RSSI_INT_ARRAY:
+            case QnsCarrierAnspSupportConfig.KEY_VIDEO_GERAN_RSSI_INT_ARRAY:
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD,
@@ -713,16 +717,11 @@ class QnsUtils {
                         };
             case QnsCarrierAnspSupportConfig.KEY_IDLE_WIFI_RSSI_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_VOICE_WIFI_RSSI_INT_ARRAY:
+            case QnsCarrierAnspSupportConfig.KEY_VIDEO_WIFI_RSSI_INT_ARRAY:
                 return (T)
                         new int[] {
                             QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD,
                             QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD
-                        };
-            case QnsCarrierAnspSupportConfig.KEY_VIDEO_WIFI_RSSI_INT_ARRAY:
-                return (T)
-                        new int[] {
-                            QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD,
-                            QnsConstants.KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD
                         };
             case QnsCarrierAnspSupportConfig.KEY_OVERRIDE_WIFI_PREF_IDLE_WIFI_RSSI_INT_ARRAY:
             case QnsCarrierAnspSupportConfig.KEY_OVERRIDE_WIFI_PREF_VOICE_WIFI_RSSI_INT_ARRAY:
