@@ -958,11 +958,10 @@ class AccessNetworkEvaluator {
 
     private boolean isAccessNetworkAllowed(int accessNetwork, int netCapability) {
         switch (netCapability) {
-            case NetworkCapabilities.NET_CAPABILITY_IMS:
-                return mConfigManager.isAccessNetworkAllowed(accessNetwork, netCapability);
             case NetworkCapabilities.NET_CAPABILITY_EIMS:
-                return mConfigManager.isAccessNetworkAllowed(
-                        accessNetwork, NetworkCapabilities.NET_CAPABILITY_IMS);
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return mConfigManager.isAccessNetworkAllowed(accessNetwork, netCapability);
             default:
                 if (accessNetwork == AccessNetworkType.UNKNOWN) {
                     return false;

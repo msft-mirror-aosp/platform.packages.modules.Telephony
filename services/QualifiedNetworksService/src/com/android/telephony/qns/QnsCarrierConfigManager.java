@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -376,25 +377,6 @@ class QnsCarrierConfigManager {
      * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
      */
     static final String KEY_QNS_MMS_TRANSPORT_TYPE_INT = "qns.mms_transport_type_int";
-
-    /**
-     * Specifies the Transport type UE supports with QNS services for XCAP network capability.
-     * {@link QnsConstants}. The values are set as below:
-     *
-     * <ul>
-     *   <li>0: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
-     *   <li>1: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}
-     *   <li>2: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}
-     * </ul>
-     *
-     * <p>{@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for XCAP network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
-     * this value set , Transport type UE supports is Wifi for XCAP network capability. {@code
-     * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for XCAP network capability. The default value for this key is {@link
-     * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
-     */
-    static final String KEY_QNS_XCAP_TRANSPORT_TYPE_INT = "qns.xcap_transport_type_int";
 
     /**
      * Specifies the Transport type UE supports with QNS services for CBS network capability. {@link
@@ -747,7 +729,7 @@ class QnsCarrierConfigManager {
     private int mQnsImsTransportType;
     private int mQnsSosTransportType;
     private int mQnsMmsTransportType;
-    private int mQnsXcapTransportType;
+    private int[] mQnsXcapSupportedAccessNetworkTypes;
     private int mQnsCbsTransportType;
     private int mXcapRatPreference;
     private int mSosRatPreference;
@@ -1334,8 +1316,11 @@ class QnsCarrierConfigManager {
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_SOS_TRANSPORT_TYPE_INT);
         mQnsMmsTransportType =
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_MMS_TRANSPORT_TYPE_INT);
-        mQnsXcapTransportType =
-                getConfig(bundleCarrier, bundleAsset, KEY_QNS_XCAP_TRANSPORT_TYPE_INT);
+        mQnsXcapSupportedAccessNetworkTypes =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY);
         mQnsCbsTransportType =
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_CBS_TRANSPORT_TYPE_INT);
         mQnsCbsTransportType =
@@ -1964,7 +1949,19 @@ class QnsCarrierConfigManager {
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_MMS) {
             return mQnsMmsTransportType;
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_XCAP) {
-            return mQnsXcapTransportType;
+            HashSet<Integer> supportedTransportType = new HashSet<>();
+            if (mQnsXcapSupportedAccessNetworkTypes != null) {
+                Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                        .forEach(accessNetwork -> supportedTransportType.add(
+                                QnsUtils.getTransportTypeFromAccessNetwork(accessNetwork)));
+            }
+            if (supportedTransportType.contains(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)) {
+                if (supportedTransportType.contains(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)) {
+                    return QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH;
+                }
+                return QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN;
+            }
+            return QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN;
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_CBS) {
             return mQnsCbsTransportType;
         }
@@ -2382,8 +2379,10 @@ class QnsCarrierConfigManager {
                 || mQnsMmsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
             netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
         }
-        if (mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+        if (mQnsXcapSupportedAccessNetworkTypes != null
+                && Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                        .anyMatch(accessNetwork -> QnsUtils.getTransportTypeFromAccessNetwork(
+                                accessNetwork) == AccessNetworkConstants.TRANSPORT_TYPE_WLAN)) {
             netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
         }
         if (mQnsCbsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
@@ -2393,34 +2392,42 @@ class QnsCarrierConfigManager {
         return netCapabilities;
     }
 
+    private static HashMap<Integer, String> sRatStringMatcher;
+    static {
+        sRatStringMatcher = new HashMap<>();
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.EUTRAN, "LTE");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.NGRAN, "NR");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.UTRAN, "3G");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.GERAN, "2G");
+    }
+
     /**
      * This method returns Allowed cellular RAT for IMS
      *
-     * @param accessNetwork , netCapability : EUTRAN / NGRAN / UTRAN/ GERAN
+     * @param accessNetwork : (EUTRAN, NGRAN, UTRAN, GERAN)
+     * @param netCapability : (ims, sos, mms, xcap, cbs)
      * @return : True or False based on configuration
      */
     boolean isAccessNetworkAllowed(int accessNetwork, int netCapability) {
 
-        // cases to be enhanced for different key items when added
-        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
-            if (mImsAllowedRats != null) {
-                for (String cellularRatType : mImsAllowedRats) {
-                    if ((cellularRatType.contains("LTE")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.EUTRAN)
-                            || (cellularRatType.contains("NR")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.NGRAN)
-                            || (cellularRatType.contains("3G")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.UTRAN)
-                            || (cellularRatType.contains("2G")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.GERAN)) {
-                        return true;
-                    }
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                // cases to be enhanced for different key items when added
+                String ratName = sRatStringMatcher.get(accessNetwork);
+                if (mImsAllowedRats != null
+                        && ratName != null
+                        && Arrays.stream(mImsAllowedRats)
+                                .anyMatch(ratType -> TextUtils.equals(ratType, ratName))) {
+                    return true;
                 }
-            }
+                break;
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return mQnsXcapSupportedAccessNetworkTypes != null
+                        && Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                                .anyMatch(xcapAccessNetwork -> accessNetwork == xcapAccessNetwork);
+            default:
+                return false;
         }
         return false;
     }
