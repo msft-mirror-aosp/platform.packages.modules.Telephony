@@ -4,7 +4,6 @@
     <int name="qns.mms_rat_preference_int" value="2"/>
     <boolean name="qns.override_cell_pref_to_ims_pref_home" value="true"/>
     <int name="qns.mms_transport_type_int" value="2"/>
-    <int name="qns.xcap_transport_type_int" value="2"/>
     <string-array name="qns.ims_cellular_allowed_rat_string_array" num="1">
         <item value="LTE"/>
     </string-array>

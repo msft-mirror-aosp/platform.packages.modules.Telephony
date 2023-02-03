@@ -625,7 +625,6 @@ class QnsUtils {
             case QnsCarrierConfigManager.KEY_QNS_IMS_TRANSPORT_TYPE_INT:
                 return (T) Integer.valueOf(QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH);
             case QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT:
-            case QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT:
             case QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT:
             case QnsCarrierConfigManager.KEY_QNS_SOS_TRANSPORT_TYPE_INT:
                 return (T) Integer.valueOf(QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN);

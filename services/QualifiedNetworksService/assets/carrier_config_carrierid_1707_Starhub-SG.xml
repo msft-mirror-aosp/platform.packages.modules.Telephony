@@ -2,5 +2,4 @@
 <carrier_config>
     <int name="qns.sos_transport_type_int" value="2"/>
     <int name="qns.mms_transport_type_int" value="2"/>
-    <int name="qns.xcap_transport_type_int" value="2"/>
 </carrier_config>
