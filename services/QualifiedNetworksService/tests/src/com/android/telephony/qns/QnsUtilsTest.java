@@ -362,13 +362,14 @@ public class QnsUtilsTest extends QnsTest {
                                 mTestBundle,
                                 null,
                                 QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT));
-        assertEquals(
-                1,
-                (int)
-                        QnsUtils.getConfig(
-                                mTestBundle,
-                                null,
-                                QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT));
+        assertArrayEquals(
+                new int[] {
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                },
+                QnsUtils.getConfig(
+                        mTestBundle,
+                        null,
+                        CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY));
         assertEquals(
                 1,
                 (int)
@@ -584,7 +585,11 @@ public class QnsUtilsTest extends QnsTest {
                 QnsCarrierConfigManager.KEY_QNS_WIFI_RSSI_THRESHOLDBACKHAUL_TIMER_MS_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_IMS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT, 1);
-        mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT, 1);
+        mTestBundle.putIntArray(
+                CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY,
+                new int[] {
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                });
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_SOS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_MMS_RAT_PREFERENCE_INT, 1);
@@ -761,13 +766,6 @@ public class QnsUtilsTest extends QnsTest {
                                 null,
                                 null,
                                 QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT));
-        assertEquals(
-                QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN,
-                (int)
-                        QnsUtils.getConfig(
-                                null,
-                                null,
-                                QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT));
         assertEquals(
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN,
                 (int)

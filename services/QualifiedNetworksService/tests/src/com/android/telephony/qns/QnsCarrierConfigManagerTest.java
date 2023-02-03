@@ -162,13 +162,13 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
                 mConfigManager.isAccessNetworkAllowed(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         NetworkCapabilities.NET_CAPABILITY_EIMS);
-        Assert.assertFalse(isAccessNetworkAllowedForRat);
+        Assert.assertTrue(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
                         AccessNetworkConstants.AccessNetworkType.NGRAN,
                         NetworkCapabilities.NET_CAPABILITY_EIMS);
-        Assert.assertFalse(isAccessNetworkAllowedForRat);
+        Assert.assertTrue(isAccessNetworkAllowedForRat);
 
         isAccessNetworkAllowedForRat =
                 mConfigManager.isAccessNetworkAllowed(
@@ -475,28 +475,45 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
 
     @Test
     public void testGetQnsSupportedNetCapabilitiesWithTestBundle() {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putInt(
+        PersistableBundle bundleCarrierConfig = new PersistableBundle();
+        PersistableBundle bundleAsset = new PersistableBundle();
+        bundleAsset.putInt(
                 QnsCarrierConfigManager.KEY_QNS_SOS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        mConfigManager.loadQnsAneSupportConfigurations(bundleAsset, null);
         List<Integer> supportedNetCapabilities = new ArrayList<>();
         supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
         supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_EIMS);
         Assert.assertEquals(
                 supportedNetCapabilities, mConfigManager.getQnsSupportedNetCapabilities());
-        bundle.putInt(
+        bundleAsset.putInt(
                 QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
-        bundle.putInt(
-                QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT,
-                QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH);
-        bundle.putInt(
+        bundleCarrierConfig.putIntArray(
+                CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY,
+                new int[] {AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        AccessNetworkConstants.AccessNetworkType.NGRAN,
+                        AccessNetworkConstants.AccessNetworkType.IWLAN});
+        bundleAsset.putInt(
                 QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT,
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN);
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
+        mConfigManager.loadQnsAneSupportConfigurations(bundleCarrierConfig, bundleAsset);
         supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
         supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_CBS);
+        Assert.assertEquals(
+                supportedNetCapabilities, mConfigManager.getQnsSupportedNetCapabilities());
+
+        bundleCarrierConfig.clear();
+        bundleCarrierConfig.putIntArray(
+                CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY,
+                new int[] {AccessNetworkConstants.AccessNetworkType.EUTRAN,
+                        AccessNetworkConstants.AccessNetworkType.NGRAN});
+        mConfigManager.loadQnsAneSupportConfigurations(bundleCarrierConfig, bundleAsset);
+        supportedNetCapabilities.clear();
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_IMS);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_EIMS);
+        supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
         supportedNetCapabilities.add(NetworkCapabilities.NET_CAPABILITY_CBS);
         Assert.assertEquals(
                 supportedNetCapabilities, mConfigManager.getQnsSupportedNetCapabilities());
