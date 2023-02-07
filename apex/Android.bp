@@ -35,5 +35,10 @@ apex {
     certificate: ":com.android.telephonymodules.certificate",
     updatable: false,
     system_ext_specific: true,
-    apps: ["QualifiedNetworksService"],
+    apps: [
+        "QualifiedNetworksService",
+    ],
+    java_libs: [
+        "TelephonyStatsLib",
+    ],
 }
