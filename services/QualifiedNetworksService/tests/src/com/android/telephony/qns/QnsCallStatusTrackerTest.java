@@ -847,12 +847,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
 
         MediaQualityStatus status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(130)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 130 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         Message msg = mLowQualityListenerLooper.nextMessage();
@@ -903,12 +901,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
 
         MediaQualityStatus status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(11000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 70 /*jitter*/, 11000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         Message msg = mLowQualityListenerLooper.nextMessage();
@@ -959,12 +955,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
 
         MediaQualityStatus status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(35)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        35 /*packetLossRate*/, 70 /*jitter*/, 7000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         Message msg = mLowQualityListenerLooper.nextMessage();
@@ -1024,12 +1018,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
 
         MediaQualityStatus status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(35)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        35 /*packetLossRate*/, 70 /*jitter*/, 7000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         Message msg = mLowQualityListenerLooper.nextMessage();
@@ -1040,12 +1032,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertNull(msg);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 70 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1060,12 +1050,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(0, (int) result.mResult);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(33)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        33 /*packetLossRate*/, 70 /*jitter*/, 7000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1076,12 +1064,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertNull(msg);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 70 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1092,12 +1078,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertNull(msg);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(33)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        33 /*packetLossRate*/, 70 /*jitter*/, 7000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1163,12 +1147,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertEquals(NetworkCapabilities.NET_CAPABILITY_IMS, activeCallTracker.getNetCapability());
 
         MediaQualityStatus status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN)
-                        .setRtpJitterMillis(70)
-                        .setRtpPacketLossRate(35)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WWAN,
+                        35 /*packetLossRate*/, 70 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         Message msg = mLowQualityListenerLooper.nextMessage();
@@ -1206,12 +1188,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         assertNull(msg);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(20)
-                        .setRtpPacketLossRate(5)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        5 /*packetLossRate*/, 20 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1232,12 +1212,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mTestLooper.moveTimeForward(10000);
         mTestLooper.dispatchAll();
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(20)
-                        .setRtpPacketLossRate(100)
-                        .setRtpInactivityMillis(11000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        100 /*packetLossRate*/, 20 /*jitter*/, 11000 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
@@ -1249,12 +1227,10 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 + (1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS), (int) result.mResult);
 
         status =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(20)
-                        .setRtpPacketLossRate(12)
-                        .setRtpInactivityMillis(0).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        12 /*packetLossRate*/, 20 /*jitter*/, 0 /*inactivityTime*/);
         activeCallTracker.onMediaQualityStatusChanged(status);
         mTestLooper.dispatchAll();
         msg = mLowQualityListenerLooper.nextMessage();
