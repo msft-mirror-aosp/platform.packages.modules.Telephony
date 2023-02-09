@@ -1025,12 +1025,10 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void testOnMediaQualityStatusChanged() {
         mQtListener.addMediaQualityStatusCallback(mTestMediaQualityConsumer);
         MediaQualityStatus testMediaQuality =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(130)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 130 /*jitter*/, 7000 /*inactivityTime*/);
         mQtListener.mTelephonyListener.onMediaQualityStatusChanged(testMediaQuality);
 
         assertEquals(testMediaQuality, mTestMediaQuality);
