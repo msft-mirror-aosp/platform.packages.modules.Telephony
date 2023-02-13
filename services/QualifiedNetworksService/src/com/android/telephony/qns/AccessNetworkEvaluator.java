@@ -58,7 +58,6 @@ class AccessNetworkEvaluator {
     private static final int EVENT_SET_CALL_TYPE = EVENT_BASE + 5;
     private static final int EVENT_DATA_CONNECTION_STATE_CHANGED = EVENT_BASE + 6;
     private static final int EVENT_PROVISIONING_INFO_CHANGED = EVENT_BASE + 8;
-    private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
     private static final int EVENT_WIFI_RTT_STATUS_CHANGED = EVENT_BASE + 11;
     private static final int EVENT_SIP_DIALOG_SESSION_STATE_CHANGED = EVENT_BASE + 12;
@@ -373,8 +372,6 @@ class AccessNetworkEvaluator {
         }
 
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
-            mAltEventListener.registerTryWfcConnectionStateListener(
-                    mHandler, EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED, null);
             if (mWifiBackhaulMonitor.isRttCheckEnabled()) {
                 mWifiBackhaulMonitor.registerForRttStatusChange(
                         mHandler, EVENT_WIFI_RTT_STATUS_CHANGED);
@@ -1911,9 +1908,6 @@ class AccessNetworkEvaluator {
                 case EVENT_DATA_CONNECTION_STATE_CHANGED:
                     onDataConnectionStateChanged(
                             (DataConnectionStatusTracker.DataConnectionChangedInfo) ar.mResult);
-                    break;
-                case EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED:
-                    onTryWfcConnectionStateChanged((boolean) ar.mResult);
                     break;
                 case EVENT_PROVISIONING_INFO_CHANGED:
                     onProvisioningInfoChanged(
