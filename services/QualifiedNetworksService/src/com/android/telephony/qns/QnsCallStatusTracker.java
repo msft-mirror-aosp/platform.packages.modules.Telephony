@@ -824,7 +824,8 @@ public class QnsCallStatusTracker {
     }
 
     private void notifyCallType(int netCapability, int callType) {
-        Log.d(mLogTag, "notifyCallType:" + netCapability + ", callType:" + callType);
+        Log.d(mLogTag, "notifyCallType for " + QnsUtils.getNameOfNetCapability(netCapability)
+                + ", callType:" + callType);
         if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS
                 && mCallTypeChangedEventListener != null) {
             mCallTypeChangedEventListener.notifyResult(callType);

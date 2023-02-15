@@ -653,6 +653,8 @@ class RestrictManager {
                 // transport type doesn't have 'no RTP reason', let's move back to previous
                 // transport type.
                 if ((reason & 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP) != 0) {
+                    releaseRestriction(QnsUtils.getOtherTransportType(mTransportType),
+                            RESTRICT_TYPE_GUARDING, true);
                     HashMap<Integer, Restriction> restrictionMap = mRestrictInfos
                             .get(QnsUtils.getOtherTransportType(mTransportType))
                             .getRestrictionMap();
