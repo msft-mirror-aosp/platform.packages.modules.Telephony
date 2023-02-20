@@ -390,8 +390,11 @@ public class QnsCallStatusTracker {
 
         void close() {
             mTelephonyListener.removeMediaQualityStatusCallback(mMediaQualityStatusConsumer);
-            mTelephonyListener.unregisterPreciseDataConnectionStateChanged(
-                    mNetCapability, mActiveCallHandler);
+            if (mNetCapability != QnsConstants.INVALID_VALUE) {
+                mTelephonyListener.unregisterPreciseDataConnectionStateChanged(
+                        mNetCapability, mActiveCallHandler);
+                mNetCapability = QnsConstants.INVALID_VALUE;
+            }
             if (mHandlerThread != null) {
                 mHandlerThread.quitSafely();
             }
@@ -523,11 +526,11 @@ public class QnsCallStatusTracker {
             Log.d(mLogTag, "callEnded callType: " + mCallType + " netCapa:"
                     + QnsUtils.getNameOfNetCapability(mNetCapability) + " " + sb.toString());
             mCallType = QnsConstants.CALL_TYPE_IDLE;
-            mNetCapability = 0;
-            mAccessNetwork = AccessNetworkConstants.AccessNetworkType.UNKNOWN;
-            mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
             mTelephonyListener.unregisterPreciseDataConnectionStateChanged(
                     mNetCapability, mActiveCallHandler);
+            mNetCapability = QnsConstants.INVALID_VALUE;
+            mAccessNetwork = AccessNetworkConstants.AccessNetworkType.UNKNOWN;
+            mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
         }
 
         void onMediaQualityStatusChanged(MediaQualityStatus status) {
@@ -846,7 +849,8 @@ public class QnsCallStatusTracker {
 
     boolean hasEmergencyCall() {
         for (CallState cs : mCallStates) {
-            if (cs.getImsCallServiceType() == ImsCallProfile.SERVICE_TYPE_EMERGENCY) {
+            if (cs.getImsCallServiceType() == ImsCallProfile.SERVICE_TYPE_EMERGENCY
+                    && cs.getCallState() == PreciseCallState.PRECISE_CALL_STATE_ACTIVE) {
                 return true;
             }
         }

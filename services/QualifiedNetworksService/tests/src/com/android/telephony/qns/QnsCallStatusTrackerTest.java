@@ -181,7 +181,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                 new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DISCONNECTING)
                         .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                         .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_NORMAL).build());
-        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DIALING)
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
@@ -396,7 +396,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
                         NetworkCapabilities.NET_CAPABILITY_IMS))
                 .thenReturn(imsDataStatus);
         // Test1:
-        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DIALING)
+        mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
@@ -526,15 +526,15 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
-        assertEquals(0, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
 
         // Test4:
         mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_DIALING)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
                 .setImsCallServiceType(ImsCallProfile.SERVICE_TYPE_EMERGENCY).build());
         mCallTracker.updateCallState(mTestCallStateList);
-        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
-        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
 
         // Test5:
         mTestCallStateList.clear();
@@ -549,7 +549,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
-        assertEquals(0, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
     }
 
     @Test
@@ -587,7 +587,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
-        assertEquals(0, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
     }
 
     @Test
@@ -771,7 +771,7 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mTestCallStateList.clear();
         mCallTracker.updateCallState(mTestCallStateList);
         assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
-        assertEquals(0, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
 
         oldTransportQuality = activeCallTracker.getLastTransportQuality(
                         AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
@@ -890,8 +890,8 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
                 mCallTracker.getActiveCallTracker();
         assertNotNull(activeCallTracker);
-        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
-        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
         mTestCallStateList.clear();
         mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
@@ -944,8 +944,8 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
                 mCallTracker.getActiveCallTracker();
         assertNotNull(activeCallTracker);
-        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
-        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
         mTestCallStateList.clear();
         mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
@@ -1007,8 +1007,8 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         QnsCallStatusTracker.ActiveCallTracker activeCallTracker =
                 mCallTracker.getActiveCallTracker();
         assertNotNull(activeCallTracker);
-        assertEquals(QnsConstants.CALL_TYPE_EMERGENCY, activeCallTracker.getCallType());
-        assertEquals(NetworkCapabilities.NET_CAPABILITY_EIMS, activeCallTracker.getNetCapability());
+        assertEquals(QnsConstants.CALL_TYPE_IDLE, activeCallTracker.getCallType());
+        assertEquals(QnsConstants.INVALID_VALUE, activeCallTracker.getNetCapability());
         mTestCallStateList.clear();
         mTestCallStateList.add(new CallState.Builder(PreciseCallState.PRECISE_CALL_STATE_ACTIVE)
                 .setImsCallType(ImsCallProfile.CALL_TYPE_VOICE)
