@@ -706,12 +706,13 @@ class AccessNetworkEvaluator {
         boolean needEvaluate = false;
         switch (info.getEvent()) {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
-                needEvaluate = true;
-                initLastNotifiedQualifiedNetwork();
                 if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                     // If FWK guided emergency's transport type during data connected state, notify
                     // the transport type when the data connection is disconnected.
                     notifyCachedTransportTypeForEmergency();
+                } else {
+                    needEvaluate = true;
+                    initLastNotifiedQualifiedNetwork();
                 }
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED:
@@ -722,8 +723,9 @@ class AccessNetworkEvaluator {
                     // If FWK guided emergency's transport type during data connecting state, notify
                     // the transport type when the data connection is failed.
                     notifyCachedTransportTypeForEmergency();
+                } else {
+                    needEvaluate = true;
                 }
-                needEvaluate = true;
                 break;
         }
         if (needEvaluate) {
