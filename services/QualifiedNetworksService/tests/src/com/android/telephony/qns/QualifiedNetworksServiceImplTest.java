@@ -93,6 +93,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
                     mMockQnsCallStatusTracker,
                     mMockWifiBm,
                     mMockWifiQm,
+                    mMockQnsMetrics,
                     slotId);
         }
 
