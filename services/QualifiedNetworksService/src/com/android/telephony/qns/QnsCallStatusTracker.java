@@ -635,7 +635,7 @@ public class QnsCallStatusTracker {
                 return QnsConstants.INVALID_VALUE;
             }
             long qualityLevel = sumDownLinkQualityLevelVolume / totalDuration;
-            Log.d(mLogTag, "getDownLinkQualityLevel for [" + QnsConstants
+            Log.d(mLogTag, "getDownLinkQualityLevel for [" + AccessNetworkConstants
                     .transportTypeToString(transportType) + "] totalQualityVolume: "
                     + sumDownLinkQualityLevelVolume + ", totalDuration: " + totalDuration
                     + " level:" + qualityLevel);
