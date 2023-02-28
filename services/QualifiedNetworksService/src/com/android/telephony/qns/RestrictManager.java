@@ -325,12 +325,15 @@ class RestrictManager {
         final ArrayList<Integer> mReleaseEventList;
         long mReleaseTime;
 
-        Restriction(int type, int[] releaseEvents, int restrictTime) {
+        Restriction(int type, int[] releaseEvents, long restrictTime) {
             mRestrictType = type;
             if (restrictTime == 0) {
                 mReleaseTime = 0;
             } else {
                 mReleaseTime = restrictTime + SystemClock.elapsedRealtime();
+                if (restrictTime > 0 && mReleaseTime < 0) {
+                    mReleaseTime = Long.MAX_VALUE;
+                }
             }
             if (releaseEvents != null && releaseEvents.length > 0) {
                 mReleaseEventList = new ArrayList<>();
@@ -354,8 +357,11 @@ class RestrictManager {
             return false;
         }
 
-        void updateRestrictTime(int timeMillis) {
+        void updateRestrictTime(long timeMillis) {
             mReleaseTime = SystemClock.elapsedRealtime() + timeMillis;
+            if (timeMillis > 0 && mReleaseTime < 0) {
+                mReleaseTime = Long.MAX_VALUE;
+            }
         }
 
         @Override
@@ -788,7 +794,7 @@ class RestrictManager {
                         mDeferredThrottlingEvent.first,
                         RESTRICT_TYPE_THROTTLING,
                         sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
-                        (int) delayMillis);
+                        delayMillis);
             }
             mDeferredThrottlingEvent = null;
         }
@@ -1173,7 +1179,7 @@ class RestrictManager {
         }
     }
 
-    void addRestriction(int transport, Restriction restrictObj, int timeMillis) {
+    void addRestriction(int transport, Restriction restrictObj, long timeMillis) {
         boolean needNotify = false;
         HashMap<Integer, Restriction> restrictionMap =
                 mRestrictInfos.get(transport).getRestrictionMap();
@@ -1185,7 +1191,8 @@ class RestrictManager {
                         + "] "
                         + restrictTypeToString(restrictObj.mRestrictType)
                         + " was restrict:"
-                        + (restriction != null));
+                        + (restriction != null)
+                        + " timeMillis:" + timeMillis);
         if (restriction == null) {
             restriction = restrictObj;
             restrictionMap.put(restrictObj.mRestrictType, restriction);
@@ -1216,7 +1223,7 @@ class RestrictManager {
         }
     }
 
-    void addRestriction(int transport, int type, int[] releaseEvents, int timeMillis) {
+    void addRestriction(int transport, int type, int[] releaseEvents, long timeMillis) {
         boolean needNotify = false;
         HashMap<Integer, Restriction> restrictionMap =
                 mRestrictInfos.get(transport).getRestrictionMap();
@@ -1228,7 +1235,8 @@ class RestrictManager {
                         + "] "
                         + restrictTypeToString(type)
                         + " was restrict:"
-                        + (restriction != null));
+                        + (restriction != null)
+                        + " timeMillis:" + timeMillis);
         if (restriction == null) {
             restriction = new Restriction(type, releaseEvents, timeMillis);
             restrictionMap.put(type, restriction);
@@ -1579,6 +1587,10 @@ class RestrictManager {
                         + "  transportType:"
                         + QnsConstants.transportTypeToString(transportType));
         if (throttle) {
+            if (throttleTime < 0) {
+                //FWK send minus value of throttle expiration time, consider anomaly report at here.
+                return;
+            }
             long delayMillis = throttleTime - SystemClock.elapsedRealtime();
             if (delayMillis > 0) {
                 if (mDataConnectionStatusTracker.isActiveState()) {
@@ -1590,11 +1602,15 @@ class RestrictManager {
                                     + throttleTime);
                     mDeferredThrottlingEvent = new Pair<>(transportType, throttleTime);
                 } else {
+                    if (throttleTime == Long.MAX_VALUE || throttleTime == Integer.MAX_VALUE) {
+                        //Keep throttle status until receiving un-throttle event.
+                        delayMillis = 0;
+                    }
                     addRestriction(
                             transportType,
                             RESTRICT_TYPE_THROTTLING,
                             sReleaseEventMap.get(RESTRICT_TYPE_THROTTLING),
-                            (int) delayMillis);
+                            delayMillis);
                 }
             }
         } else {

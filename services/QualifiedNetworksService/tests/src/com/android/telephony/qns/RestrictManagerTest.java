@@ -932,6 +932,75 @@ public class RestrictManagerTest extends QnsTest {
     }
 
     @Test
+    public void testRestrictWithThrottlingWithThrottleTimeMax() {
+        long throttleTime = Long.MAX_VALUE;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        long elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+
+        throttleTime = Integer.MAX_VALUE;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
+    public void testRestrictWithThrottlingWithAbnormalThrottleTime() {
+        long throttleTime = -134243;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+
+        throttleTime = Long.MAX_VALUE - 100;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        long elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed * 2);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(elapsed + 1000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
     public void testDeferThrottlingDuringActiveState() {
         long throttleTime = SystemClock.elapsedRealtime() + 10000;
         DataConnectionStatusTracker.DataConnectionChangedInfo dcInfo =
