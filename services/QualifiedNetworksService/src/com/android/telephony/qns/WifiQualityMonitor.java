@@ -16,14 +16,12 @@
 package com.android.telephony.qns;
 
 import static android.net.NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 
 import static com.android.telephony.qns.QnsConstants.THRESHOLD_EQUAL_OR_LARGER;
 
 import android.annotation.NonNull;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -54,16 +52,14 @@ public class WifiQualityMonitor extends QualityMonitor {
     private final WifiManager mWifiManager;
     private final ConnectivityManager mConnectivityManager;
     private final WiFiThresholdCallback mWiFiThresholdCallback;
-    private final WiFiStatusCallback mWiFiStatusCallback;
     private final NetworkRequest.Builder mBuilder;
 
     private int mWifiRssi;
-    private final Handler mHandler;
+    @VisibleForTesting Handler mHandler;
     private int mRegisteredThreshold = SIGNAL_STRENGTH_UNSPECIFIED;
-    private boolean mIsWifiConnected = true;
+    private static final int BACKHAUL_TIMER_DEFAULT = 3000;
+    static final int INVALID_RSSI = -127;
     private boolean mIsRegistered = false;
-    private boolean mWifiStateIntentEnabled = false;
-    private boolean mIsBackhaulRunning;
 
     private class WiFiThresholdCallback extends ConnectivityManager.NetworkCallback {
         /** Callback Received based on meeting Wifi RSSI Threshold Registered or Wifi Lost */
@@ -71,64 +67,62 @@ public class WifiQualityMonitor extends QualityMonitor {
         public void onCapabilitiesChanged(
                 @NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
             super.onCapabilitiesChanged(network, networkCapabilities);
-            mWifiRssi = networkCapabilities.getSignalStrength();
-            Log.d(mTag, "onCapabilitiesChanged, wifi rssi = " + mWifiRssi);
-            mHandler.sendEmptyMessage(EVENT_WIFI_RSSI_CHANGED);
+            Log.d(
+                    mTag,
+                    "onCapabilitiesChanged wlan network="
+                            + network
+                            + ", capabilities="
+                            + networkCapabilities);
+            if (networkCapabilities != null) {
+                mWifiRssi = networkCapabilities.getSignalStrength();
+                Log.d(mTag, "onCapabilitiesChanged_rssi: " + mWifiRssi);
+                validateWqmStatus(mWifiRssi);
+            }
         }
-    }
 
-    private class WiFiStatusCallback extends ConnectivityManager.NetworkCallback {
-        /** Called when connected network is disconnected. */
+        /** Called when current threshold goes below the threshold set. */
         @Override
         public void onLost(@NonNull Network network) {
             super.onLost(network);
-            Log.d(mTag, "onLost: " + network);
-            mIsWifiConnected = false;
-            if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-                Log.d(mTag, "Stop all active backhaul timers");
-                mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
-                mWaitingThresholds.clear();
-            }
-            mHandler.sendEmptyMessage(EVENT_WIFI_STATE_CHANGED);
-        }
-
-        /** Called when the framework connects network & is ready for use. */
-        @Override
-        public void onAvailable(@NonNull Network network) {
-            super.onAvailable(network);
-            Log.d(mTag, "onAvailable: " + network);
-            NetworkCapabilities networkCapabilities =
-                    mConnectivityManager.getNetworkCapabilities(network);
-            if (networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                if (!mIsWifiConnected) {
-                    mIsWifiConnected = true;
-                    mHandler.sendEmptyMessage(EVENT_WIFI_STATE_CHANGED);
-                } else {
-                    Log.d(mTag, "mIsWifiConnected is already true");
-                }
-            }
+            mWifiRssi = getCurrentQuality(SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
+            Log.d(mTag, "onLost_rssi=" + mWifiRssi);
+            validateWqmStatus(mWifiRssi);
         }
     }
 
-    final BroadcastReceiver mWifiStateIntentReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    String action = intent.getAction();
-                    Log.d(mTag, "onReceive action = " + action);
-                    if (WifiManager.RSSI_CHANGED_ACTION.equals(action)) {
-                        mWifiRssi = intent.getIntExtra(WifiManager.EXTRA_NEW_RSSI, -200);
-                        Log.d(mTag, "Threshold on RSSI change = " + mWifiRssi);
-                        if (mRegisteredThreshold != SIGNAL_STRENGTH_UNSPECIFIED
-                                && mWifiRssi < 0
-                                && mWifiRssi > SIGNAL_STRENGTH_UNSPECIFIED) {
-                            mHandler.sendEmptyMessage(EVENT_WIFI_RSSI_CHANGED);
-                        } else {
-                            Log.d(mTag, "Current Registered_Vs_RSSI= " + mRegisteredThreshold);
-                        }
-                    }
-                }
-            };
+    @VisibleForTesting
+    synchronized void validateWqmStatus(int wifiRssi) {
+        if (isWifiRssiValid(wifiRssi)) {
+            Log.d(mTag, "Registered Threshold @ Wqm Status check =" + mRegisteredThreshold);
+            if (!mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
+                mHandler.obtainMessage(EVENT_WIFI_RSSI_CHANGED, wifiRssi, 0).sendToTarget();
+            } else {
+                Log.d(mTag, "BackhaulCheck in Progress , skip validation");
+            }
+        } else {
+            Log.d(mTag, "Cancel backhaul if running for invalid SS received");
+            clearBackHaulTimer();
+        }
+    }
+
+    private boolean isWifiRssiValid(int wifiRssi) {
+        if (mRegisteredThreshold != SIGNAL_STRENGTH_UNSPECIFIED
+                && wifiRssi < 0
+                && wifiRssi > SIGNAL_STRENGTH_UNSPECIFIED
+                && wifiRssi != INVALID_RSSI) {
+            Log.d(mTag, "rssi under check is valid");
+            return true;
+        }
+        return false;
+    }
+
+    private void clearBackHaulTimer() {
+        if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
+            Log.d(mTag, "Stop all active backhaul timers");
+            mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
+            mWaitingThresholds.clear();
+        }
+    }
 
     /**
      * Create WifiQualityMonitor object for accessing WifiManager, ConnectivityManager to monitor
@@ -141,6 +135,7 @@ public class WifiQualityMonitor extends QualityMonitor {
         HandlerThread handlerThread = new HandlerThread(mTag);
         handlerThread.start();
         mHandler = new WiFiEventsHandler(handlerThread.getLooper());
+
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         mWifiManager = mContext.getSystemService(WifiManager.class);
         if (mConnectivityManager == null) {
@@ -155,11 +150,7 @@ public class WifiQualityMonitor extends QualityMonitor {
                 new NetworkRequest.Builder()
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
-                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
-
-        /* Network Callback for Threshold Register. */
-        mWiFiStatusCallback = new WiFiStatusCallback();
-        Log.d(mTag, "created WifiQualityMonitor");
+                        .addTransportType(TRANSPORT_WIFI);
     }
 
     /** Returns current Wifi RSSI information */
@@ -217,8 +208,6 @@ public class WifiQualityMonitor extends QualityMonitor {
     private void checkForThresholdRegistration() {
         // Current check is on measurement type as RSSI
         // Future to be enhanced for WiFi PER.
-        mWifiRssi = getCurrentQuality(SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Log.d(mTag, "Current Wifi Threshold = " + mWifiRssi);
         int newThreshold = SIGNAL_STRENGTH_UNSPECIFIED;
         for (Map.Entry<String, List<Threshold>> entry : mThresholdsList.entrySet()) {
             for (Threshold t : entry.getValue()) {
@@ -249,55 +238,57 @@ public class WifiQualityMonitor extends QualityMonitor {
         }
     }
 
-    private void validateForWifiBackhaul() {
-        mIsBackhaulRunning = false;
+    private void validateForWifiBackhaul(int wifiRssi) {
+        if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
+            mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
+        }
         for (Map.Entry<String, List<Threshold>> entry : mThresholdsList.entrySet()) {
             if (mWaitingThresholds.getOrDefault(entry.getKey(), false)) {
                 continue;
             }
             for (Threshold th : entry.getValue()) {
-                if (th.isMatching(mWifiRssi)) {
+                if (th.isMatching(wifiRssi)) {
                     Log.d(mTag, "RSSI matched for threshold = " + th);
-                    handleMatchingThreshold(entry.getKey(), th);
+                    handleMatchingThreshold(entry.getKey(), th, wifiRssi);
                 }
             }
         }
     }
 
-    private void handleMatchingThreshold(String key, Threshold th) {
+    private void handleMatchingThreshold(String key, Threshold th, int wifiRssi) {
         int backhaul = th.getWaitTime();
         if (backhaul < 0 && th.getMatchType() != QnsConstants.THRESHOLD_EQUAL_OR_SMALLER) {
             backhaul = BACKHAUL_TIMER_DEFAULT;
         }
         if (backhaul > 0) {
             mWaitingThresholds.put(key, true);
-            if (!mIsBackhaulRunning) {
+            if (!mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
                 Log.d(mTag, "Starting backhaul timer = " + backhaul);
                 mHandler.sendEmptyMessageDelayed(EVENT_WIFI_NOTIFY_TIMER_EXPIRED, backhaul);
-                mIsBackhaulRunning = true;
             }
         } else {
-            checkAndNotifySignalStrength(key);
+            Log.d(mTag, "Notify for RSSI Threshold Registered w/o Backhaul = " + backhaul);
+            checkAndNotifySignalStrength(key, wifiRssi);
         }
     }
 
-    private void validateThresholdsAfterBackHaul() {
+    private void validateThresholdsAfterBackHaul(int wifiRssi) {
         mWaitingThresholds.clear();
         for (Map.Entry<String, List<Threshold>> entry : mThresholdsList.entrySet()) {
-            checkAndNotifySignalStrength(entry.getKey());
+            checkAndNotifySignalStrength(entry.getKey(), wifiRssi);
         }
     }
 
-    private void checkAndNotifySignalStrength(String key) {
+    private void checkAndNotifySignalStrength(String key, int wifiRssi) {
         List<Threshold> thresholdsList = mThresholdsList.get(key);
         if (thresholdsList == null) return;
         Log.d(mTag, "checkAndNotifySignalStrength for " + thresholdsList);
         List<Threshold> matchedThresholds = new ArrayList<>();
         Threshold threshold;
         for (Threshold th : thresholdsList) {
-            if (th.isMatching(mWifiRssi)) {
+            if (th.isMatching(wifiRssi)) {
                 threshold = th.copy();
-                threshold.setThreshold(mWifiRssi);
+                threshold.setThreshold(wifiRssi);
                 matchedThresholds.add(threshold);
             }
         }
@@ -310,62 +301,30 @@ public class WifiQualityMonitor extends QualityMonitor {
         if (!register) {
             unregisterCallback();
             if (mThresholdsList.isEmpty()) {
-                registerWiFiReceiver(false);
-                if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-                    Log.d(mTag, "Stop all active backhaul timers");
-                    mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
-                    mWaitingThresholds.clear();
-                }
+                clearBackHaulTimer();
+                mWaitingThresholds.clear();
             }
         } else {
             Log.d(mTag, "Listening to threshold = " + mRegisteredThreshold);
             mBuilder.setSignalStrength(mRegisteredThreshold);
             registerCallback();
-            registerWiFiReceiver(true);
         }
     }
 
     private void unregisterCallback() {
         if (mIsRegistered) {
-            Log.d(mTag, "Unregister CallBack");
-            mConnectivityManager.unregisterNetworkCallback(mWiFiThresholdCallback);
-            mConnectivityManager.unregisterNetworkCallback(mWiFiStatusCallback);
+            Log.d(mTag, "Unregister callbacks");
             mIsRegistered = false;
+            mConnectivityManager.unregisterNetworkCallback(mWiFiThresholdCallback);
         }
     }
 
     private void registerCallback() {
         unregisterCallback();
         if (!mIsRegistered) {
-            Log.d(mTag, "Register CallBacks");
+            Log.d(mTag, "Register callbacks");
             mConnectivityManager.registerNetworkCallback(mBuilder.build(), mWiFiThresholdCallback);
-            mConnectivityManager.registerNetworkCallback(
-                    new NetworkRequest.Builder()
-                            .clearCapabilities()
-                            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                            .build(),
-                    mWiFiStatusCallback);
             mIsRegistered = true;
-        }
-    }
-
-    private synchronized void registerWiFiReceiver(boolean register) {
-        if (register) {
-            if (!mWifiStateIntentEnabled) {
-                // Register for RSSI Changed Action intent.
-                Log.d(mTag, "registerReceiver for RSSI_CHANGED");
-                IntentFilter filter = new IntentFilter();
-                filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
-                mContext.registerReceiver(mWifiStateIntentReceiver, filter);
-                mWifiStateIntentEnabled = true;
-            }
-        } else {
-            if (mWifiStateIntentEnabled) {
-                Log.d(mTag, "unregisterReceiver RSSI_CHANGED");
-                mContext.unregisterReceiver(mWifiStateIntentReceiver);
-                mWifiStateIntentEnabled = false;
-            }
         }
     }
 
@@ -383,19 +342,15 @@ public class WifiQualityMonitor extends QualityMonitor {
         public void handleMessage(Message msg) {
             Log.d(mTag, "handleMessage what = " + msg.what);
             switch (msg.what) {
-                case EVENT_WIFI_STATE_CHANGED:
-                    registerWiFiReceiver(mIsWifiConnected);
-                    break;
                 case EVENT_WIFI_RSSI_CHANGED:
-                    validateForWifiBackhaul();
+                    Log.d(mTag, "start validating for rssi = " + msg.arg1);
+                    validateForWifiBackhaul(msg.arg1);
                     break;
                 case EVENT_WIFI_NOTIFY_TIMER_EXPIRED:
                     mWifiRssi = getCurrentQuality(SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
                     Log.d(mTag, "Backhaul timer expired, wifi rssi = " + mWifiRssi);
-                    if (mRegisteredThreshold != SIGNAL_STRENGTH_UNSPECIFIED
-                            && mWifiRssi < 0
-                            && mWifiRssi > SIGNAL_STRENGTH_UNSPECIFIED) {
-                        validateThresholdsAfterBackHaul();
+                    if (isWifiRssiValid(mWifiRssi)) {
+                        validateThresholdsAfterBackHaul(mWifiRssi);
                     }
                     break;
                 default:
@@ -407,7 +362,6 @@ public class WifiQualityMonitor extends QualityMonitor {
     @VisibleForTesting
     @Override
     public void close() {
-        registerWiFiReceiver(false);
         unregisterCallback();
         mWifiRssi = SIGNAL_STRENGTH_UNSPECIFIED;
         mIsRegistered = false;
@@ -422,14 +376,10 @@ public class WifiQualityMonitor extends QualityMonitor {
         super.dump(pw, prefix);
         pw.println(
                 prefix
-                        + "mIsWifiConnected="
-                        + mIsWifiConnected
                         + ", mIsRegistered="
                         + mIsRegistered
-                        + ", mWifiStateIntentEnabled="
-                        + mWifiStateIntentEnabled
-                        + ", mIsBackhaulRunning="
-                        + mIsBackhaulRunning);
+                        + ", backhaulstatus ="
+                        + mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
         pw.println(
                 prefix
                         + "mWifiRssi="
