@@ -702,19 +702,20 @@ public class QnsCallStatusTracker {
             }
         }
 
+        @VisibleForTesting
         int thresholdBreached(MediaQualityStatus status) {
             int breachedReason = 0;
             QnsCarrierConfigManager.RtpMetricsConfig rtpConfig = mConfigManager.getRTPMetricsData();
             if (status.getRtpPacketLossRate() > 0
-                    && status.getRtpPacketLossRate() > rtpConfig.mPktLossRate) {
+                    && status.getRtpPacketLossRate() >= rtpConfig.mPktLossRate) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS;
             }
             if (status.getRtpJitterMillis() > 0
-                    && status.getRtpJitterMillis() > rtpConfig.mJitter) {
+                    && status.getRtpJitterMillis() >= rtpConfig.mJitter) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_JITTER;
             }
             if (status.getRtpInactivityMillis() > 0
-                    && status.getRtpInactivityMillis() > rtpConfig.mNoRtpInterval) {
+                    && status.getRtpInactivityMillis() >= rtpConfig.mNoRtpInterval) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP;
             }
             return breachedReason;
