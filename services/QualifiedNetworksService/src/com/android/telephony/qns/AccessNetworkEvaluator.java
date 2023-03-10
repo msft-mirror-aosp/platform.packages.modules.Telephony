@@ -675,7 +675,11 @@ class AccessNetworkEvaluator {
                     log(
                             "onEmergencyPreferredTransportTypeChanged transport:"
                                     + QnsConstants.transportTypeToString(transport));
-                    if (mDataConnectionStatusTracker.isInactiveState()) {
+                    if (mDataConnectionStatusTracker.isInactiveState()
+                            || (mDataConnectionStatusTracker.isActiveState()
+                                    && mCallType == QnsConstants.CALL_TYPE_IDLE)) {
+                        // If data network state is inactive OR active but call is not active yet,
+                        // QNS will follow domain selection's decision.
                         enforceNotifyQualifiedNetworksWithTransportType(transport);
                     } else {
                         log(
@@ -1170,7 +1174,7 @@ class AccessNetworkEvaluator {
         }
         log("evaluate reason:" + evaluateSpecificReasonToString(specificReason));
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS
-                && mDataConnectionStatusTracker.isInactiveState()) {
+                && !mDataConnectionStatusTracker.isActiveState()) {
             log("QNS only handles HO of EMERGENCY data connection");
             return;
         }
