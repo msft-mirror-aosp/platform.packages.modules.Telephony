@@ -63,6 +63,10 @@ class AccessNetworkEvaluator {
     private static final int EVENT_SIP_DIALOG_SESSION_STATE_CHANGED = EVENT_BASE + 12;
     private static final int EVALUATE_SPECIFIC_REASON_NONE = 0;
     private static final int EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE = 1;
+    private static final int EVALUATE_SPECIFIC_REASON_DATA_DISCONNECTED = 2;
+    private static final int EVALUATE_SPECIFIC_REASON_DATA_FAILED = 3;
+    private static final int EVALUATE_SPECIFIC_REASON_DATA_CONNECTED = 4;
+
     protected final int mSlotIndex;
     protected final Context mContext;
     private final String mLogTag;
@@ -708,32 +712,50 @@ class AccessNetworkEvaluator {
             DataConnectionStatusTracker.DataConnectionChangedInfo info) {
         log("onDataConnectionStateChanged info:" + info);
         boolean needEvaluate = false;
+        int evaluateSpecificReason = EVALUATE_SPECIFIC_REASON_NONE;
         switch (info.getEvent()) {
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED:
+                evaluateSpecificReason = EVALUATE_SPECIFIC_REASON_DATA_DISCONNECTED;
                 if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                     // If FWK guided emergency's transport type during data connected state, notify
                     // the transport type when the data connection is disconnected.
                     notifyCachedTransportTypeForEmergency();
+                    // When cellular is not available, CellularQualityMonitor will stop listening to
+                    // TelephonyCallback. Thresholds for Emergency apn may not be reset as ANE for
+                    // emergency only evaluates while data is connected. CellularQualityMonitor will
+                    // not listen to TelephonyCallback again until the set of threshold values
+                    // changed. Resetting thresholds for emergency after the emergency connection
+                    // disconnects.
+                    unregisterThresholdToQualityMonitor();
                 } else {
                     needEvaluate = true;
                     initLastNotifiedQualifiedNetwork();
                 }
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_CONNECTED:
+                evaluateSpecificReason = EVALUATE_SPECIFIC_REASON_DATA_CONNECTED;
                 mHandler.post(() -> onDataConnectionConnected(info.getTransportType()));
                 break;
             case DataConnectionStatusTracker.EVENT_DATA_CONNECTION_FAILED:
+                evaluateSpecificReason = EVALUATE_SPECIFIC_REASON_DATA_FAILED;
                 if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
                     // If FWK guided emergency's transport type during data connecting state, notify
                     // the transport type when the data connection is failed.
                     notifyCachedTransportTypeForEmergency();
+                    // When cellular is not available, CellularQualityMonitor will stop listening to
+                    // TelephonyCallback. Thresholds for Emergency apn may not be reset as ANE for
+                    // emergency only evaluates while data is connected. CellularQualityMonitor will
+                    // not listen to TelephonyCallback again until the set of threshold values
+                    // changed. Resetting thresholds for emergency after the emergency connection
+                    // disconnects.
+                    unregisterThresholdToQualityMonitor();
                 } else {
                     needEvaluate = true;
                 }
                 break;
         }
         if (needEvaluate) {
-            evaluate();
+            evaluate(evaluateSpecificReason);
         }
     }
 
@@ -1173,10 +1195,11 @@ class AccessNetworkEvaluator {
             return;
         }
         log("evaluate reason:" + evaluateSpecificReasonToString(specificReason));
-        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS
-                && !mDataConnectionStatusTracker.isActiveState()) {
-            log("QNS only handles HO of EMERGENCY data connection");
-            return;
+        if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            if (!mDataConnectionStatusTracker.isActiveState()) {
+                log("QNS only handles HO of EMERGENCY data connection");
+                return;
+            }
         }
 
         /* Check handover policy */
@@ -1875,6 +1898,12 @@ class AccessNetworkEvaluator {
             return "EVALUATE_SPECIFIC_REASON_NONE";
         } else if (specificReason == EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE) {
             return "EVALUATE_SPECIFIC_REASON_IWLAN_DISABLE";
+        } else if (specificReason == EVALUATE_SPECIFIC_REASON_DATA_DISCONNECTED) {
+            return "EVALUATE_SPECIFIC_REASON_DATA_DISCONNECTED";
+        } else if (specificReason == EVALUATE_SPECIFIC_REASON_DATA_FAILED) {
+            return "EVALUATE_SPECIFIC_REASON_DATA_FAILED";
+        } else if (specificReason == EVALUATE_SPECIFIC_REASON_DATA_CONNECTED) {
+            return "EVALUATE_SPECIFIC_REASON_DATA_CONNECTED";
         }
         return "UNKNOWN";
     }
