@@ -63,6 +63,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,6 +72,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 @RunWith(JUnit4.class)
 public class AccessNetworkEvaluatorTest extends QnsTest {
@@ -1733,5 +1735,53 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertFalse(matchedAnsp.isEmpty());
         assertEquals(
                 QnsConstants.CALL_TYPE_VIDEO, matchedAnsp.get(0).getPreCondition().getCallType());
+    }
+
+    @Test
+    public void testDataConnectionDisconnectedOnSos_ResettingThresholds() {
+        AccessNetworkEvaluator aneSos =
+                new AccessNetworkEvaluator(
+                        mQnsComponents[mSlotIndex],
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
+                        mRestrictManager,
+                        mDataConnectionStatusTracker,
+                        mSlotIndex);
+        aneSos.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        aneSos.onDataConnectionStateChanged(
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        aneSos.onDataConnectionStateChanged(
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        DataConnectionStatusTracker.EVENT_DATA_CONNECTION_FAILED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        verify(mMockWifiQm, times(2)).updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mSlotIndex, null);
+    }
+
+    @Test
+    public void testEvaluateSpecificReasonToString() throws Exception {
+        Method method = AccessNetworkEvaluator.class.getDeclaredMethod(
+                "evaluateSpecificReasonToString", int.class);
+        method.setAccessible(true);
+
+        IntStream.rangeClosed(0, 4).forEach(i -> {
+            try {
+                assertTrue(((String) method.invoke(mAne, i)).startsWith(
+                        "EVALUATE_SPECIFIC_REASON_"));
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }
