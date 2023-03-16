@@ -17,6 +17,13 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+genrule {
+  name: "statslog-qns-java-gen",
+  tools: ["stats-log-api-gen"],
+  cmd: "$(location stats-log-api-gen) --java $(out) --module qns --javaPackage com.android.telephony.qns.stats --javaClass QnsStatsLog --worksource",
+  out: ["com/android/telephony/qns/stats/QnsStatsLog.java"],
+}
+
 android_app {
     name: "QualifiedNetworksService",
     system_ext_specific: true,
@@ -25,11 +32,13 @@ android_app {
     srcs: [
         "src/**/*.java",
         "src/**/I*.aidl",
+        ":statslog-qns-java-gen",
     ],
 
     static_libs: [
         "androidx.appcompat_appcompat",
         "androidx.browser_browser",
+        "TelephonyStatsLib",
     ],
 
     libs: [
@@ -72,6 +81,7 @@ android_test {
         "src/**/*.java",
         "src/**/I*.aidl",
         "tests/**/*.java",
+        ":statslog-qns-java-gen",
     ],
     libs: [
         "android.test.runner",
@@ -90,8 +100,9 @@ android_test {
         "frameworks-base-testutils",
         "mockito-target-extended-minus-junit4",
         "platform-test-annotations",
-         "truth-prebuilt",
-         "testables",
+        "truth-prebuilt",
+        "testables",
+        "TelephonyStatsLib",
     ],
     jni_libs: [
         "libdexmakerjvmtiagent",

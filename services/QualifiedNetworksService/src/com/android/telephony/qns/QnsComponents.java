@@ -46,6 +46,7 @@ class QnsComponents {
     private final List<Integer> mSlotIds;
     private IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     private WifiQualityMonitor mWifiQualityMonitor;
+    private QnsMetrics mQnsMetrics;
 
     /** Constructor to instantiate QnsComponents class. */
     QnsComponents(Context context) {
@@ -113,6 +114,9 @@ class QnsComponents {
                 mQnsImsManagers.get(slotId),
                 mQnsTelephonyListeners.get(slotId),
                 slotId);
+        if (mQnsMetrics == null) {
+            mQnsMetrics = new QnsMetrics(mContext);
+        }
 
         Log.d(mLogTag, "QnsComponents created for slot " + slotId);
     }
@@ -132,6 +136,7 @@ class QnsComponents {
             QnsCallStatusTracker qnsCallStatusTracker,
             WifiBackhaulMonitor wifiBackhaulMonitor,
             WifiQualityMonitor wifiQualityMonitor,
+            QnsMetrics qnsMetrics,
             int slotId) {
         this(context);
         mSlotIds.add(slotId);
@@ -155,6 +160,7 @@ class QnsComponents {
                 qnsImsManager,
                 qnsTelephonyListener,
                 slotId);
+        mQnsMetrics = qnsMetrics;
     }
 
     /** Returns instance of AlternativeEventListener for given slotId. */
@@ -217,6 +223,11 @@ class QnsComponents {
         return mWifiQualityMonitor;
     }
 
+    /** Returns instance of WifiQualityMonitor. */
+    QnsMetrics getQnsMetrics() {
+        return mQnsMetrics;
+    }
+
     /** Returns context. */
     Context getContext() {
         return mContext;
@@ -229,8 +240,10 @@ class QnsComponents {
         if (mSlotIds.size() == 1) {
             mIwlanNetworkStatusTracker.close();
             mWifiQualityMonitor.close();
+            mQnsMetrics.close();
             mIwlanNetworkStatusTracker = null;
             mWifiQualityMonitor = null;
+            mQnsMetrics = null;
         }
 
         WifiBackhaulMonitor wifiBackhaulMonitor = mWifiBackhaulMonitors.get(slotId);

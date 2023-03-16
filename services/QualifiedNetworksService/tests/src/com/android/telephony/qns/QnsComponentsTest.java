@@ -87,6 +87,7 @@ public class QnsComponentsTest extends QnsTest {
                 mMockQnsCallStatusTracker,
                 mMockWifiBm,
                 mMockWifiQm,
+                mMockQnsMetrics,
                 slotId);
 
         assertNotNull(qnsComponents.getQnsTelephonyListener(slotId));
@@ -101,6 +102,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNotNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNotNull(qnsComponents.getWifiQualityMonitor());
         assertNotNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNotNull(qnsComponents.getQnsMetrics());
 
         qnsComponents.closeComponents(slotId);
 
@@ -116,6 +118,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNull(qnsComponents.getWifiQualityMonitor());
         assertNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNull(qnsComponents.getQnsMetrics());
 
         verify(mMockQnsTelephonyListener).close();
         verify(mMockQnsImsManager).close();
@@ -129,5 +132,6 @@ public class QnsComponentsTest extends QnsTest {
         verify(mMockWifiBm).close();
         verify(mMockWifiQm).close();
         verify(mMockIwlanNetworkStatusTracker).close();
+        verify(mMockQnsMetrics).close();
     }
 }
