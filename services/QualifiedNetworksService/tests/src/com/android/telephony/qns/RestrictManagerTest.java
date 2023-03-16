@@ -75,6 +75,9 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 @RunWith(JUnit4.class)
 public class RestrictManagerTest extends QnsTest {
 
@@ -144,6 +147,7 @@ public class RestrictManagerTest extends QnsTest {
                         mMockQnsCallStatusTracker,
                         mMockWifiBm,
                         mMockWifiQm,
+                        mMockQnsMetrics,
                         0);
 
         mRestrictManager =
@@ -2790,4 +2794,29 @@ public class RestrictManagerTest extends QnsTest {
         mRestrictManager.releaseRestriction(
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING, true);
     }
+
+    @Test
+    public void testSendRestrictionsForMetrics() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        Handler handler = new Handler(mHandlerThread.getLooper()) {
+            public void handleMessage(Message msg) {
+                latch.countDown();
+            }
+        };
+
+        mRestrictManager.registerRestrictInfoChanged(handler, 0);
+        assertNotNull(mRestrictManager.mRestrictInfoRegistrant);
+
+        mRestrictManager.addRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_RTP_LOW_QUALITY,
+                sReleaseEventMap.get(RESTRICT_TYPE_NON_PREFERRED_TRANSPORT),
+                DEFAULT_RESTRICT_NON_PREFERRED_TRANSPORT_TIME);
+
+        assertTrue(latch.await(3, TimeUnit.SECONDS));
+
+        mRestrictManager.unRegisterRestrictInfoChanged(handler);
+        assertNull(mRestrictManager.mRestrictInfoRegistrant);
+    }
+
 }

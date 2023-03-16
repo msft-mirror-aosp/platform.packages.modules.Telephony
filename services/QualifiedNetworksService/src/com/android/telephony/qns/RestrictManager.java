@@ -162,6 +162,7 @@ class RestrictManager {
     private QnsCallStatusTracker.ActiveCallTracker mActiveCallTracker;
     private QnsImsManager mQnsImsManager;
     private WifiBackhaulMonitor mWifiBackhaulMonitor;
+    private QnsMetrics mQnsMetrics;
     private int mNetCapability;
     private int mSlotId;
     private int mTransportType = AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
@@ -456,6 +457,7 @@ class RestrictManager {
         mDataConnectionStatusTracker = dcst;
         mQnsCallStatusTracker = qnsComponents.getQnsCallStatusTracker(mSlotId);
         mActiveCallTracker = qnsComponents.getQnsCallStatusTracker(mSlotId).getActiveCallTracker();
+        mQnsMetrics = qnsComponents.getQnsMetrics();
         mDataConnectionStatusTracker.registerDataConnectionStatusChanged(
                 mHandler, EVENT_DATA_CONNECTION_CHANGED);
         if (mNetCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
@@ -1440,6 +1442,9 @@ class RestrictManager {
         Log.d(mLogTag, "notifyRestrictInfoChanged");
         if (mRestrictInfoRegistrant != null) {
             mRestrictInfoRegistrant.notifyResult(mRestrictInfos);
+
+            // metrics
+            sendRestrictionsForMetrics();
         } else {
             Log.d(mLogTag, "notifyRestrictInfoChanged. no Registrant.");
         }
@@ -1683,5 +1688,25 @@ class RestrictManager {
                         + ", mCallState="
                         + QnsConstants.callStateToString(mCallState));
         pw.println(prefix + "mRestrictInfos=" + mRestrictInfos);
+    }
+
+    private void sendRestrictionsForMetrics() {
+        if (mNetCapability != NetworkCapabilities.NET_CAPABILITY_IMS) {
+            return;
+        }
+        ArrayList<Integer> wlanRestrictions =
+                new ArrayList<>(
+                        mRestrictInfos
+                                .get(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                                .getRestrictionMap()
+                                .keySet());
+        ArrayList<Integer> wwanRestrictions =
+                new ArrayList<>(
+                        mRestrictInfos
+                                .get(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
+                                .getRestrictionMap()
+                                .keySet());
+        mQnsMetrics.reportAtomForRestrictions(mNetCapability, mSlotId,
+                wlanRestrictions, wwanRestrictions, mQnsCarrierConfigManager.getCarrierId());
     }
 }
