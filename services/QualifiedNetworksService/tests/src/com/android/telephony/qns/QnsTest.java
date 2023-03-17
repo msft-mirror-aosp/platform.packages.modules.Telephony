@@ -81,6 +81,7 @@ public abstract class QnsTest {
     @Mock protected QnsTelephonyListener mMockQnsTelephonyListener;
     @Mock protected QnsCallStatusTracker mMockQnsCallStatusTracker;
     @Mock protected WifiBackhaulMonitor mMockWifiBm;
+    @Mock protected QnsMetrics mMockQnsMetrics;
 
     protected QnsComponents[] mQnsComponents = new QnsComponents[2];
 
@@ -112,6 +113,7 @@ public abstract class QnsTest {
                         mMockQnsCallStatusTracker,
                         mMockWifiBm,
                         mMockWifiQm,
+                        mMockQnsMetrics,
                         0);
 
         mQnsComponents[1] =
@@ -129,6 +131,7 @@ public abstract class QnsTest {
                         mMockQnsCallStatusTracker,
                         mMockWifiBm,
                         mMockWifiQm,
+                        mMockQnsMetrics,
                         1);
     }
 
