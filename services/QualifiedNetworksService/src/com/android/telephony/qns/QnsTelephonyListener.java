@@ -37,6 +37,7 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
+import android.telephony.ims.ImsReasonInfo;
 import android.telephony.ims.MediaQualityStatus;
 import android.util.Log;
 
@@ -69,6 +70,7 @@ class QnsTelephonyListener {
     QnsRegistrantList mSrvccStateListener = new QnsRegistrantList();
     QnsRegistrantList mSubscriptionIdListener = new QnsRegistrantList();
     QnsRegistrantList mIwlanServiceStateListener = new QnsRegistrantList();
+    QnsRegistrantList mImsCallDropDisconnectCauseListener = new QnsRegistrantList();
     List<Consumer<List<CallState>>> mCallStatesConsumerList = new ArrayList<>();
     List<Consumer<Integer>> mSrvccStateConsumerList = new ArrayList<>();
     List<Consumer<MediaQualityStatus>> mMediaQualityConsumerList = new ArrayList<>();
@@ -327,6 +329,21 @@ class QnsTelephonyListener {
     }
 
     /**
+     * Register an event for ImsCallDropDisconnectCause changed.
+     *
+     * @param h the Handler to get event.
+     * @param what the event.
+     * @param userObj user object.
+     */
+    void registerImsCallDropDisconnectCauseListener(Handler h, int what, Object userObj) {
+        log("registerImsCallDropDisconnectCauseListener");
+        if (h != null) {
+            QnsRegistrant r = new QnsRegistrant(h, what, userObj);
+            mImsCallDropDisconnectCauseListener.add(r);
+        }
+    }
+
+    /**
      * Unregister an event for QnsTelephonyInfo changed.
      *
      * @param netCapability Network Capability to be notified.
@@ -406,6 +423,18 @@ class QnsTelephonyListener {
         }
     }
 
+    /**
+     * Unregister an event for ImsCallDropDisconnectCause state changed.
+     *
+     * @param h the handler to get event.
+     */
+    void unregisterImsCallDropDisconnectCauseListener(Handler h) {
+        log("unregisterImsCallDropDisconnectCauseListener");
+        if (h != null) {
+            mImsCallDropDisconnectCauseListener.remove(h);
+        }
+    }
+
     private void createTelephonyListener() {
         if (mTelephonyListener == null) {
             mTelephonyListener = new TelephonyListener(mContext.getMainExecutor());
@@ -428,6 +457,10 @@ class QnsTelephonyListener {
             mTelephonyListener.setSrvccStateListener(
                     (int srvccState) -> {
                         onSrvccStateChanged(srvccState);
+                    });
+            mTelephonyListener.setImsCallDisconnectCauseListener(
+                    (ImsReasonInfo imsReasonInfo) -> {
+                        onImsCallDisconnectCauseChanged(imsReasonInfo);
                     });
         }
     }
@@ -721,6 +754,10 @@ class QnsTelephonyListener {
         mSubscriptionIdListener.notifyResult(subId);
     }
 
+    protected void onImsCallDisconnectCauseChanged(ImsReasonInfo imsReasonInfo) {
+        mImsCallDropDisconnectCauseListener.notifyResult(imsReasonInfo);
+    }
+
     protected void log(String s) {
         Log.d(mLogTag, s);
     }
@@ -767,6 +804,11 @@ class QnsTelephonyListener {
     protected interface OnCallStatesChangedCallback {
         /** Notify the Call state changed. */
         void onCallStatesChanged(List<CallState> callStateList);
+    }
+
+    protected interface OnImsCallDisconnectCauseListener {
+        /** Notify the call disconnected cause changed. */
+        void onImsCallDisconnectCauseChanged(@NonNull ImsReasonInfo imsReasonInfo);
     }
 
     protected static class Archiving<V> {
@@ -1037,7 +1079,8 @@ class QnsTelephonyListener {
                     TelephonyCallback.CallStateListener,
                     TelephonyCallback.SrvccStateListener,
                     TelephonyCallback.CallAttributesListener,
-                    TelephonyCallback.MediaQualityStatusChangedListener {
+                    TelephonyCallback.MediaQualityStatusChangedListener,
+                    TelephonyCallback.ImsCallDisconnectCauseListener {
         private final Executor mExecutor;
         private OnServiceStateListener mServiceStateListener;
         private OnPreciseDataConnectionStateListener mPreciseDataConnectionStateListener;
@@ -1046,6 +1089,7 @@ class QnsTelephonyListener {
         private OnSrvccStateChangedCallback mSrvccStateCallback;
         private OnSrvccStateChangedCallback mSrvccStateListener;
         private OnCallStatesChangedCallback mCallStatesCallback;
+        private OnImsCallDisconnectCauseListener mImsCallDisconnectCauseListener;
         private TelephonyManager mTelephonyManager;
 
         TelephonyListener(Executor executor) {
@@ -1080,6 +1124,11 @@ class QnsTelephonyListener {
         void setCallStatesCallback(OnCallStatesChangedCallback listener) {
             mCallStatesCallback = listener;
         }
+
+        void setImsCallDisconnectCauseListener(OnImsCallDisconnectCauseListener listener) {
+            mImsCallDisconnectCauseListener = listener;
+        }
+
         /**
          * Register a TelephonyCallback for this listener.
          *
@@ -1166,6 +1215,13 @@ class QnsTelephonyListener {
         public void onMediaQualityStatusChanged(MediaQualityStatus status) {
             for (Consumer<MediaQualityStatus> consumer : mMediaQualityConsumerList) {
                 consumer.accept(status);
+            }
+        }
+
+        @Override
+        public void onImsCallDisconnectCauseChanged(@NonNull ImsReasonInfo imsReasonInfo) {
+            if (mImsCallDisconnectCauseListener != null) {
+                mImsCallDisconnectCauseListener.onImsCallDisconnectCauseChanged(imsReasonInfo);
             }
         }
     }
