@@ -33,7 +33,6 @@ class QnsComponents {
 
     private final String mLogTag = QnsComponents.class.getSimpleName();
     private final Context mContext;
-    private final SparseArray<AlternativeEventListener> mAlternativeEventListeners;
     private final SparseArray<CellularNetworkStatusTracker> mCellularNetworkStatusTrackers;
     private final SparseArray<CellularQualityMonitor> mCellularQualityMonitors;
     private final SparseArray<QnsImsManager> mQnsImsManagers;
@@ -51,7 +50,6 @@ class QnsComponents {
     /** Constructor to instantiate QnsComponents class. */
     QnsComponents(Context context) {
         mContext = context;
-        mAlternativeEventListeners = new SparseArray<>();
         mCellularNetworkStatusTrackers = new SparseArray<>();
         mCellularQualityMonitors = new SparseArray<>();
         mQnsImsManagers = new SparseArray<>();
@@ -69,9 +67,6 @@ class QnsComponents {
         mSlotIds.add(slotId);
         mQnsTelephonyListeners.put(slotId, new QnsTelephonyListener(mContext, slotId));
         mQnsImsManagers.put(slotId, new QnsImsManager(mContext, slotId));
-        mAlternativeEventListeners.put(
-                slotId,
-                new AlternativeEventListener(mContext, mQnsTelephonyListeners.get(slotId), slotId));
         mCellularNetworkStatusTrackers.put(
                 slotId,
                 new CellularNetworkStatusTracker(mQnsTelephonyListeners.get(slotId), slotId));
@@ -127,7 +122,6 @@ class QnsComponents {
     @VisibleForTesting
     QnsComponents(
             Context context,
-            AlternativeEventListener alternativeEventListener,
             CellularNetworkStatusTracker cellularNetworkStatusTracker,
             CellularQualityMonitor cellularQualityMonitor,
             IwlanNetworkStatusTracker iwlanNetworkStatusTracker,
@@ -145,7 +139,6 @@ class QnsComponents {
         mSlotIds.add(slotId);
         mQnsTelephonyListeners.put(slotId, qnsTelephonyListener);
         mQnsImsManagers.put(slotId, qnsImsManager);
-        mAlternativeEventListeners.put(slotId, alternativeEventListener);
         mCellularNetworkStatusTrackers.put(slotId, cellularNetworkStatusTracker);
         mCellularQualityMonitors.put(slotId, cellularQualityMonitor);
         mQnsCallStatusTracker.put(slotId, qnsCallStatusTracker);
@@ -164,11 +157,6 @@ class QnsComponents {
                 qnsTelephonyListener,
                 slotId);
         mQnsMetrics = qnsMetrics;
-    }
-
-    /** Returns instance of AlternativeEventListener for given slotId. */
-    AlternativeEventListener getAlternativeEventListener(int slotId) {
-        return mAlternativeEventListeners.get(slotId);
     }
 
     /** Returns instance of CellularNetworkStatusTracker for given slotId. */
@@ -283,11 +271,6 @@ class QnsComponents {
         if (cellularTracker != null) {
             mCellularNetworkStatusTrackers.remove(slotId);
             cellularTracker.close();
-        }
-        AlternativeEventListener alternativeEventListener = mAlternativeEventListeners.get(slotId);
-        if (alternativeEventListener != null) {
-            mAlternativeEventListeners.remove(slotId);
-            alternativeEventListener.close();
         }
         QnsImsManager qnsImsManager = mQnsImsManagers.get(slotId);
         if (qnsImsManager != null) {

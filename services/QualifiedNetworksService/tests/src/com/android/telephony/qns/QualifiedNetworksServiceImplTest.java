@@ -81,7 +81,6 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
         TestQnsComponents(int slotId) {
             super(
                     sMockContext,
-                    mMockAltEventListener,
                     mMockCellNetStatusTracker,
                     mMockCellularQm,
                     mMockIwlanNetworkStatusTracker,
