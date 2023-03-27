@@ -46,6 +46,7 @@ import android.os.PersistableBundle;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
+import android.telephony.SignalThresholdInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsMmTelManager;
@@ -667,6 +668,20 @@ class QnsCarrierConfigManager {
      */
     static final String KEY_SIP_DIALOG_SESSION_POLICY_INT = "qns.sip_dialog_session_policy_int";
 
+    /**
+     * List of Array items indicating hysteresis db levels based on access network and measurement
+     * type , whose value to be used at api
+     * {@link SignalThresholdInfo#Builder().setHysteresisDb(int)}
+     * The values are set as Format "<accessNetwork>:<meas_type>:<hysteresisDb>"
+     * Ex: "eutran:rsrp:2","ngran:ssrsrp:1"
+     *
+     * The default value or if value set is less than zero,
+     * for this key is {@link QnsConstants#KEY_DEFAULT_VALUE}
+     *
+     */
+    public static final String KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY =
+            "qns.cellular_signal_strength_hysteresis_db_string_array";
+
     static HashMap<Integer, String> sAccessNetworkMap =
             new HashMap<>() {
                 {
@@ -755,6 +770,7 @@ class QnsCarrierConfigManager {
     private String[] mImsAllowedRats;
     private String[] mRoveInGuardTimerConditionThresholdGaps;
     private String[] mFallbackOnInitialConnectionFailure;
+    private String[] mAccessNetworkMeasurementHysteresisDb;
 
     @NonNull
     private final List<FallbackRule> mFallbackWwanRuleWithImsUnregistered = new ArrayList<>();
@@ -1382,6 +1398,11 @@ class QnsCarrierConfigManager {
                         KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY);
         mSipDialogSessionPolicy =
                 getConfig(bundleCarrier, bundleAsset, KEY_SIP_DIALOG_SESSION_POLICY_INT);
+        mAccessNetworkMeasurementHysteresisDb =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY);
 
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
     }
@@ -2063,22 +2084,46 @@ class QnsCarrierConfigManager {
     int getThresholdGapWithGuardTimer(
             @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType) {
 
-        if (mRoveInGuardTimerConditionThresholdGaps == null) {
+        return getValueForMeasurementType(
+                accessNetwork, measType, mRoveInGuardTimerConditionThresholdGaps);
+
+    }
+
+    /**
+     *  This method returns hysteresis Dbm level for ran and measurement type configured.
+     *
+     * @return : Based on Carrier Config Settings & operator requirement Default Value.
+     * Note: If configured value set is less than zero or not set,
+     * {@link QnsConstants#KEY_DEFAULT_VALUE}
+     */
+    public int getWwanHysteresisDbLevel(
+            @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType) {
+
+        int hysteresisDb = getValueForMeasurementType(
+                accessNetwork, measType, mAccessNetworkMeasurementHysteresisDb);
+        return hysteresisDb >= 0 ? hysteresisDb : QnsConstants.KEY_DEFAULT_VALUE;
+    }
+
+    private int getValueForMeasurementType(
+            @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType,
+            String [] measurementValues) {
+
+        if (measurementValues == null) {
             return QnsConstants.KEY_DEFAULT_VALUE;
         }
-        if (!mRoveInGuardTimerConditionThresholdGaps[0].isEmpty()) {
-            for (String check_offset : mRoveInGuardTimerConditionThresholdGaps) {
-                String[] gap = check_offset.split(":");
-                String access_network = sAccessNetworkMap.get(accessNetwork);
-                String measurement_Type = sMeasTypeMap.get(measType);
 
-                try {
-                    if (gap[0].equalsIgnoreCase(access_network)
-                            && gap[1].equalsIgnoreCase(measurement_Type)) {
-                        return Integer.parseInt(gap[2]);
-                    }
-                } catch (Exception e) {
+        for (String check_offset : measurementValues) {
+            if (check_offset == null || check_offset.isEmpty()) continue;
+            String[] value = check_offset.split(":");
+            String access_network = sAccessNetworkMap.get(accessNetwork);
+            String measurement_Type = sMeasTypeMap.get(measType);
+            try {
+                if (value.length == 3 && value[0].equalsIgnoreCase(access_network)
+                        && value[1].equalsIgnoreCase(measurement_Type)) {
+                    return Integer.parseInt(value[2]);
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
         return QnsConstants.KEY_DEFAULT_VALUE;
