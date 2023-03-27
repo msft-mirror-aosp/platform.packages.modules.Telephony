@@ -62,6 +62,7 @@ class CellularQualityMonitor extends QualityMonitor {
             SignalThresholdInfo.MAXIMUM_NUMBER_OF_THRESHOLDS_ALLOWED;
     private final String mTag;
     private TelephonyManager mTelephonyManager;
+    private QnsCarrierConfigManager mConfigManager;
     private int mSubId;
     private final int mSlotIndex;
     private boolean mIsQnsListenerRegistered;
@@ -89,7 +90,10 @@ class CellularQualityMonitor extends QualityMonitor {
      * @param listener QnsTelephonyListener instance
      * @param slotIndex slot index
      */
-    CellularQualityMonitor(Context context, QnsTelephonyListener listener, int slotIndex) {
+    CellularQualityMonitor(Context context,
+            QnsCarrierConfigManager configMgr,
+            QnsTelephonyListener listener,
+            int slotIndex) {
         super(QualityMonitor.class.getSimpleName() + "-C-" + slotIndex);
         mContext = context;
         mSlotIndex = slotIndex;
@@ -110,6 +114,7 @@ class CellularQualityMonitor extends QualityMonitor {
         } else {
             Log.e(mTag, "Failed to get Telephony Service");
         }
+        mConfigManager = configMgr;
         mSignalStrengthListener = new CellularSignalStrengthListener(mContext.getMainExecutor());
         mSignalStrengthListener.setSignalStrengthListener(this::onSignalStrengthsChanged);
     }
@@ -273,6 +278,9 @@ class CellularQualityMonitor extends QualityMonitor {
             if (backhaulTime > 0) {
                 builder.setHysteresisMs(backhaulTime);
             }
+            int hysteresisDb = mConfigManager.getWwanHysteresisDbLevel(networkType,
+                    measurementType);
+            builder.setHysteresisDb(hysteresisDb);
             mSignalThresholdInfoList.add(builder.build());
             Log.d(mTag, "Updated SignalThresholdInfo List: " + mSignalThresholdInfoList);
         }

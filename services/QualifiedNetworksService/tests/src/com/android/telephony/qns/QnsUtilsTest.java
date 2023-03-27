@@ -256,6 +256,8 @@ public class QnsUtilsTest extends QnsTest {
         String[] defaultStringArray = new String[] {"LTE", "UMTS"};
         String[] defaultGapOffsetStringArray =
                 new String[] {"eutran:rsrp:-5", "ngran:ssrsp:-2", "utran:rscp:-3"};
+        String[] defaultHysteresisDbLevelStringArray =
+                new String[] {"eutran:rsrp:1", "ngran:ssrsp:2", "utran:rscp:5"};
         String[] defaultHandoverPolicyArray = new String[] {HANDOVER_POLICY_1, HANDOVER_POLICY_2};
         String[] fallbackWwanRuleWithImsUnregistered =
                 new String[] {FALLBACK_RULE0, FALLBACK_RULE1};
@@ -515,6 +517,13 @@ public class QnsUtilsTest extends QnsTest {
                         QnsCarrierConfigManager
                                 .KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY));
         assertArrayEquals(
+                defaultHysteresisDbLevelStringArray,
+                QnsUtils.getConfig(
+                        mTestBundle,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY));
+        assertArrayEquals(
                 defaultHandoverPolicyArray,
                 QnsUtils.getConfig(
                         mTestBundle,
@@ -662,6 +671,9 @@ public class QnsUtilsTest extends QnsTest {
         mTestBundle.putStringArray(
                 QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
                 new String[] {"ims:2:30000:60000:5", "mms:1:10000:5000:2"});
+        mTestBundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
+                new String[] {"eutran:rsrp:1", "ngran:ssrsp:2", "utran:rscp:5"});
     }
 
     @Test
@@ -1079,6 +1091,13 @@ public class QnsUtilsTest extends QnsTest {
                         null,
                         QnsCarrierConfigManager
                                 .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY));
+        assertArrayEquals(
+                (String[]) null,
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY));
     }
 
     @Test
