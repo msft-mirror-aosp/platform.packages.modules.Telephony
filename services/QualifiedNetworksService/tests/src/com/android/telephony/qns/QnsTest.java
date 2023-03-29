@@ -69,7 +69,6 @@ public abstract class QnsTest {
     @Mock protected Resources mMockResources;
 
     // qns mocks
-    @Mock AlternativeEventListener mMockAltEventListener;
     @Mock protected IwlanNetworkStatusTracker mMockIwlanNetworkStatusTracker;
     @Mock protected WifiQualityMonitor mMockWifiQm;
     @Mock protected CellularNetworkStatusTracker mMockCellNetStatusTracker;
@@ -101,7 +100,6 @@ public abstract class QnsTest {
         mQnsComponents[0] =
                 new QnsComponents(
                         sMockContext,
-                        mMockAltEventListener,
                         mMockCellNetStatusTracker,
                         mMockCellularQm,
                         mMockIwlanNetworkStatusTracker,
@@ -119,7 +117,6 @@ public abstract class QnsTest {
         mQnsComponents[1] =
                 new QnsComponents(
                         sMockContext,
-                        mMockAltEventListener,
                         mMockCellNetStatusTracker,
                         mMockCellularQm,
                         mMockIwlanNetworkStatusTracker,
