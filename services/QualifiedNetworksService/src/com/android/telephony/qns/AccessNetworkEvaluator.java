@@ -85,7 +85,6 @@ class AccessNetworkEvaluator {
     protected IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
     protected DataConnectionStatusTracker mDataConnectionStatusTracker;
     protected QnsEventDispatcher mQnsEventDispatcher;
-    protected AlternativeEventListener mAltEventListener;
     protected QnsCallStatusTracker mCallStatusTracker;
     protected QnsProvisioningListener mQnsProvisioningListener;
     protected QnsImsManager mQnsImsManager;
@@ -149,7 +148,6 @@ class AccessNetworkEvaluator {
         Executor executor = new QnsUtils.QnsExecutor(mHandler);
 
         mConfigManager = mQnsComponents.getQnsCarrierConfigManager(mSlotIndex);
-        mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
         mCallStatusTracker = mQnsComponents.getQnsCallStatusTracker(mSlotIndex);
         mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
         mIwlanNetworkStatusTracker = mQnsComponents.getIwlanNetworkStatusTracker();
@@ -216,7 +214,6 @@ class AccessNetworkEvaluator {
         mIwlanNetworkStatusTracker = mQnsComponents.getIwlanNetworkStatusTracker();
         mDataConnectionStatusTracker = dataConnectionStatusTracker;
         mQnsEventDispatcher = mQnsComponents.getQnsEventDispatcher(mSlotIndex);
-        mAltEventListener = mQnsComponents.getAlternativeEventListener(mSlotIndex);
         mCallStatusTracker = mQnsComponents.getQnsCallStatusTracker(mSlotIndex);
         mQnsProvisioningListener = mQnsComponents.getQnsProvisioningListener(mSlotIndex);
         mQnsImsManager = mQnsComponents.getQnsImsManager(mSlotIndex);
