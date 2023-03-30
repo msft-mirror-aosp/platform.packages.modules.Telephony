@@ -77,10 +77,7 @@ class QnsComponents {
                 new CellularNetworkStatusTracker(mQnsTelephonyListeners.get(slotId), slotId));
         mCellularQualityMonitors.put(
                 slotId,
-                new CellularQualityMonitor(mContext,
-                        mQnsCarrierConfigManagers.get(slotId),
-                        mQnsTelephonyListeners.get(slotId),
-                        slotId));
+                new CellularQualityMonitor(mContext, mQnsTelephonyListeners.get(slotId), slotId));
         mQnsProvisioningListeners.put(
                 slotId, new QnsProvisioningListener(mContext, mQnsImsManagers.get(slotId), slotId));
         mQnsEventDispatchers.put(

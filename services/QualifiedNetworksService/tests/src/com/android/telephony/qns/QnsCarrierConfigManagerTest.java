@@ -16,16 +16,16 @@
 
 package com.android.telephony.qns;
 
+import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP;
 import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRQ;
 import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI;
 import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSNR;
+import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP;
 import static android.hardware.radio.network.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRQ;
 import static android.telephony.AccessNetworkConstants.TRANSPORT_TYPE_INVALID;
 import static android.telephony.AccessNetworkConstants.TRANSPORT_TYPE_WLAN;
 import static android.telephony.AccessNetworkConstants.TRANSPORT_TYPE_WWAN;
-import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSCP;
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSRP;
-import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSRSRP;
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_SSSINR;
 import static android.telephony.SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_UNKNOWN;
 
@@ -462,90 +462,6 @@ public class QnsCarrierConfigManagerTest extends QnsTest {
         Assert.assertEquals(
                 QnsConstants.KEY_DEFAULT_VALUE,
                 mConfigManager.getThresholdGapWithGuardTimer(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-    }
-
-    @Test
-    public void testGetWwanHysteresisDbLevelWithTestbundle() {
-        PersistableBundle bundle = new PersistableBundle();
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {"eutran:rsrp:1"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                1,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {"ngran:ssrsrp:2"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                2,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.NGRAN,
-                        SIGNAL_MEASUREMENT_TYPE_SSRSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {"eutran:rsrp:-5"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_VALUE,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {"utran:rscp:5"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                5,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.UTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSCP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {"eutran::-2"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_VALUE,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {":rsrp:-2"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_VALUE,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {""});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_VALUE,
-                mConfigManager.getWwanHysteresisDbLevel(
-                        AccessNetworkConstants.AccessNetworkType.EUTRAN,
-                        SIGNAL_MEASUREMENT_TYPE_RSRP));
-
-        bundle.putStringArray(
-                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
-                new String[] {":"});
-        mConfigManager.loadQnsAneSupportConfigurations(bundle, null);
-        Assert.assertEquals(
-                QnsConstants.KEY_DEFAULT_VALUE,
-                mConfigManager.getWwanHysteresisDbLevel(
                         AccessNetworkConstants.AccessNetworkType.EUTRAN,
                         SIGNAL_MEASUREMENT_TYPE_RSRP));
     }
