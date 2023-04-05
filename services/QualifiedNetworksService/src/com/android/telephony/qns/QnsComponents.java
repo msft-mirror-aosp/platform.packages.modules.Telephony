@@ -72,12 +72,6 @@ class QnsComponents {
         mCellularNetworkStatusTrackers.put(
                 slotId,
                 new CellularNetworkStatusTracker(mQnsTelephonyListeners.get(slotId), slotId));
-        mCellularQualityMonitors.put(
-                slotId,
-                new CellularQualityMonitor(mContext,
-                        mQnsCarrierConfigManagers.get(slotId),
-                        mQnsTelephonyListeners.get(slotId),
-                        slotId));
         mQnsProvisioningListeners.put(
                 slotId, new QnsProvisioningListener(mContext, mQnsImsManagers.get(slotId), slotId));
         mQnsEventDispatchers.put(
@@ -90,6 +84,12 @@ class QnsComponents {
         mQnsCarrierConfigManagers.put(
                 slotId,
                 new QnsCarrierConfigManager(mContext, mQnsEventDispatchers.get(slotId), slotId));
+        mCellularQualityMonitors.put(
+                slotId,
+                new CellularQualityMonitor(mContext,
+                        mQnsCarrierConfigManagers.get(slotId),
+                        mQnsTelephonyListeners.get(slotId),
+                        slotId));
         if (mQnsTimer == null) {
             mQnsTimer = new QnsTimer(mContext);
         }
@@ -266,6 +266,11 @@ class QnsComponents {
             mQnsTimer.close();
             mQnsTimer = null;
         }
+        CellularQualityMonitor cellularQualityMonitor = mCellularQualityMonitors.get(slotId);
+        if (cellularQualityMonitor != null) {
+            mCellularQualityMonitors.remove(slotId);
+            cellularQualityMonitor.close();
+        }
         QnsCarrierConfigManager qnsCarrierConfigManager = mQnsCarrierConfigManagers.get(slotId);
         if (qnsCarrierConfigManager != null) {
             mQnsCarrierConfigManagers.remove(slotId);
@@ -280,11 +285,6 @@ class QnsComponents {
         if (qnsProvisioningListener != null) {
             mQnsProvisioningListeners.remove(slotId);
             qnsProvisioningListener.close();
-        }
-        CellularQualityMonitor cellularQualityMonitor = mCellularQualityMonitors.get(slotId);
-        if (cellularQualityMonitor != null) {
-            mCellularQualityMonitors.remove(slotId);
-            cellularQualityMonitor.close();
         }
         CellularNetworkStatusTracker cellularTracker = mCellularNetworkStatusTrackers.get(slotId);
         if (cellularTracker != null) {
