@@ -90,6 +90,7 @@ public class QualifiedNetworksServiceImplTest extends QnsTest {
                     mMockQnsProvisioningListener,
                     mMockQnsTelephonyListener,
                     mMockQnsCallStatusTracker,
+                    mMockQnsTimer,
                     mMockWifiBm,
                     mMockWifiQm,
                     mMockQnsMetrics,

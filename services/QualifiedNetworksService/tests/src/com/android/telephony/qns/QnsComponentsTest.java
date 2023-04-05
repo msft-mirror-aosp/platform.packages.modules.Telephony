@@ -51,6 +51,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNull(qnsComponents.getWifiQualityMonitor());
         assertNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNull(qnsComponents.getQnsTimer());
 
         qnsComponents.createQnsComponents(slotId);
 
@@ -65,6 +66,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNotNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNotNull(qnsComponents.getWifiQualityMonitor());
         assertNotNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNotNull(qnsComponents.getQnsTimer());
     }
 
 
@@ -82,6 +84,7 @@ public class QnsComponentsTest extends QnsTest {
                 mMockQnsProvisioningListener,
                 mMockQnsTelephonyListener,
                 mMockQnsCallStatusTracker,
+                mMockQnsTimer,
                 mMockWifiBm,
                 mMockWifiQm,
                 mMockQnsMetrics,
@@ -98,6 +101,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNotNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNotNull(qnsComponents.getWifiQualityMonitor());
         assertNotNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNotNull(qnsComponents.getQnsTimer());
         assertNotNull(qnsComponents.getQnsMetrics());
 
         qnsComponents.closeComponents(slotId);
@@ -113,6 +117,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNull(qnsComponents.getWifiQualityMonitor());
         assertNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNull(qnsComponents.getQnsTimer());
         assertNull(qnsComponents.getQnsMetrics());
 
         verify(mMockQnsTelephonyListener).close();
@@ -126,6 +131,7 @@ public class QnsComponentsTest extends QnsTest {
         verify(mMockWifiBm).close();
         verify(mMockWifiQm).close();
         verify(mMockIwlanNetworkStatusTracker).close();
+        verify(mMockQnsTimer).close();
         verify(mMockQnsMetrics).close();
     }
 }
