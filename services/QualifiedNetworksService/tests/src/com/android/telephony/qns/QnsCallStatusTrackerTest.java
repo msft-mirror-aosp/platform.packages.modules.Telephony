@@ -24,6 +24,10 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -53,8 +57,10 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @RunWith(JUnit4.class)
@@ -69,6 +75,8 @@ public class QnsCallStatusTrackerTest extends QnsTest {
     private Handler mLowQualityHandler;
     private MockitoSession mMockSession;
     List<CallState> mTestCallStateList = new ArrayList<>();
+    int mId = 0;
+    HashMap<Integer, Message> mMessageHashMap = new HashMap<>();
 
     @Before
     public void setUp() throws Exception {
@@ -82,8 +90,27 @@ public class QnsCallStatusTrackerTest extends QnsTest {
         mImsHandler = new Handler(mTestLooperListener.getLooper());
         mEmergencyHandler = new Handler(mTestLooperListener.getLooper());
         mLowQualityHandler = new Handler(mLowQualityListenerLooper.getLooper());
+        mMessageHashMap = new HashMap<>();
+        when(mMockQnsTimer.registerTimer(isA(Message.class), anyLong())).thenAnswer(
+                (Answer<Integer>) invocation -> {
+                    Message msg = (Message) invocation.getArguments()[0];
+                    long delay = (long) invocation.getArguments()[1];
+                    msg.getTarget().sendMessageDelayed(msg, delay);
+                    mMessageHashMap.put(++mId, msg);
+                    return mId;
+                });
+
+        doAnswer(invocation -> {
+            int timerId = (int) invocation.getArguments()[0];
+            Message msg = mMessageHashMap.get(timerId);
+            if (msg != null && msg.getTarget() != null) {
+                msg.getTarget().removeMessages(msg.what, msg.obj);
+            }
+            return null;
+        }).when(mMockQnsTimer).unregisterTimer(anyInt());
         mCallTracker = new QnsCallStatusTracker(
-                mMockQnsTelephonyListener, mMockQnsConfigManager, 0, mTestLooper.getLooper());
+                mMockQnsTelephonyListener, mMockQnsConfigManager, mMockQnsTimer, 0,
+                mTestLooper.getLooper());
         mCallTracker.registerCallTypeChangedListener(
                 NetworkCapabilities.NET_CAPABILITY_IMS, mImsHandler, 1, null);
         mCallTracker.registerCallTypeChangedListener(

@@ -53,6 +53,8 @@ public class WifiQualityMonitor extends QualityMonitor {
     private final ConnectivityManager mConnectivityManager;
     private final WiFiThresholdCallback mWiFiThresholdCallback;
     private final NetworkRequest.Builder mBuilder;
+    private final QnsTimer mQnsTimer;
+    private final List<Integer> mTimerIds;
 
     private int mWifiRssi;
     @VisibleForTesting Handler mHandler;
@@ -60,6 +62,7 @@ public class WifiQualityMonitor extends QualityMonitor {
     private static final int BACKHAUL_TIMER_DEFAULT = 3000;
     static final int INVALID_RSSI = -127;
     private boolean mIsRegistered = false;
+    private boolean mIsBackhaulRunning;
 
     private class WiFiThresholdCallback extends ConnectivityManager.NetworkCallback {
         /** Callback Received based on meeting Wifi RSSI Threshold Registered or Wifi Lost */
@@ -94,11 +97,7 @@ public class WifiQualityMonitor extends QualityMonitor {
     synchronized void validateWqmStatus(int wifiRssi) {
         if (isWifiRssiValid(wifiRssi)) {
             Log.d(mTag, "Registered Threshold @ Wqm Status check =" + mRegisteredThreshold);
-            if (!mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-                mHandler.obtainMessage(EVENT_WIFI_RSSI_CHANGED, wifiRssi, 0).sendToTarget();
-            } else {
-                Log.d(mTag, "BackhaulCheck in Progress , skip validation");
-            }
+            mHandler.obtainMessage(EVENT_WIFI_RSSI_CHANGED, wifiRssi, 0).sendToTarget();
         } else {
             Log.d(mTag, "Cancel backhaul if running for invalid SS received");
             clearBackHaulTimer();
@@ -117,21 +116,24 @@ public class WifiQualityMonitor extends QualityMonitor {
     }
 
     private void clearBackHaulTimer() {
-        if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-            Log.d(mTag, "Stop all active backhaul timers");
-            mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
-            mWaitingThresholds.clear();
+        Log.d(mTag, "Stop all active backhaul timers");
+        for (int timerId : mTimerIds) {
+            mQnsTimer.unregisterTimer(timerId);
         }
+        mTimerIds.clear();
+        mWaitingThresholds.clear();
     }
 
     /**
      * Create WifiQualityMonitor object for accessing WifiManager, ConnectivityManager to monitor
      * RSSI, build parameters for registering threshold & callback listening.
      */
-    WifiQualityMonitor(Context context) {
+    WifiQualityMonitor(Context context, QnsTimer qnsTimer) {
         super(QualityMonitor.class.getSimpleName() + "-I");
         mTag = WifiQualityMonitor.class.getSimpleName() + "-I";
         mContext = context;
+        mQnsTimer = qnsTimer;
+        mTimerIds = new ArrayList<>();
         HandlerThread handlerThread = new HandlerThread(mTag);
         handlerThread.start();
         mHandler = new WiFiEventsHandler(handlerThread.getLooper());
@@ -239,9 +241,7 @@ public class WifiQualityMonitor extends QualityMonitor {
     }
 
     private void validateForWifiBackhaul(int wifiRssi) {
-        if (mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-            mHandler.removeMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED);
-        }
+        mIsBackhaulRunning = false;
         for (Map.Entry<String, List<Threshold>> entry : mThresholdsList.entrySet()) {
             if (mWaitingThresholds.getOrDefault(entry.getKey(), false)) {
                 continue;
@@ -262,9 +262,13 @@ public class WifiQualityMonitor extends QualityMonitor {
         }
         if (backhaul > 0) {
             mWaitingThresholds.put(key, true);
-            if (!mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED)) {
-                Log.d(mTag, "Starting backhaul timer = " + backhaul);
-                mHandler.sendEmptyMessageDelayed(EVENT_WIFI_NOTIFY_TIMER_EXPIRED, backhaul);
+            Log.d(mTag, "Starting backhaul timer = " + backhaul);
+            if (!mIsBackhaulRunning) {
+                mTimerIds.add(
+                        mQnsTimer.registerTimer(
+                                Message.obtain(mHandler, EVENT_WIFI_NOTIFY_TIMER_EXPIRED),
+                                backhaul));
+                mIsBackhaulRunning = true;
             }
         } else {
             Log.d(mTag, "Notify for RSSI Threshold Registered w/o Backhaul = " + backhaul);
@@ -302,7 +306,6 @@ public class WifiQualityMonitor extends QualityMonitor {
             unregisterCallback();
             if (mThresholdsList.isEmpty()) {
                 clearBackHaulTimer();
-                mWaitingThresholds.clear();
             }
         } else {
             Log.d(mTag, "Listening to threshold = " + mRegisteredThreshold);
@@ -378,8 +381,8 @@ public class WifiQualityMonitor extends QualityMonitor {
                 prefix
                         + ", mIsRegistered="
                         + mIsRegistered
-                        + ", backhaulstatus ="
-                        + mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
+                        + ", mIsBackhaulRunning="
+                        + mIsBackhaulRunning);
         pw.println(
                 prefix
                         + "mWifiRssi="
