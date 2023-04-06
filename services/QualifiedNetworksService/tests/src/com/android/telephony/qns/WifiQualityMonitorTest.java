@@ -53,8 +53,10 @@ import java.util.concurrent.Executor;
 @RunWith(JUnit4.class)
 public class WifiQualityMonitorTest extends QnsTest {
 
+    private static final int EVENT_QNS_TIMER_EXPIRED = 1;
     Context mContext;
     @Mock ConnectivityManager mConnectivityManager;
+    QnsTimer mQnsTimer;
     @Mock WifiManager mWifiManager;
     @Mock NetworkCapabilities mNetworkCapabilityManager;
     @Mock private Network mMockNetwork;
@@ -96,7 +98,8 @@ public class WifiQualityMonitorTest extends QnsTest {
         mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
         mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(mExecutor);
-        mWifiQualityMonitor = new WifiQualityMonitor(mContext);
+        mQnsTimer = new QnsTimer(mContext);
+        mWifiQualityMonitor = new WifiQualityMonitor(mContext, mQnsTimer);
     }
 
     @Test
@@ -232,7 +235,7 @@ public class WifiQualityMonitorTest extends QnsTest {
     }
 
     @Test
-    public void testBackhaulTimer() throws InterruptedException {
+    public void testBackhaulTimer() {
         mSetRssi = -65;
         mLatch = new CountDownLatch(1);
         mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
@@ -277,8 +280,9 @@ public class WifiQualityMonitorTest extends QnsTest {
 
         mWifiQualityMonitor.mHandler.obtainMessage(EVENT_WIFI_RSSI_CHANGED, -65, 0).sendToTarget();
         waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 1000, 200);
-        assertTrue(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
+        assertTrue(mQnsTimer.mHandler.hasMessages(EVENT_QNS_TIMER_EXPIRED));
         waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 4000, 200);
+        assertFalse(mQnsTimer.mHandler.hasMessages(EVENT_QNS_TIMER_EXPIRED));
         assertFalse(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
     }
 
@@ -327,23 +331,6 @@ public class WifiQualityMonitorTest extends QnsTest {
 
         mWifiQualityMonitor.validateWqmStatus(-65);
         isWifiRssiChangedHandlerNotPosted();
-    }
-
-    @Test
-    public void testSkipValidateWqmStatus_WithBackhaulInProgress() {
-        mSetRssi = -65;
-        mLatch = new CountDownLatch(1);
-        mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
-        when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
-
-        setWqmThreshold();
-        mWifiQualityMonitor.validateWqmStatus(-65);
-
-        waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 1000, 200);
-        assertTrue(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
-
-        mWifiQualityMonitor.validateWqmStatus(-68);
-        assertFalse(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_RSSI_CHANGED));
     }
 
     private void setWqmThreshold() {

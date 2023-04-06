@@ -46,7 +46,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -74,7 +77,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
+import org.mockito.stubbing.Answer;
 
+import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -93,6 +98,8 @@ public class RestrictManagerTest extends QnsTest {
     private QnsImsManager mQnsImsManager;
 
     protected TestLooper mTestLooper;
+    int mId = 0;
+    HashMap<Integer, Message> mMessageHashMap = new HashMap<>();
 
     HandlerThread mHandlerThread =
             new HandlerThread("") {
@@ -123,6 +130,24 @@ public class RestrictManagerTest extends QnsTest {
         when(mMockQnsConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
                 .thenReturn(0);
+        when(mMockQnsTimer.registerTimer(isA(Message.class), anyLong())).thenAnswer(
+                (Answer<Integer>) invocation -> {
+                    Message msg = (Message) invocation.getArguments()[0];
+                    long delay = (long) invocation.getArguments()[1];
+                    msg.getTarget().sendMessageDelayed(msg, delay);
+                    mMessageHashMap.put(++mId, msg);
+                    return mId;
+                });
+
+        doAnswer(invocation -> {
+            int timerId = (int) invocation.getArguments()[0];
+            Message msg = mMessageHashMap.get(timerId);
+            if (msg != null && msg.getTarget() != null) {
+                msg.getTarget().removeMessages(msg.what, msg.obj);
+            }
+            return null;
+        }).when(mMockQnsTimer).unregisterTimer(anyInt());
+
         mTestLooper = new TestLooper();
         mHandlerThread.start();
 
@@ -140,6 +165,7 @@ public class RestrictManagerTest extends QnsTest {
                         mMockQnsProvisioningListener,
                         mTelephonyListener,
                         mMockQnsCallStatusTracker,
+                        mMockQnsTimer,
                         mMockWifiBm,
                         mMockWifiQm,
                         mMockQnsMetrics,
