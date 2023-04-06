@@ -32,6 +32,7 @@ import android.net.ConnectivityManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -73,6 +74,7 @@ public abstract class QnsTest {
     @Mock protected WifiQualityMonitor mMockWifiQm;
     @Mock protected CellularNetworkStatusTracker mMockCellNetStatusTracker;
     @Mock protected CellularQualityMonitor mMockCellularQm;
+    @Mock protected PowerManager mMockPowerManager;
     @Mock protected QnsImsManager mMockQnsImsManager;
     @Mock protected QnsCarrierConfigManager mMockQnsConfigManager;
     @Mock protected QnsEventDispatcher mMockQnsEventDispatcher;
@@ -80,6 +82,7 @@ public abstract class QnsTest {
     @Mock protected QnsTelephonyListener mMockQnsTelephonyListener;
     @Mock protected QnsCallStatusTracker mMockQnsCallStatusTracker;
     @Mock protected WifiBackhaulMonitor mMockWifiBm;
+    @Mock protected QnsTimer mMockQnsTimer;
     @Mock protected QnsMetrics mMockQnsMetrics;
 
     protected QnsComponents[] mQnsComponents = new QnsComponents[2];
@@ -109,6 +112,7 @@ public abstract class QnsTest {
                         mMockQnsProvisioningListener,
                         mMockQnsTelephonyListener,
                         mMockQnsCallStatusTracker,
+                        mMockQnsTimer,
                         mMockWifiBm,
                         mMockWifiQm,
                         mMockQnsMetrics,
@@ -126,6 +130,7 @@ public abstract class QnsTest {
                         mMockQnsProvisioningListener,
                         mMockQnsTelephonyListener,
                         mMockQnsCallStatusTracker,
+                        mMockQnsTimer,
                         mMockWifiBm,
                         mMockWifiQm,
                         mMockQnsMetrics,
@@ -144,7 +149,7 @@ public abstract class QnsTest {
         when(sMockContext.getSystemService(ImsManager.class)).thenReturn(mMockImsManager);
         when(sMockContext.getSystemService(WifiManager.class)).thenReturn(mMockWifiManager);
         when(sMockContext.getSystemService(CountryDetector.class)).thenReturn(mMockCountryDetector);
-
+        when(sMockContext.getSystemService(PowerManager.class)).thenReturn(mMockPowerManager);
         when(sMockContext.getResources()).thenReturn(mMockResources);
     }
 
@@ -165,6 +170,7 @@ public abstract class QnsTest {
 
         when(mMockCountryDetector.detectCountry())
                 .thenReturn(new Country("US", Country.COUNTRY_SOURCE_LOCATION));
+        when(mMockPowerManager.isDeviceIdleMode()).thenReturn(false);
     }
 
     private void stubOthers() {

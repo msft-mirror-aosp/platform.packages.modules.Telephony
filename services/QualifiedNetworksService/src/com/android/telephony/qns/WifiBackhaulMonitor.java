@@ -16,6 +16,8 @@
 
 package com.android.telephony.qns;
 
+import static com.android.telephony.qns.QnsConstants.INVALID_ID;
+
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
@@ -27,6 +29,8 @@ import android.os.HandlerThread;
 import android.os.Message;
 import android.telephony.AccessNetworkConstants;
 import android.util.Log;
+
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -56,6 +60,7 @@ class WifiBackhaulMonitor {
     private final HandlerThread mHandlerThread;
     private final Handler mHandler;
     private final QnsCarrierConfigManager mConfigManager;
+    private final QnsTimer mQnsTimer;
     private boolean mRttResult = false;
 
     ArrayList<InetAddress> mValidIpList = new ArrayList<>();
@@ -65,6 +70,7 @@ class WifiBackhaulMonitor {
     private boolean mIsIwlanConnected = false;
     private boolean mIsRttRunning = false;
     private String mInterfaceName = null;
+    private int mRttTimerId = INVALID_ID;
 
     private class BackhaulHandler extends Handler {
         BackhaulHandler() {
@@ -118,6 +124,7 @@ class WifiBackhaulMonitor {
             Context context,
             QnsCarrierConfigManager configManager,
             QnsImsManager imsManager,
+            QnsTimer qnstimer,
             int slotIndex) {
         mSlotIndex = slotIndex;
         mTag = WifiBackhaulMonitor.class.getSimpleName() + "[" + mSlotIndex + "]";
@@ -125,6 +132,7 @@ class WifiBackhaulMonitor {
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         mConfigManager = configManager;
         mQnsImsManager = imsManager;
+        mQnsTimer = qnstimer;
         mNetworkCallback = new WiFiStatusCallback();
         mRegistrantList = new QnsRegistrantList();
         mHandlerThread = new HandlerThread(mTag);
@@ -174,8 +182,9 @@ class WifiBackhaulMonitor {
     /** Triggers the request to check RTT. */
     void requestRttCheck() {
         if (!mIsRttRunning) {
-            if (mHandler.hasMessages(EVENT_START_RTT_CHECK)) {
-                mHandler.removeMessages(EVENT_START_RTT_CHECK);
+            if (mRttTimerId != INVALID_ID) {
+                mQnsTimer.unregisterTimer(mRttTimerId);
+                mRttTimerId = INVALID_ID;
             }
             mHandler.sendEmptyMessage(EVENT_START_RTT_CHECK);
         } else {
@@ -232,13 +241,17 @@ class WifiBackhaulMonitor {
     }
 
     private void startRttSchedule(int delay) {
-        mHandler.sendEmptyMessageDelayed(EVENT_START_RTT_CHECK, delay);
+        log("start RTT schedule for " + delay);
+        mRttTimerId = mQnsTimer.registerTimer(Message.obtain(mHandler, EVENT_START_RTT_CHECK),
+                delay);
         mIsRttScheduled = true;
     }
 
     private void stopRttSchedule() {
         if (mIsRttScheduled) {
-            mHandler.removeMessages(EVENT_START_RTT_CHECK);
+            log("stop RTT schedule");
+            mQnsTimer.unregisterTimer(mRttTimerId);
+            mRttTimerId = INVALID_ID;
             mIsRttScheduled = false;
         }
     }
@@ -348,6 +361,11 @@ class WifiBackhaulMonitor {
         mIsCellularAvailable = false;
         mIsIwlanConnected = false;
         mIsRttScheduled = false;
+    }
+
+    @VisibleForTesting
+    int getRttTimerId() {
+        return mRttTimerId;
     }
 
     private void log(String s) {
