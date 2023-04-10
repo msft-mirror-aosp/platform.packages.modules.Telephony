@@ -22,6 +22,7 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,7 +34,6 @@ class QnsComponents {
 
     private final String mLogTag = QnsComponents.class.getSimpleName();
     private final Context mContext;
-    private final SparseArray<AlternativeEventListener> mAlternativeEventListeners;
     private final SparseArray<CellularNetworkStatusTracker> mCellularNetworkStatusTrackers;
     private final SparseArray<CellularQualityMonitor> mCellularQualityMonitors;
     private final SparseArray<QnsImsManager> mQnsImsManagers;
@@ -45,12 +45,13 @@ class QnsComponents {
     private final SparseArray<WifiBackhaulMonitor> mWifiBackhaulMonitors;
     private final List<Integer> mSlotIds;
     private IwlanNetworkStatusTracker mIwlanNetworkStatusTracker;
+    private QnsTimer mQnsTimer;
     private WifiQualityMonitor mWifiQualityMonitor;
+    private QnsMetrics mQnsMetrics;
 
     /** Constructor to instantiate QnsComponents class. */
     QnsComponents(Context context) {
         mContext = context;
-        mAlternativeEventListeners = new SparseArray<>();
         mCellularNetworkStatusTrackers = new SparseArray<>();
         mCellularQualityMonitors = new SparseArray<>();
         mQnsImsManagers = new SparseArray<>();
@@ -68,15 +69,9 @@ class QnsComponents {
         mSlotIds.add(slotId);
         mQnsTelephonyListeners.put(slotId, new QnsTelephonyListener(mContext, slotId));
         mQnsImsManagers.put(slotId, new QnsImsManager(mContext, slotId));
-        mAlternativeEventListeners.put(
-                slotId,
-                new AlternativeEventListener(mContext, mQnsTelephonyListeners.get(slotId), slotId));
         mCellularNetworkStatusTrackers.put(
                 slotId,
                 new CellularNetworkStatusTracker(mQnsTelephonyListeners.get(slotId), slotId));
-        mCellularQualityMonitors.put(
-                slotId,
-                new CellularQualityMonitor(mContext, mQnsTelephonyListeners.get(slotId), slotId));
         mQnsProvisioningListeners.put(
                 slotId, new QnsProvisioningListener(mContext, mQnsImsManagers.get(slotId), slotId));
         mQnsEventDispatchers.put(
@@ -89,20 +84,32 @@ class QnsComponents {
         mQnsCarrierConfigManagers.put(
                 slotId,
                 new QnsCarrierConfigManager(mContext, mQnsEventDispatchers.get(slotId), slotId));
+        mCellularQualityMonitors.put(
+                slotId,
+                new CellularQualityMonitor(mContext,
+                        mQnsCarrierConfigManagers.get(slotId),
+                        mQnsTelephonyListeners.get(slotId),
+                        slotId));
+        if (mQnsTimer == null) {
+            mQnsTimer = new QnsTimer(mContext);
+        }
         mQnsCallStatusTracker.put(
                 slotId,
-                new QnsCallStatusTracker(mQnsTelephonyListeners.get(slotId),
-                        mQnsCarrierConfigManagers.get(slotId), slotId));
+                new QnsCallStatusTracker(
+                        mQnsTelephonyListeners.get(slotId),
+                        mQnsCarrierConfigManagers.get(slotId),
+                        mQnsTimer,
+                        slotId));
         mWifiBackhaulMonitors.put(
                 slotId,
                 new WifiBackhaulMonitor(
                         mContext,
                         mQnsCarrierConfigManagers.get(slotId),
                         mQnsImsManagers.get(slotId),
+                        mQnsTimer,
                         slotId));
-
         if (mWifiQualityMonitor == null) {
-            mWifiQualityMonitor = new WifiQualityMonitor(mContext);
+            mWifiQualityMonitor = new WifiQualityMonitor(mContext, mQnsTimer);
         }
         if (mIwlanNetworkStatusTracker == null) {
             mIwlanNetworkStatusTracker = new IwlanNetworkStatusTracker(mContext);
@@ -113,6 +120,9 @@ class QnsComponents {
                 mQnsImsManagers.get(slotId),
                 mQnsTelephonyListeners.get(slotId),
                 slotId);
+        if (mQnsMetrics == null) {
+            mQnsMetrics = new QnsMetrics(mContext);
+        }
 
         Log.d(mLogTag, "QnsComponents created for slot " + slotId);
     }
@@ -120,7 +130,6 @@ class QnsComponents {
     @VisibleForTesting
     QnsComponents(
             Context context,
-            AlternativeEventListener alternativeEventListener,
             CellularNetworkStatusTracker cellularNetworkStatusTracker,
             CellularQualityMonitor cellularQualityMonitor,
             IwlanNetworkStatusTracker iwlanNetworkStatusTracker,
@@ -130,14 +139,15 @@ class QnsComponents {
             QnsProvisioningListener qnsProvisioningListener,
             QnsTelephonyListener qnsTelephonyListener,
             QnsCallStatusTracker qnsCallStatusTracker,
+            QnsTimer qnsTimer,
             WifiBackhaulMonitor wifiBackhaulMonitor,
             WifiQualityMonitor wifiQualityMonitor,
+            QnsMetrics qnsMetrics,
             int slotId) {
         this(context);
         mSlotIds.add(slotId);
         mQnsTelephonyListeners.put(slotId, qnsTelephonyListener);
         mQnsImsManagers.put(slotId, qnsImsManager);
-        mAlternativeEventListeners.put(slotId, alternativeEventListener);
         mCellularNetworkStatusTrackers.put(slotId, cellularNetworkStatusTracker);
         mCellularQualityMonitors.put(slotId, cellularQualityMonitor);
         mQnsCallStatusTracker.put(slotId, qnsCallStatusTracker);
@@ -148,6 +158,7 @@ class QnsComponents {
         mWifiBackhaulMonitors.put(slotId, wifiBackhaulMonitor);
 
         mWifiQualityMonitor = wifiQualityMonitor;
+        mQnsTimer = qnsTimer;
         mIwlanNetworkStatusTracker = iwlanNetworkStatusTracker;
         mIwlanNetworkStatusTracker.initBySlotIndex(
                 qnsCarrierConfigManager,
@@ -155,11 +166,7 @@ class QnsComponents {
                 qnsImsManager,
                 qnsTelephonyListener,
                 slotId);
-    }
-
-    /** Returns instance of AlternativeEventListener for given slotId. */
-    AlternativeEventListener getAlternativeEventListener(int slotId) {
-        return mAlternativeEventListeners.get(slotId);
+        mQnsMetrics = qnsMetrics;
     }
 
     /** Returns instance of CellularNetworkStatusTracker for given slotId. */
@@ -217,6 +224,16 @@ class QnsComponents {
         return mWifiQualityMonitor;
     }
 
+    /** Returns instance of QnsTimer. */
+    QnsTimer getQnsTimer() {
+        return mQnsTimer;
+    }
+
+    /** Returns instance of WifiQualityMonitor. */
+    QnsMetrics getQnsMetrics() {
+        return mQnsMetrics;
+    }
+
     /** Returns context. */
     Context getContext() {
         return mContext;
@@ -229,8 +246,10 @@ class QnsComponents {
         if (mSlotIds.size() == 1) {
             mIwlanNetworkStatusTracker.close();
             mWifiQualityMonitor.close();
+            mQnsMetrics.close();
             mIwlanNetworkStatusTracker = null;
             mWifiQualityMonitor = null;
+            mQnsMetrics = null;
         }
 
         WifiBackhaulMonitor wifiBackhaulMonitor = mWifiBackhaulMonitors.get(slotId);
@@ -242,6 +261,15 @@ class QnsComponents {
         if (qnsCallStatusTracker != null) {
             mQnsCallStatusTracker.remove(slotId);
             qnsCallStatusTracker.close();
+        }
+        if (mSlotIds.size() == 1) {
+            mQnsTimer.close();
+            mQnsTimer = null;
+        }
+        CellularQualityMonitor cellularQualityMonitor = mCellularQualityMonitors.get(slotId);
+        if (cellularQualityMonitor != null) {
+            mCellularQualityMonitors.remove(slotId);
+            cellularQualityMonitor.close();
         }
         QnsCarrierConfigManager qnsCarrierConfigManager = mQnsCarrierConfigManagers.get(slotId);
         if (qnsCarrierConfigManager != null) {
@@ -258,24 +286,14 @@ class QnsComponents {
             mQnsProvisioningListeners.remove(slotId);
             qnsProvisioningListener.close();
         }
-        CellularQualityMonitor cellularQualityMonitor = mCellularQualityMonitors.get(slotId);
-        if (cellularQualityMonitor != null) {
-            mCellularQualityMonitors.remove(slotId);
-            cellularQualityMonitor.close();
-        }
         CellularNetworkStatusTracker cellularTracker = mCellularNetworkStatusTrackers.get(slotId);
         if (cellularTracker != null) {
             mCellularNetworkStatusTrackers.remove(slotId);
             cellularTracker.close();
         }
-        AlternativeEventListener alternativeEventListener = mAlternativeEventListeners.get(slotId);
-        if (alternativeEventListener != null) {
-            mAlternativeEventListeners.remove(slotId);
-            alternativeEventListener.close();
-        }
         QnsImsManager qnsImsManager = mQnsImsManagers.get(slotId);
         if (qnsImsManager != null) {
-            mQnsTelephonyListeners.remove(slotId);
+            mQnsImsManagers.remove(slotId);
             qnsImsManager.close();
         }
         QnsTelephonyListener qnsTelephonyListener = mQnsTelephonyListeners.get(slotId);
@@ -286,5 +304,17 @@ class QnsComponents {
 
         mSlotIds.remove(Integer.valueOf(slotId));
         Log.d(mLogTag, "QnsComponents closed for slot " + slotId);
+    }
+
+    void dump(PrintWriter pw) {
+        if (mIwlanNetworkStatusTracker != null) {
+            mIwlanNetworkStatusTracker.dump(pw, "  ");
+        }
+        if (mIwlanNetworkStatusTracker != null) {
+            mWifiQualityMonitor.dump(pw, "  ");
+        }
+        if (mIwlanNetworkStatusTracker != null) {
+            mQnsTimer.dump(pw, " ");
+        }
     }
 }

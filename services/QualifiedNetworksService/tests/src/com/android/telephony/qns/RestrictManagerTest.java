@@ -46,7 +46,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -74,6 +77,11 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
+import org.mockito.stubbing.Answer;
+
+import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
 public class RestrictManagerTest extends QnsTest {
@@ -81,7 +89,6 @@ public class RestrictManagerTest extends QnsTest {
     @Mock DataConnectionStatusTracker mMockDcst;
 
     private MockitoSession mMockSession;
-    private AlternativeEventListener mAltListener;
     private QnsTelephonyListener mTelephonyListener;
 
     private static final int DEFAULT_GUARDING_TIME = 30000;
@@ -91,15 +98,14 @@ public class RestrictManagerTest extends QnsTest {
     private QnsImsManager mQnsImsManager;
 
     protected TestLooper mTestLooper;
+    int mId = 0;
+    HashMap<Integer, Message> mMessageHashMap = new HashMap<>();
 
     HandlerThread mHandlerThread =
             new HandlerThread("") {
                 @Override
                 protected void onLooperPrepared() {
                     super.onLooperPrepared();
-                    mAltListener =
-                            new AlternativeEventListener(
-                                    sMockContext, mMockQnsTelephonyListener, 0);
                     mTelephonyListener = new QnsTelephonyListener(sMockContext, 0);
                     mQnsImsManager = new QnsImsManager(sMockContext, 0);
                     setReady(true);
@@ -124,6 +130,24 @@ public class RestrictManagerTest extends QnsTest {
         when(mMockQnsConfigManager.getWaitingTimerForPreferredTransportOnPowerOn(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
                 .thenReturn(0);
+        when(mMockQnsTimer.registerTimer(isA(Message.class), anyLong())).thenAnswer(
+                (Answer<Integer>) invocation -> {
+                    Message msg = (Message) invocation.getArguments()[0];
+                    long delay = (long) invocation.getArguments()[1];
+                    msg.getTarget().sendMessageDelayed(msg, delay);
+                    mMessageHashMap.put(++mId, msg);
+                    return mId;
+                });
+
+        doAnswer(invocation -> {
+            int timerId = (int) invocation.getArguments()[0];
+            Message msg = mMessageHashMap.get(timerId);
+            if (msg != null && msg.getTarget() != null) {
+                msg.getTarget().removeMessages(msg.what, msg.obj);
+            }
+            return null;
+        }).when(mMockQnsTimer).unregisterTimer(anyInt());
+
         mTestLooper = new TestLooper();
         mHandlerThread.start();
 
@@ -132,7 +156,6 @@ public class RestrictManagerTest extends QnsTest {
         mQnsComponents[0] =
                 new QnsComponents(
                         sMockContext,
-                        mAltListener,
                         mMockCellNetStatusTracker,
                         mMockCellularQm,
                         mMockIwlanNetworkStatusTracker,
@@ -142,8 +165,10 @@ public class RestrictManagerTest extends QnsTest {
                         mMockQnsProvisioningListener,
                         mTelephonyListener,
                         mMockQnsCallStatusTracker,
+                        mMockQnsTimer,
                         mMockWifiBm,
                         mMockWifiQm,
+                        mMockQnsMetrics,
                         0);
 
         mRestrictManager =
@@ -929,6 +954,75 @@ public class RestrictManagerTest extends QnsTest {
         assertFalse(
                 mRestrictManager.hasRestrictionType(
                         AccessNetworkConstants.TRANSPORT_TYPE_WWAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
+    public void testRestrictWithThrottlingWithThrottleTimeMax() {
+        long throttleTime = Long.MAX_VALUE;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        long elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+
+        throttleTime = Integer.MAX_VALUE;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mRestrictManager.releaseRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+    }
+
+    @Test
+    public void testRestrictWithThrottlingWithAbnormalThrottleTime() {
+        long throttleTime = -134243;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+
+        throttleTime = Long.MAX_VALUE - 100;
+        mRestrictManager.notifyThrottling(
+                true, throttleTime, AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        long elapsed = SystemClock.elapsedRealtime();
+        mTestLooper.moveTimeForward(Long.MAX_VALUE - elapsed * 2);
+        mTestLooper.dispatchAll();
+        assertTrue(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
+        mTestLooper.moveTimeForward(elapsed + 1000);
+        mTestLooper.dispatchAll();
+        assertFalse(
+                mRestrictManager.hasRestrictionType(
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_THROTTLING));
     }
 
     @Test
@@ -2721,4 +2815,29 @@ public class RestrictManagerTest extends QnsTest {
         mRestrictManager.releaseRestriction(
                 AccessNetworkConstants.TRANSPORT_TYPE_WLAN, RESTRICT_TYPE_GUARDING, true);
     }
+
+    @Test
+    public void testSendRestrictionsForMetrics() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        Handler handler = new Handler(mHandlerThread.getLooper()) {
+            public void handleMessage(Message msg) {
+                latch.countDown();
+            }
+        };
+
+        mRestrictManager.registerRestrictInfoChanged(handler, 0);
+        assertNotNull(mRestrictManager.mRestrictInfoRegistrant);
+
+        mRestrictManager.addRestriction(
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                RESTRICT_TYPE_RTP_LOW_QUALITY,
+                sReleaseEventMap.get(RESTRICT_TYPE_NON_PREFERRED_TRANSPORT),
+                DEFAULT_RESTRICT_NON_PREFERRED_TRANSPORT_TIME);
+
+        assertTrue(latch.await(3, TimeUnit.SECONDS));
+
+        mRestrictManager.unRegisterRestrictInfoChanged(handler);
+        assertNull(mRestrictManager.mRestrictInfoRegistrant);
+    }
+
 }

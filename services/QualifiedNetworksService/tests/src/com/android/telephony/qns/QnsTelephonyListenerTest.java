@@ -47,6 +47,7 @@ import android.telephony.TelephonyManager;
 import android.telephony.VopsSupportInfo;
 import android.telephony.data.ApnSetting;
 import android.telephony.ims.ImsCallProfile;
+import android.telephony.ims.ImsReasonInfo;
 import android.telephony.ims.MediaQualityStatus;
 import android.util.SparseArray;
 
@@ -1025,15 +1026,27 @@ public final class QnsTelephonyListenerTest extends QnsTest {
     public void testOnMediaQualityStatusChanged() {
         mQtListener.addMediaQualityStatusCallback(mTestMediaQualityConsumer);
         MediaQualityStatus testMediaQuality =
-                new MediaQualityStatus.Builder(
+                new MediaQualityStatus(
                         "1", MediaQualityStatus.MEDIA_SESSION_TYPE_AUDIO,
-                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN)
-                        .setRtpJitterMillis(130)
-                        .setRtpPacketLossRate(10)
-                        .setRtpInactivityMillis(7000).build();
+                        AccessNetworkConstants.TRANSPORT_TYPE_WLAN,
+                        10 /*packetLossRate*/, 130 /*jitter*/, 7000 /*inactivityTime*/);
         mQtListener.mTelephonyListener.onMediaQualityStatusChanged(testMediaQuality);
 
         assertEquals(testMediaQuality, mTestMediaQuality);
+    }
+
+    @Test
+    public void testOnImsCallDisconnectCauseChanged() {
+        mQtListener.registerImsCallDropDisconnectCauseListener(mMockHandler, 0, null);
+        assertTrue(mQtListener.mImsCallDropDisconnectCauseListener.size() > 0);
+        verify(mMockHandler, never()).sendMessage(any());
+
+        ImsReasonInfo imsReasonInfo = new ImsReasonInfo();
+        mQtListener.onImsCallDisconnectCauseChanged(imsReasonInfo);
+        verify(mMockHandler, times(1)).sendMessage(any());
+
+        mQtListener.unregisterImsCallDropDisconnectCauseListener(mMockHandler);
+        assertEquals(0, mQtListener.mImsCallDropDisconnectCauseListener.size());
     }
 
     @Test

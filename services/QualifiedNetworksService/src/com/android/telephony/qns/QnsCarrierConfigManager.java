@@ -46,6 +46,7 @@ import android.os.PersistableBundle;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.Annotation.NetCapability;
 import android.telephony.CarrierConfigManager;
+import android.telephony.SignalThresholdInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.ims.ImsMmTelManager;
@@ -62,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -378,25 +380,6 @@ class QnsCarrierConfigManager {
     static final String KEY_QNS_MMS_TRANSPORT_TYPE_INT = "qns.mms_transport_type_int";
 
     /**
-     * Specifies the Transport type UE supports with QNS services for XCAP network capability.
-     * {@link QnsConstants}. The values are set as below:
-     *
-     * <ul>
-     *   <li>0: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
-     *   <li>1: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}
-     *   <li>2: {@link QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}
-     * </ul>
-     *
-     * <p>{@code QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}: If set , Transport type UE supports is
-     * cellular for XCAP network capability. {@code QnsConstants#TRANSPORT_TYPE_ALLOWED_IWLAN}: If
-     * this value set , Transport type UE supports is Wifi for XCAP network capability. {@code
-     * QnsConstants#TRANSPORT_TYPE_ALLOWED_BOTH}: If this value set , Transport type UE supports is
-     * both Cellular & Wifi for XCAP network capability. The default value for this key is {@link
-     * QnsConstants#TRANSPORT_TYPE_ALLOWED_WWAN}
-     */
-    static final String KEY_QNS_XCAP_TRANSPORT_TYPE_INT = "qns.xcap_transport_type_int";
-
-    /**
      * Specifies the Transport type UE supports with QNS services for CBS network capability. {@link
      * QnsConstants}. The values are set as below:
      *
@@ -486,9 +469,16 @@ class QnsCarrierConfigManager {
     /**
      * This item is the minimum handover guarding timer value when there is no guarding time for
      * handover.
+     * Note:
+     * If this value is set to less than or equal to 0, minimum guarding action is disabled.
+     * if this value is set to greater than or equal to
+     * {@code QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT},
+     * {@code QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT} value is set.
+     * If no value set at asset or paris , QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER
+     * value at code is set.
      *
      * <p>{@code QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER} : default value of timer.
-     * {@code QnsConstants#CONFIg_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT} : maximum allowable
+     * {@code QnsConstants#CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT} : maximum allowable
      * value.
      */
     static final String KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT =
@@ -678,6 +668,20 @@ class QnsCarrierConfigManager {
      */
     static final String KEY_SIP_DIALOG_SESSION_POLICY_INT = "qns.sip_dialog_session_policy_int";
 
+    /**
+     * List of Array items indicating hysteresis db levels based on access network and measurement
+     * type , whose value to be used at api
+     * {@link SignalThresholdInfo#Builder().setHysteresisDb(int)}
+     * The values are set as Format "<accessNetwork>:<meas_type>:<hysteresisDb>"
+     * Ex: "eutran:rsrp:2","ngran:ssrsrp:1"
+     *
+     * The default value or if value set is less than zero,
+     * for this key is {@link QnsConstants#KEY_DEFAULT_VALUE}
+     *
+     */
+    public static final String KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY =
+            "qns.cellular_signal_strength_hysteresis_db_string_array";
+
     static HashMap<Integer, String> sAccessNetworkMap =
             new HashMap<>() {
                 {
@@ -740,7 +744,7 @@ class QnsCarrierConfigManager {
     private int mQnsImsTransportType;
     private int mQnsSosTransportType;
     private int mQnsMmsTransportType;
-    private int mQnsXcapTransportType;
+    private int[] mQnsXcapSupportedAccessNetworkTypes;
     private int mQnsCbsTransportType;
     private int mXcapRatPreference;
     private int mSosRatPreference;
@@ -766,6 +770,7 @@ class QnsCarrierConfigManager {
     private String[] mImsAllowedRats;
     private String[] mRoveInGuardTimerConditionThresholdGaps;
     private String[] mFallbackOnInitialConnectionFailure;
+    private String[] mAccessNetworkMeasurementHysteresisDb;
 
     @NonNull
     private final List<FallbackRule> mFallbackWwanRuleWithImsUnregistered = new ArrayList<>();
@@ -1327,8 +1332,11 @@ class QnsCarrierConfigManager {
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_SOS_TRANSPORT_TYPE_INT);
         mQnsMmsTransportType =
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_MMS_TRANSPORT_TYPE_INT);
-        mQnsXcapTransportType =
-                getConfig(bundleCarrier, bundleAsset, KEY_QNS_XCAP_TRANSPORT_TYPE_INT);
+        mQnsXcapSupportedAccessNetworkTypes =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY);
         mQnsCbsTransportType =
                 getConfig(bundleCarrier, bundleAsset, KEY_QNS_CBS_TRANSPORT_TYPE_INT);
         mQnsCbsTransportType =
@@ -1390,6 +1398,11 @@ class QnsCarrierConfigManager {
                         KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY);
         mSipDialogSessionPolicy =
                 getConfig(bundleCarrier, bundleAsset, KEY_SIP_DIALOG_SESSION_POLICY_INT);
+        mAccessNetworkMeasurementHysteresisDb =
+                getConfig(
+                        bundleCarrier,
+                        bundleAsset,
+                        KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY);
 
         loadFallbackPolicyWithImsRegiFail(bundleCarrier, bundleAsset);
     }
@@ -1957,7 +1970,19 @@ class QnsCarrierConfigManager {
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_MMS) {
             return mQnsMmsTransportType;
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_XCAP) {
-            return mQnsXcapTransportType;
+            HashSet<Integer> supportedTransportType = new HashSet<>();
+            if (mQnsXcapSupportedAccessNetworkTypes != null) {
+                Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                        .forEach(accessNetwork -> supportedTransportType.add(
+                                QnsUtils.getTransportTypeFromAccessNetwork(accessNetwork)));
+            }
+            if (supportedTransportType.contains(AccessNetworkConstants.TRANSPORT_TYPE_WLAN)) {
+                if (supportedTransportType.contains(AccessNetworkConstants.TRANSPORT_TYPE_WWAN)) {
+                    return QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH;
+                }
+                return QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN;
+            }
+            return QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN;
         } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_CBS) {
             return mQnsCbsTransportType;
         }
@@ -2040,10 +2065,10 @@ class QnsCarrierConfigManager {
      */
     int getMinimumHandoverGuardingTimer() {
         int timer = mMinimumHandoverGuardingTimer;
-        if (timer < QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER) {
-            timer = QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER;
+        if (timer <= 0) {
+            return 0;
         }
-        if (timer > QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT) {
+        if (timer >= QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT) {
             timer = QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER_LIMIT;
         }
         return timer;
@@ -2059,22 +2084,46 @@ class QnsCarrierConfigManager {
     int getThresholdGapWithGuardTimer(
             @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType) {
 
-        if (mRoveInGuardTimerConditionThresholdGaps == null) {
+        return getValueForMeasurementType(
+                accessNetwork, measType, mRoveInGuardTimerConditionThresholdGaps);
+
+    }
+
+    /**
+     *  This method returns hysteresis Dbm level for ran and measurement type configured.
+     *
+     * @return : Based on Carrier Config Settings & operator requirement Default Value.
+     * Note: If configured value set is less than zero or not set,
+     * {@link QnsConstants#KEY_DEFAULT_VALUE}
+     */
+    public int getWwanHysteresisDbLevel(
+            @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType) {
+
+        int hysteresisDb = getValueForMeasurementType(
+                accessNetwork, measType, mAccessNetworkMeasurementHysteresisDb);
+        return hysteresisDb >= 0 ? hysteresisDb : QnsConstants.KEY_DEFAULT_VALUE;
+    }
+
+    private int getValueForMeasurementType(
+            @AccessNetworkConstants.RadioAccessNetworkType int accessNetwork, int measType,
+            String [] measurementValues) {
+
+        if (measurementValues == null) {
             return QnsConstants.KEY_DEFAULT_VALUE;
         }
-        if (!mRoveInGuardTimerConditionThresholdGaps[0].isEmpty()) {
-            for (String check_offset : mRoveInGuardTimerConditionThresholdGaps) {
-                String[] gap = check_offset.split(":");
-                String access_network = sAccessNetworkMap.get(accessNetwork);
-                String measurement_Type = sMeasTypeMap.get(measType);
 
-                try {
-                    if (gap[0].equalsIgnoreCase(access_network)
-                            && gap[1].equalsIgnoreCase(measurement_Type)) {
-                        return Integer.parseInt(gap[2]);
-                    }
-                } catch (Exception e) {
+        for (String check_offset : measurementValues) {
+            if (check_offset == null || check_offset.isEmpty()) continue;
+            String[] value = check_offset.split(":");
+            String access_network = sAccessNetworkMap.get(accessNetwork);
+            String measurement_Type = sMeasTypeMap.get(measType);
+            try {
+                if (value.length == 3 && value[0].equalsIgnoreCase(access_network)
+                        && value[1].equalsIgnoreCase(measurement_Type)) {
+                    return Integer.parseInt(value[2]);
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
         return QnsConstants.KEY_DEFAULT_VALUE;
@@ -2375,8 +2424,10 @@ class QnsCarrierConfigManager {
                 || mQnsMmsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
             netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_MMS);
         }
-        if (mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
-                || mQnsXcapTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_BOTH) {
+        if (mQnsXcapSupportedAccessNetworkTypes != null
+                && Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                        .anyMatch(accessNetwork -> QnsUtils.getTransportTypeFromAccessNetwork(
+                                accessNetwork) == AccessNetworkConstants.TRANSPORT_TYPE_WLAN)) {
             netCapabilities.add(NetworkCapabilities.NET_CAPABILITY_XCAP);
         }
         if (mQnsCbsTransportType == QnsConstants.TRANSPORT_TYPE_ALLOWED_IWLAN
@@ -2386,34 +2437,42 @@ class QnsCarrierConfigManager {
         return netCapabilities;
     }
 
+    private static HashMap<Integer, String> sRatStringMatcher;
+    static {
+        sRatStringMatcher = new HashMap<>();
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.EUTRAN, "LTE");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.NGRAN, "NR");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.UTRAN, "3G");
+        sRatStringMatcher.put(AccessNetworkConstants.AccessNetworkType.GERAN, "2G");
+    }
+
     /**
      * This method returns Allowed cellular RAT for IMS
      *
-     * @param accessNetwork , netCapability : EUTRAN / NGRAN / UTRAN/ GERAN
+     * @param accessNetwork : (EUTRAN, NGRAN, UTRAN, GERAN)
+     * @param netCapability : (ims, sos, mms, xcap, cbs)
      * @return : True or False based on configuration
      */
     boolean isAccessNetworkAllowed(int accessNetwork, int netCapability) {
 
-        // cases to be enhanced for different key items when added
-        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
-            if (mImsAllowedRats != null) {
-                for (String cellularRatType : mImsAllowedRats) {
-                    if ((cellularRatType.contains("LTE")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.EUTRAN)
-                            || (cellularRatType.contains("NR")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.NGRAN)
-                            || (cellularRatType.contains("3G")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.UTRAN)
-                            || (cellularRatType.contains("2G")
-                                    && accessNetwork
-                                            == AccessNetworkConstants.AccessNetworkType.GERAN)) {
-                        return true;
-                    }
+        switch (netCapability) {
+            case NetworkCapabilities.NET_CAPABILITY_EIMS:
+            case NetworkCapabilities.NET_CAPABILITY_IMS:
+                // cases to be enhanced for different key items when added
+                String ratName = sRatStringMatcher.get(accessNetwork);
+                if (mImsAllowedRats != null
+                        && ratName != null
+                        && Arrays.stream(mImsAllowedRats)
+                                .anyMatch(ratType -> TextUtils.equals(ratType, ratName))) {
+                    return true;
                 }
-            }
+                break;
+            case NetworkCapabilities.NET_CAPABILITY_XCAP:
+                return mQnsXcapSupportedAccessNetworkTypes != null
+                        && Arrays.stream(mQnsXcapSupportedAccessNetworkTypes)
+                                .anyMatch(xcapAccessNetwork -> accessNetwork == xcapAccessNetwork);
+            default:
+                return false;
         }
         return false;
     }

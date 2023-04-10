@@ -655,8 +655,8 @@ class QnsCarrierAnspSupportConfig {
      * <p>{@code 2 values defined by default(Good, Bad)}
      *
      * <UL>
-     *   <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"
-     *   <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD}"
+     *   <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"
+     *   <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"
      * </UL>
      *
      * <p>This key is considered invalid if the format is violated. If the key not configured, a
@@ -716,8 +716,8 @@ class QnsCarrierAnspSupportConfig {
      * <p>{@code 2 values defined by default(Good, Bad)}
      *
      * <UL>
-     *   <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_GOOD}"
-     *   <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_VIDEO_WIFI_RSSI_BAD}"
+     *   <LI>"Good:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD}"
+     *   <LI>"Bad:{@link QnsConstants#KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD}"
      * </UL>
      *
      * <p>This key is considered invalid if the format is violated. If the key not configured, a

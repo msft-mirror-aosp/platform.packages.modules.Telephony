@@ -256,14 +256,13 @@ public class QnsUtilsTest extends QnsTest {
         String[] defaultStringArray = new String[] {"LTE", "UMTS"};
         String[] defaultGapOffsetStringArray =
                 new String[] {"eutran:rsrp:-5", "ngran:ssrsp:-2", "utran:rscp:-3"};
+        String[] defaultHysteresisDbLevelStringArray =
+                new String[] {"eutran:rsrp:1", "ngran:ssrsp:2", "utran:rscp:5"};
         String[] defaultHandoverPolicyArray = new String[] {HANDOVER_POLICY_1, HANDOVER_POLICY_2};
         String[] fallbackWwanRuleWithImsUnregistered =
                 new String[] {FALLBACK_RULE0, FALLBACK_RULE1};
         String[] fallbackWwanRuleWithImsHoRegisterFail =
                 new String[] {FALLBACK_RULE1, FALLBACK_RULE0};
-        String[] apnTypesForInternationalRoamingCheck = new String[] {"ims", "emergency"};
-        String[] plmnsToBeInternationalRoaming = new String[] {"313200", "233", "37809"};
-        String[] plmnsToBeDomesticRoaming = new String[] {"313200", "233", "37707"};
         String[] defaultFallbackConfigInitialDataConnection =
                 new String[] {"ims:2:30000:60000:5", "mms:1:10000:5000:2"};
 
@@ -365,13 +364,14 @@ public class QnsUtilsTest extends QnsTest {
                                 mTestBundle,
                                 null,
                                 QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT));
-        assertEquals(
-                1,
-                (int)
-                        QnsUtils.getConfig(
-                                mTestBundle,
-                                null,
-                                QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT));
+        assertArrayEquals(
+                new int[] {
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                },
+                QnsUtils.getConfig(
+                        mTestBundle,
+                        null,
+                        CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY));
         assertEquals(
                 1,
                 (int)
@@ -430,6 +430,14 @@ public class QnsUtilsTest extends QnsTest {
                                 null,
                                 QnsCarrierConfigManager
                                         .KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT));
+        assertEquals(
+                2000 /* test value */,
+                (int)
+                        QnsUtils.getConfig(
+                                mTestBundle,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT));
         assertArrayEquals(
                 defaultIwlanMaxHoCountAndFallback,
                 QnsUtils.getConfig(
@@ -509,6 +517,13 @@ public class QnsUtilsTest extends QnsTest {
                         QnsCarrierConfigManager
                                 .KEY_QNS_ROVEIN_THRESHOLD_GAP_WITH_GUARD_TIMER_STRING_ARRAY));
         assertArrayEquals(
+                defaultHysteresisDbLevelStringArray,
+                QnsUtils.getConfig(
+                        mTestBundle,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY));
+        assertArrayEquals(
                 defaultHandoverPolicyArray,
                 QnsUtils.getConfig(
                         mTestBundle,
@@ -579,7 +594,11 @@ public class QnsUtilsTest extends QnsTest {
                 QnsCarrierConfigManager.KEY_QNS_WIFI_RSSI_THRESHOLDBACKHAUL_TIMER_MS_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_IMS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_MMS_TRANSPORT_TYPE_INT, 1);
-        mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT, 1);
+        mTestBundle.putIntArray(
+                CarrierConfigManager.ImsSs.KEY_XCAP_OVER_UT_SUPPORTED_RATS_INT_ARRAY,
+                new int[] {
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                });
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_SOS_TRANSPORT_TYPE_INT, 1);
         mTestBundle.putInt(QnsCarrierConfigManager.KEY_QNS_MMS_RAT_PREFERENCE_INT, 1);
@@ -592,6 +611,12 @@ public class QnsUtilsTest extends QnsTest {
         mTestBundle.putInt(
                 QnsCarrierConfigManager.KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT,
                 3000);
+        mTestBundle.putInt(
+                QnsCarrierConfigManager.KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT,
+                3000);
+        mTestBundle.putInt(
+                QnsCarrierConfigManager.KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT,
+                2000);
         mTestBundle.putIntArray(
                 QnsCarrierConfigManager
                         .KEY_QNS_IN_CALL_ROVEIN_ALLOWED_COUNT_AND_FALLBACK_REASON_INT_ARRAY,
@@ -646,6 +671,9 @@ public class QnsUtilsTest extends QnsTest {
         mTestBundle.putStringArray(
                 QnsCarrierConfigManager.KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY,
                 new String[] {"ims:2:30000:60000:5", "mms:1:10000:5000:2"});
+        mTestBundle.putStringArray(
+                QnsCarrierConfigManager.KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY,
+                new String[] {"eutran:rsrp:1", "ngran:ssrsp:2", "utran:rscp:5"});
     }
 
     @Test
@@ -756,13 +784,6 @@ public class QnsUtilsTest extends QnsTest {
                         QnsUtils.getConfig(
                                 null,
                                 null,
-                                QnsCarrierConfigManager.KEY_QNS_XCAP_TRANSPORT_TYPE_INT));
-        assertEquals(
-                QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN,
-                (int)
-                        QnsUtils.getConfig(
-                                null,
-                                null,
                                 QnsCarrierConfigManager.KEY_QNS_CBS_TRANSPORT_TYPE_INT));
         assertEquals(
                 QnsConstants.TRANSPORT_TYPE_ALLOWED_WWAN,
@@ -815,6 +836,14 @@ public class QnsUtilsTest extends QnsTest {
                                 null,
                                 QnsCarrierConfigManager
                                         .KEY_QNS_MEDIA_THRESHOLD_RTP_PACKET_LOSS_TIME_MILLIS_INT));
+        assertEquals(
+                QnsConstants.CONFIG_DEFAULT_MIN_HANDOVER_GUARDING_TIMER,
+                (int)
+                        QnsUtils.getConfig(
+                                null,
+                                null,
+                                QnsCarrierConfigManager
+                                        .KEY_MINIMUM_HANDOVER_GUARDING_TIMER_MS_INT));
         assertArrayEquals(
                 new int[] {QnsConstants.MAX_COUNT_INVALID, QnsConstants.FALLBACK_REASON_INVALID},
                 QnsUtils.getConfig(
@@ -864,7 +893,7 @@ public class QnsUtilsTest extends QnsTest {
         assertArrayEquals(
                 new int[] {
                     QnsConstants.KEY_DEFAULT_IWLAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS,
-                    QnsConstants.KEY_DEFAULT_VALUE
+                    QnsConstants.KEY_DEFAULT_WWAN_AVOID_TIME_LOW_RTP_QUALITY_MILLIS
                 },
                 QnsUtils.getConfig(
                         null,
@@ -884,6 +913,153 @@ public class QnsUtilsTest extends QnsTest {
                         null,
                         null,
                         CarrierConfigManager.Ims.KEY_IMS_PDN_ENABLED_IN_NO_VOPS_SUPPORT_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_NGRAN_SSRSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VOICE_NGRAN_SSRSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_SSRSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VIDEO_NGRAN_SSRSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_EUTRAN_RSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VOICE_EUTRAN_RSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSRP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VIDEO_EUTRAN_RSRP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_UTRAN_RSCP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VOICE_UTRAN_RSCP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_RSCP_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VIDEO_UTRAN_RSCP_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_GERAN_RSSI_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VOICE_GERAN_RSSI_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_GERAN_RSSI_BAD,
+                        QnsCarrierConfigManager.QnsConfigArray.INVALID
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VIDEO_GERAN_RSSI_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_IDLE_WIFI_RSSI_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VOICE_WIFI_RSSI_INT_ARRAY));
+        assertArrayEquals(
+                new int[] {
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_GOOD,
+                        QnsConstants.KEY_DEFAULT_THRESHOLD_WIFI_RSSI_BAD
+                },
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierAnspSupportConfig.KEY_VIDEO_WIFI_RSSI_INT_ARRAY));
         assertEquals(
                 "",
                 QnsUtils.getConfig(
@@ -915,6 +1091,13 @@ public class QnsUtilsTest extends QnsTest {
                         null,
                         QnsCarrierConfigManager
                                 .KEY_QNS_FALLBACK_ON_INITIAL_CONNECTION_FAILURE_STRING_ARRAY));
+        assertArrayEquals(
+                (String[]) null,
+                QnsUtils.getConfig(
+                        null,
+                        null,
+                        QnsCarrierConfigManager
+                                .KEY_QNS_CELLULAR_SIGNAL_STRENGTH_HYSTERESIS_DB_STRING_ARRAY));
     }
 
     @Test
