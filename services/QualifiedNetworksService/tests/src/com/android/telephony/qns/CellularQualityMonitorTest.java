@@ -99,7 +99,10 @@ public final class CellularQualityMonitorTest extends QnsTest {
         MockitoAnnotations.initMocks(this);
         super.setUp();
         mCellularQualityMonitor =
-                new CellularQualityMonitor(sMockContext, mMockQnsTelephonyListener, mSlotIndex);
+                new CellularQualityMonitor(sMockContext,
+                        mMockQnsConfigManager,
+                        mMockQnsTelephonyListener,
+                        mSlotIndex);
         mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(mExecutor);
 
