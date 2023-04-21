@@ -42,7 +42,6 @@ public class QnsComponentsTest extends QnsTest {
 
         assertNull(qnsComponents.getQnsTelephonyListener(slotId));
         assertNull(qnsComponents.getQnsImsManager(slotId));
-        assertNull(qnsComponents.getAlternativeEventListener(slotId));
         assertNull(qnsComponents.getCellularNetworkStatusTracker(slotId));
         assertNull(qnsComponents.getCellularQualityMonitor(slotId));
         assertNull(qnsComponents.getQnsProvisioningListener(slotId));
@@ -52,12 +51,12 @@ public class QnsComponentsTest extends QnsTest {
         assertNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNull(qnsComponents.getWifiQualityMonitor());
         assertNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNull(qnsComponents.getQnsTimer());
 
         qnsComponents.createQnsComponents(slotId);
 
         assertNotNull(qnsComponents.getQnsTelephonyListener(slotId));
         assertNotNull(qnsComponents.getQnsImsManager(slotId));
-        assertNotNull(qnsComponents.getAlternativeEventListener(slotId));
         assertNotNull(qnsComponents.getCellularNetworkStatusTracker(slotId));
         assertNotNull(qnsComponents.getCellularQualityMonitor(slotId));
         assertNotNull(qnsComponents.getQnsProvisioningListener(slotId));
@@ -67,6 +66,7 @@ public class QnsComponentsTest extends QnsTest {
         assertNotNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNotNull(qnsComponents.getWifiQualityMonitor());
         assertNotNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNotNull(qnsComponents.getQnsTimer());
     }
 
 
@@ -75,7 +75,6 @@ public class QnsComponentsTest extends QnsTest {
         int slotId = 0;
         QnsComponents qnsComponents = new QnsComponents(
                 sMockContext,
-                mMockAltEventListener,
                 mMockCellNetStatusTracker,
                 mMockCellularQm,
                 mMockIwlanNetworkStatusTracker,
@@ -85,13 +84,14 @@ public class QnsComponentsTest extends QnsTest {
                 mMockQnsProvisioningListener,
                 mMockQnsTelephonyListener,
                 mMockQnsCallStatusTracker,
+                mMockQnsTimer,
                 mMockWifiBm,
                 mMockWifiQm,
+                mMockQnsMetrics,
                 slotId);
 
         assertNotNull(qnsComponents.getQnsTelephonyListener(slotId));
         assertNotNull(qnsComponents.getQnsImsManager(slotId));
-        assertNotNull(qnsComponents.getAlternativeEventListener(slotId));
         assertNotNull(qnsComponents.getCellularNetworkStatusTracker(slotId));
         assertNotNull(qnsComponents.getCellularQualityMonitor(slotId));
         assertNotNull(qnsComponents.getQnsProvisioningListener(slotId));
@@ -101,12 +101,13 @@ public class QnsComponentsTest extends QnsTest {
         assertNotNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNotNull(qnsComponents.getWifiQualityMonitor());
         assertNotNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNotNull(qnsComponents.getQnsTimer());
+        assertNotNull(qnsComponents.getQnsMetrics());
 
         qnsComponents.closeComponents(slotId);
 
         assertNull(qnsComponents.getQnsTelephonyListener(slotId));
         assertNull(qnsComponents.getQnsImsManager(slotId));
-        assertNull(qnsComponents.getAlternativeEventListener(slotId));
         assertNull(qnsComponents.getCellularNetworkStatusTracker(slotId));
         assertNull(qnsComponents.getCellularQualityMonitor(slotId));
         assertNull(qnsComponents.getQnsProvisioningListener(slotId));
@@ -116,10 +117,11 @@ public class QnsComponentsTest extends QnsTest {
         assertNull(qnsComponents.getWifiBackhaulMonitor(slotId));
         assertNull(qnsComponents.getWifiQualityMonitor());
         assertNull(qnsComponents.getIwlanNetworkStatusTracker());
+        assertNull(qnsComponents.getQnsTimer());
+        assertNull(qnsComponents.getQnsMetrics());
 
         verify(mMockQnsTelephonyListener).close();
         verify(mMockQnsImsManager).close();
-        verify(mMockAltEventListener).close();
         verify(mMockCellNetStatusTracker).close();
         verify(mMockCellularQm).close();
         verify(mMockQnsProvisioningListener).close();
@@ -129,5 +131,7 @@ public class QnsComponentsTest extends QnsTest {
         verify(mMockWifiBm).close();
         verify(mMockWifiQm).close();
         verify(mMockIwlanNetworkStatusTracker).close();
+        verify(mMockQnsTimer).close();
+        verify(mMockQnsMetrics).close();
     }
 }

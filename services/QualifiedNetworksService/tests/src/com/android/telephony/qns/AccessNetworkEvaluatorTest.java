@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNotNull;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,7 @@ import android.telephony.ServiceState;
 import android.telephony.SignalThresholdInfo;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
+import android.telephony.ims.ImsReasonInfo;
 import android.telephony.ims.ProvisioningManager;
 
 import com.android.telephony.qns.AccessNetworkSelectionPolicy.PreCondition;
@@ -63,6 +65,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,6 +74,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 @RunWith(JUnit4.class)
 public class AccessNetworkEvaluatorTest extends QnsTest {
@@ -86,6 +90,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
     private static final int EVENT_WFC_ACTIVATION_WITH_IWLAN_CONNECTION_REQUIRED = EVENT_BASE + 9;
     private static final int EVENT_IMS_REGISTRATION_STATE_CHANGED = EVENT_BASE + 10;
     private static final int EVENT_SIP_DIALOG_SESSION_STATE_CHANGED = EVENT_BASE + 12;
+    private static final int EVENT_IMS_CALL_DISCONNECT_CAUSE_CHANGED = EVENT_BASE + 13;
 
     @Mock private RestrictManager mRestrictManager;
     @Mock private DataConnectionStatusTracker mDataConnectionStatusTracker;
@@ -162,6 +167,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(mMockQnsImsManager.getWfcMode(anyBoolean()))
                 .thenAnswer(i -> (boolean) i.getArguments()[0] ? mWfcModeRoaming : mWfcMode);
 
+        when(mMockQnsTelephonyListener.getLastQnsTelephonyInfo())
+                .thenReturn(mMockQnsTelephonyListener.new QnsTelephonyInfo());
         when(mMockQnsTelephonyListener.getLastQnsTelephonyInfo())
                 .thenReturn(mMockQnsTelephonyListener.new QnsTelephonyInfo());
     }
@@ -282,6 +289,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(mDataConnectionStatusTracker.isActiveState()).thenReturn(true);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        when(mMockQnsCallStatusTracker.isCallIdle(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(true);
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         QnsTelephonyListener.QnsTelephonyInfo info =
@@ -342,6 +351,8 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         when(mDataConnectionStatusTracker.isActiveState()).thenReturn(true);
         when(mDataConnectionStatusTracker.getLastTransportType())
                 .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        when(mMockQnsCallStatusTracker.isCallIdle(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(true);
         List<Integer> accessNetworks = new ArrayList<>();
         accessNetworks.add(AccessNetworkConstants.AccessNetworkType.IWLAN);
         QnsTelephonyListener.QnsTelephonyInfo info =
@@ -375,14 +386,20 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         mAne.onQnsTelephonyInfoChanged(infoIms);
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         mAne.onSetCallType(QnsConstants.CALL_TYPE_VOICE);
+        when(mMockQnsCallStatusTracker.isCallIdle(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(false);
         assertTrue(mAne.needHandoverPolicyCheck());
         assertFalse(mAne.moveTransportTypeAllowed());
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         mAne.onSetCallType(QnsConstants.CALL_TYPE_IDLE);
+        when(mMockQnsCallStatusTracker.isCallIdle(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(true);
         assertTrue(mAne.needHandoverPolicyCheck());
         assertTrue(mAne.moveTransportTypeAllowed());
         mAne.updateLastNotifiedQualifiedNetwork(accessNetworks);
         mAne.onSetCallType(QnsConstants.CALL_TYPE_EMERGENCY);
+        when(mMockQnsCallStatusTracker.isCallIdle(NetworkCapabilities.NET_CAPABILITY_IMS))
+                .thenReturn(false);
         assertTrue(mAne.needHandoverPolicyCheck());
         assertFalse(mAne.moveTransportTypeAllowed());
     }
@@ -1042,6 +1059,7 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         waitForLastHandlerAction(mAne.mHandler);
         mLatch = new CountDownLatch(1);
         mAne.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
         waitForLastHandlerAction(mAne.mHandler);
         assertFalse(mLatch.await(100, TimeUnit.MILLISECONDS));
@@ -1062,11 +1080,12 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         waitForLastHandlerAction(mAne.mHandler);
         assertFalse(mLatch.await(500, TimeUnit.MILLISECONDS));
         assertNull(mQualifiedNetworksInfo);
+
+        mLatch = new CountDownLatch(1);
         mAne.onDataConnectionStateChanged(
                 new DataConnectionStatusTracker.DataConnectionChangedInfo(
                         EVENT_DATA_CONNECTION_DISCONNECTED, STATE_INACTIVE,
                         AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
-        mLatch = new CountDownLatch(1);
         waitForLastHandlerAction(mAne.mHandler);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -1084,18 +1103,20 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         QnsTelephonyInfoIms infoIms =
                 mMockQnsTelephonyListener.new QnsTelephonyInfoIms(info, true, true, false, false);
         mAne.onQnsTelephonyInfoChanged(infoIms);
-        waitForLastHandlerAction(mAne.mHandler);
         when(mDataConnectionStatusTracker.isInactiveState()).thenReturn(false);
         mQualifiedNetworksInfo = null;
+
         mLatch = new CountDownLatch(1);
         mAne.onEmergencyPreferredTransportTypeChanged(AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        waitForLastHandlerAction(mAne.mHandler);
         assertFalse(mLatch.await(500, TimeUnit.MILLISECONDS));
         assertNull(mQualifiedNetworksInfo);
+
+        mLatch = new CountDownLatch(1);
         mAne.onDataConnectionStateChanged(
                 new DataConnectionStatusTracker.DataConnectionChangedInfo(
                         EVENT_DATA_CONNECTION_FAILED, STATE_INACTIVE,
                         AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
-        mLatch = new CountDownLatch(1);
         waitForLastHandlerAction(mAne.mHandler);
         assertTrue(mLatch.await(100, TimeUnit.MILLISECONDS));
         assertTrue(
@@ -1729,5 +1750,88 @@ public class AccessNetworkEvaluatorTest extends QnsTest {
         assertFalse(matchedAnsp.isEmpty());
         assertEquals(
                 QnsConstants.CALL_TYPE_VIDEO, matchedAnsp.get(0).getPreCondition().getCallType());
+    }
+
+    @Test
+    public void testDataConnectionDisconnectedOnSos_ResettingThresholds() {
+        AccessNetworkEvaluator aneSos =
+                new AccessNetworkEvaluator(
+                        mQnsComponents[mSlotIndex],
+                        NetworkCapabilities.NET_CAPABILITY_EIMS,
+                        mRestrictManager,
+                        mDataConnectionStatusTracker,
+                        mSlotIndex);
+        aneSos.registerForQualifiedNetworksChanged(mHandler, QUALIFIED_NETWORKS_CHANGED);
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        aneSos.onDataConnectionStateChanged(
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        DataConnectionStatusTracker.EVENT_DATA_CONNECTION_DISCONNECTED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        aneSos.onDataConnectionStateChanged(
+                new DataConnectionStatusTracker.DataConnectionChangedInfo(
+                        DataConnectionStatusTracker.EVENT_DATA_CONNECTION_FAILED,
+                        DataConnectionStatusTracker.STATE_INACTIVE,
+                        AccessNetworkConstants.TRANSPORT_TYPE_INVALID));
+        waitForLastHandlerAction(aneSos.mHandler);
+
+        verify(mMockWifiQm, times(2)).updateThresholdsForNetCapability(
+                NetworkCapabilities.NET_CAPABILITY_EIMS, mSlotIndex, null);
+    }
+
+    @Test
+    public void testOnImsCallDisconnectCauseChanged() {
+        // ANE takes time to build ANSP.
+        waitForLastHandlerAction(mAne.mHandler);
+        when(mRestrictManager.isRestricted(anyInt())).thenReturn(false);
+        when(mRestrictManager.isAllowedOnSingleTransport(anyInt())).thenReturn(true);
+        when(mDataConnectionStatusTracker.getLastTransportType())
+                .thenReturn(AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+
+        // make iwlan and cellular available
+        IwlanNetworkStatusTracker.IwlanAvailabilityInfo iwlanInfo =
+                mMockIwlanNetworkStatusTracker.new IwlanAvailabilityInfo(true, false);
+        mAne.onIwlanNetworkStatusChanged(iwlanInfo);
+        QnsTelephonyListener.QnsTelephonyInfo cellInfo =
+                mMockQnsTelephonyListener.new QnsTelephonyInfo();
+        cellInfo.setCellularAvailable(true);
+        cellInfo.setCoverage(true);
+        cellInfo.setDataNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        cellInfo.setVoiceNetworkType(TelephonyManager.NETWORK_TYPE_LTE);
+        cellInfo.setDataRegState(ServiceState.STATE_IN_SERVICE);
+        mAne.onQnsTelephonyInfoChanged(cellInfo);
+        assertTrue(mAne.mIwlanAvailable);
+        assertTrue(mAne.mCellularAvailable);
+
+        // send ims call drop event.
+        ImsReasonInfo imsReasonInfo = new ImsReasonInfo(ImsReasonInfo.CODE_MEDIA_NO_DATA, 0);
+        Message.obtain(mAne.mHandler, EVENT_IMS_CALL_DISCONNECT_CAUSE_CHANGED,
+                new QnsAsyncResult(null, imsReasonInfo, null)).sendToTarget();
+        waitForLastHandlerAction(mAne.mHandler);
+
+        verify(mMockQnsMetrics, atLeast(1))
+                .reportAtomForImsCallDropStats(
+                        anyInt(), anyInt(), any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    public void testEvaluateSpecificReasonToString() throws Exception {
+        Method method = AccessNetworkEvaluator.class.getDeclaredMethod(
+                "evaluateSpecificReasonToString", int.class);
+        method.setAccessible(true);
+
+        IntStream.rangeClosed(0, 4).forEach(i -> {
+            try {
+                assertTrue(((String) method.invoke(mAne, i)).startsWith(
+                        "EVALUATE_SPECIFIC_REASON_"));
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }

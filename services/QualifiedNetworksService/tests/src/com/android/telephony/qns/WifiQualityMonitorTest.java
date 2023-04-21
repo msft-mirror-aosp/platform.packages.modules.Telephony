@@ -16,12 +16,21 @@
 
 package com.android.telephony.qns;
 
+import static android.net.NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED;
+
+import static com.android.telephony.qns.QualityMonitor.EVENT_WIFI_NOTIFY_TIMER_EXPIRED;
+import static com.android.telephony.qns.QualityMonitor.EVENT_WIFI_RSSI_CHANGED;
+import static com.android.telephony.qns.WifiQualityMonitor.INVALID_RSSI;
+
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.content.Intent;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -31,7 +40,6 @@ import android.telephony.SignalThresholdInfo;
 import androidx.test.core.app.ApplicationProvider;
 
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,16 +49,20 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 @RunWith(JUnit4.class)
-public class WifiQualityMonitorTest {
+public class WifiQualityMonitorTest extends QnsTest {
 
+    private static final int EVENT_QNS_TIMER_EXPIRED = 1;
     Context mContext;
     @Mock ConnectivityManager mConnectivityManager;
+    QnsTimer mQnsTimer;
     @Mock WifiManager mWifiManager;
+    @Mock NetworkCapabilities mNetworkCapabilityManager;
+    @Mock private Network mMockNetwork;
     private WifiInfo mWifiInfo;
     private WifiQualityMonitor mWifiQualityMonitor;
+    private Threshold[] mRetThresholds;
     Threshold[] mThs1 = new Threshold[1];
     Threshold[] mThs2 = new Threshold[1];
     Threshold[] mThs3 = new Threshold[1];
@@ -68,6 +80,7 @@ public class WifiQualityMonitorTest {
 
         @Override
         public void onWifiThresholdChanged(Threshold[] thresholds) {
+            mRetThresholds = thresholds;
             mLatch.countDown();
         }
     }
@@ -80,24 +93,27 @@ public class WifiQualityMonitorTest {
         mContext = spy(ApplicationProvider.getApplicationContext());
         when(mContext.getSystemService(ConnectivityManager.class)).thenReturn(mConnectivityManager);
         when(mContext.getSystemService(WifiManager.class)).thenReturn(mWifiManager);
+        when(mContext.getSystemService(NetworkCapabilities.class))
+                .thenReturn(mNetworkCapabilityManager);
         mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
         mLatch = new CountDownLatch(1);
         mThresholdListener = new ThresholdListener(mExecutor);
-        mWifiQualityMonitor = new WifiQualityMonitor(mContext);
+        mQnsTimer = new QnsTimer(mContext);
+        mWifiQualityMonitor = new WifiQualityMonitor(mContext, mQnsTimer);
     }
 
     @Test
     public void testGetCurrentQuality() {
         when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
-        int receiveRssi =
+        int recv_rssi =
                 mWifiQualityMonitor.getCurrentQuality(
                         AccessNetworkConstants.AccessNetworkType.IWLAN,
                         SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI);
-        Assert.assertEquals(mSetRssi, receiveRssi);
+        assertEquals(mSetRssi, recv_rssi);
     }
 
     @Test
-    public void testRegisterThresholdChange_RoveIn() {
+    public void testRegisterThresholdChange_RoveIn() throws InterruptedException {
         when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
         mThs1[0] =
                 new Threshold(
@@ -119,15 +135,15 @@ public class WifiQualityMonitorTest {
                 mThresholdListener, NetworkCapabilities.NET_CAPABILITY_XCAP, mThs2, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         // smaller threshold should register
-        Assert.assertEquals(mThs1[0].getThreshold(), regThreshold);
+        assertEquals(mThs1[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUnregisterThresholdChange_RoveIn() {
+    public void testUnregisterThresholdChange_RoveIn() throws InterruptedException {
         testRegisterThresholdChange_RoveIn();
         mWifiQualityMonitor.unregisterThresholdChange(NetworkCapabilities.NET_CAPABILITY_IMS, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs2[0].getThreshold(), regThreshold);
+        assertEquals(mThs2[0].getThreshold(), regThreshold);
     }
 
     @Test
@@ -153,19 +169,23 @@ public class WifiQualityMonitorTest {
                 mThresholdListener, NetworkCapabilities.NET_CAPABILITY_XCAP, mThs2, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
         // bigger threshold should register
-        Assert.assertEquals(mThs2[0].getThreshold(), regThreshold);
+        assertEquals(mThs2[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUnregisterThresholdChange_RoveOut() {
+    public void testUnregisterThresholdChange_RoveOut() throws InterruptedException {
         testRegisterThresholdChange_RoveOut();
         mWifiQualityMonitor.unregisterThresholdChange(NetworkCapabilities.NET_CAPABILITY_XCAP, 0);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs1[0].getThreshold(), regThreshold);
+        assertEquals(mThs1[0].getThreshold(), regThreshold);
+
+        mWifiQualityMonitor.unregisterThresholdChange(NetworkCapabilities.NET_CAPABILITY_IMS, 0);
+        regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
+        assertEquals(SIGNAL_STRENGTH_UNSPECIFIED, regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForNetCapability_RoveIn_Add() {
+    public void testUpdateThresholdsForNetCapability_RoveIn_Add() throws InterruptedException {
         testRegisterThresholdChange_RoveIn();
         mThs3[0] =
                 new Threshold(
@@ -177,16 +197,16 @@ public class WifiQualityMonitorTest {
         mWifiQualityMonitor.updateThresholdsForNetCapability(
                 NetworkCapabilities.NET_CAPABILITY_IMS, 0, mThs3);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs3[0].getThreshold(), regThreshold);
+        assertEquals(mThs3[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testUpdateThresholdsForNetCapability_RoveIn_Remove() {
+    public void testUpdateThresholdsForNetCapability_RoveIn_Remove() throws InterruptedException {
         testUpdateThresholdsForNetCapability_RoveIn_Add();
         mWifiQualityMonitor.updateThresholdsForNetCapability(
                 NetworkCapabilities.NET_CAPABILITY_IMS, 0, null);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs2[0].getThreshold(), regThreshold);
+        assertEquals(mThs2[0].getThreshold(), regThreshold);
     }
 
     @Test
@@ -202,7 +222,7 @@ public class WifiQualityMonitorTest {
         mWifiQualityMonitor.updateThresholdsForNetCapability(
                 NetworkCapabilities.NET_CAPABILITY_IMS, 0, mThs3);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs3[0].getThreshold(), regThreshold);
+        assertEquals(mThs3[0].getThreshold(), regThreshold);
     }
 
     @Test
@@ -211,13 +231,13 @@ public class WifiQualityMonitorTest {
         mWifiQualityMonitor.updateThresholdsForNetCapability(
                 NetworkCapabilities.NET_CAPABILITY_IMS, 0, null);
         int regThreshold = mWifiQualityMonitor.getRegisteredThreshold();
-        Assert.assertEquals(mThs2[0].getThreshold(), regThreshold);
+        assertEquals(mThs2[0].getThreshold(), regThreshold);
     }
 
     @Test
-    public void testBackhaulTimer() throws InterruptedException {
+    public void testBackhaulTimer() {
         mSetRssi = -65;
-        mLatch = new CountDownLatch(4);
+        mLatch = new CountDownLatch(1);
         mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
         when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
         mThs1[0] =
@@ -257,11 +277,86 @@ public class WifiQualityMonitorTest {
                 mThresholdListener, NetworkCapabilities.NET_CAPABILITY_EIMS, mThs2, 0);
         mWifiQualityMonitor.registerThresholdChange(
                 mThresholdListener, NetworkCapabilities.NET_CAPABILITY_MMS, mThs3, 0);
-        Intent i = new Intent();
-        i.setAction(WifiManager.RSSI_CHANGED_ACTION);
-        i.putExtra(WifiManager.EXTRA_NEW_RSSI, -75);
-        mWifiQualityMonitor.mWifiStateIntentReceiver.onReceive(mContext, i);
-        Assert.assertTrue(mLatch.await(5, TimeUnit.SECONDS));
+
+        mWifiQualityMonitor.mHandler.obtainMessage(EVENT_WIFI_RSSI_CHANGED, -65, 0).sendToTarget();
+        waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 1000, 200);
+        assertTrue(mQnsTimer.mHandler.hasMessages(EVENT_QNS_TIMER_EXPIRED));
+        waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 4000, 200);
+        assertFalse(mQnsTimer.mHandler.hasMessages(EVENT_QNS_TIMER_EXPIRED));
+        assertFalse(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_NOTIFY_TIMER_EXPIRED));
+    }
+
+    @Test
+    public void testValidateWqmStatus_ValidRange() {
+        mSetRssi = -65;
+        mLatch = new CountDownLatch(1);
+        mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
+        when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
+
+        setWqmThreshold();
+        mWifiQualityMonitor.validateWqmStatus(-65);
+        assertTrue(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_RSSI_CHANGED));
+    }
+
+    @Test
+    public void testValidateWqmStatus_InValidRssiWithValidThreshold() {
+        mSetRssi = -65;
+        mLatch = new CountDownLatch(1);
+        mWifiInfo = new WifiInfo.Builder().setRssi(mSetRssi).build();
+        when(mWifiManager.getConnectionInfo()).thenReturn(mWifiInfo);
+
+        setWqmThreshold();
+
+        mWifiQualityMonitor.validateWqmStatus(SIGNAL_STRENGTH_UNSPECIFIED);
+        isWifiRssiChangedHandlerNotPosted();
+
+        mWifiQualityMonitor.validateWqmStatus(INVALID_RSSI);
+        isWifiRssiChangedHandlerNotPosted();
+
+        mWifiQualityMonitor.validateWqmStatus(50);
+        isWifiRssiChangedHandlerNotPosted();
+    }
+
+    @Test
+    public void testValidateWqmStatus_ValidRssiWithInValidThreshold() {
+        mThs1[0] =
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        SIGNAL_STRENGTH_UNSPECIFIED,
+                        QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
+        mWifiQualityMonitor.registerThresholdChange(
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_IMS, mThs1, 0);
+
+        mWifiQualityMonitor.validateWqmStatus(-65);
+        isWifiRssiChangedHandlerNotPosted();
+    }
+
+    private void setWqmThreshold() {
+        mThs1[0] =
+                new Threshold(
+                        AccessNetworkConstants.AccessNetworkType.IWLAN,
+                        SignalThresholdInfo.SIGNAL_MEASUREMENT_TYPE_RSSI,
+                        -70,
+                        QnsConstants.THRESHOLD_EQUAL_OR_LARGER,
+                        QnsConstants.DEFAULT_WIFI_BACKHAUL_TIMER);
+        mWifiQualityMonitor.registerThresholdChange(
+                mThresholdListener, NetworkCapabilities.NET_CAPABILITY_IMS, mThs1, 0);
+    }
+
+    private void isWifiRssiChangedHandlerNotPosted() {
+        waitForDelayedHandlerAction(mWifiQualityMonitor.mHandler, 1000, 200);
+        assertFalse(mWifiQualityMonitor.mHandler.hasMessages(EVENT_WIFI_RSSI_CHANGED));
+    }
+
+    @Test
+    public void testUpdateThresholdsForNetCapabilityException() {
+        assertThrows(
+                IllegalStateException.class,
+                () ->
+                        mWifiQualityMonitor.updateThresholdsForNetCapability(
+                                NetworkCapabilities.NET_CAPABILITY_IMS, 0, mThs1));
     }
 
     @After

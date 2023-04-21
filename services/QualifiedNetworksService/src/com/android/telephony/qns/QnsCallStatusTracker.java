@@ -16,6 +16,8 @@
 
 package com.android.telephony.qns;
 
+import static com.android.telephony.qns.QnsConstants.INVALID_ID;
+
 import android.annotation.NonNull;
 import android.net.NetworkCapabilities;
 import android.os.Handler;
@@ -50,6 +52,7 @@ public class QnsCallStatusTracker {
     private List<CallState> mCallStates = new ArrayList<>();
     private QnsRegistrant mCallTypeChangedEventListener;
     private QnsRegistrant mEmergencyCallTypeChangedEventListener;
+    private final QnsTimer mQnsTimer;
     private int mLastNormalCallType = QnsConstants.CALL_TYPE_IDLE;
     private int mLastEmergencyCallType = QnsConstants.CALL_TYPE_IDLE;
     private boolean mEmergencyOverIms;
@@ -144,7 +147,6 @@ public class QnsCallStatusTracker {
             private static final int EVENT_PACKET_LOSS_TIMER_EXPIRED = 3402;
             private static final int EVENT_HYSTERESIS_FOR_NORMAL_QUALITY = 3403;
             private static final int EVENT_POLLING_CHECK_LOW_QUALITY = 3404;
-            private static final int EVENT_LOW_QUALITY_HANDLER_MAX = 3405;
 
             private static final int STATE_NORMAL_QUALITY = 0;
             private static final int STATE_SUSPECT_LOW_QUALITY = 1;
@@ -156,6 +158,9 @@ public class QnsCallStatusTracker {
             private static final int LOW_QUALITY_REPORTED_TIME_INITIAL_VALUE = -1;
 
             private int mState = STATE_NORMAL_QUALITY;
+            private int mPacketLossTimerId = INVALID_ID;
+            private int mHysteresisTimerId = INVALID_ID;
+            private int mPollingCheckTimerId = INVALID_ID;
             private MediaQualityStatus mMediaQualityStatus;
             private String mTag;
 
@@ -204,12 +209,14 @@ public class QnsCallStatusTracker {
                         return;
                     } else {
                         // check normal quality is stable or not.
-                        this.sendEmptyMessageDelayed(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY,
+                        mHysteresisTimerId = mQnsTimer.registerTimer(
+                                Message.obtain(this, EVENT_HYSTERESIS_FOR_NORMAL_QUALITY),
                                 HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
                     }
                 } else {
                     // Threshold breached.
-                    this.removeMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY);
+                    mQnsTimer.unregisterTimer(mHysteresisTimerId);
+                    mHysteresisTimerId = INVALID_ID;
                     switch (mState) {
                         case STATE_NORMAL_QUALITY:
                         case STATE_SUSPECT_LOW_QUALITY:
@@ -223,7 +230,8 @@ public class QnsCallStatusTracker {
                                     needNotify = true;
                                 }
                             } else {
-                                removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
+                                mQnsTimer.unregisterTimer(mPacketLossTimerId);
+                                mPacketLossTimerId = INVALID_ID;
                                 enterLowQualityState(status);
                                 needNotify = true;
                             }
@@ -250,28 +258,30 @@ public class QnsCallStatusTracker {
             void enterLowQualityState(MediaQualityStatus status) {
                 Log.d(mTag, "enterLowQualityState " + status);
                 mState = STATE_LOW_QUALITY;
-                this.sendEmptyMessageDelayed(
-                        EVENT_POLLING_CHECK_LOW_QUALITY, LOW_QUALITY_CHECK_INTERVAL_MILLIS);
+                mPollingCheckTimerId = mQnsTimer.registerTimer(
+                        Message.obtain(this, EVENT_POLLING_CHECK_LOW_QUALITY),
+                        LOW_QUALITY_CHECK_INTERVAL_MILLIS);
             }
 
             void enterSuspectLowQualityState(int delayMillis) {
                 Log.d(mTag, "enterSuspectLowQualityState.");
-                if (!this.hasMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED)) {
-                    this.removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
-                }
+                mQnsTimer.unregisterTimer(mPacketLossTimerId);
                 Log.d(mTag, "Packet loss timer start. " + delayMillis);
                 Message msg = this.obtainMessage(
                         EVENT_PACKET_LOSS_TIMER_EXPIRED, mTransportType, 0);
-                this.sendMessageDelayed(msg, delayMillis);
+                mPacketLossTimerId = mQnsTimer.registerTimer(msg, delayMillis);
                 mState = STATE_SUSPECT_LOW_QUALITY;
             }
 
             void exitLowQualityState() {
                 mState = STATE_NORMAL_QUALITY;
-                for (int i = EVENT_PACKET_LOSS_TIMER_EXPIRED;
-                        i < EVENT_LOW_QUALITY_HANDLER_MAX; i++) {
-                    this.removeMessages(i);
-                }
+                this.removeCallbacksAndMessages(null);
+                mQnsTimer.unregisterTimer(mPacketLossTimerId);
+                mQnsTimer.unregisterTimer(mHysteresisTimerId);
+                mQnsTimer.unregisterTimer(mPollingCheckTimerId);
+                mPacketLossTimerId = INVALID_ID;
+                mHysteresisTimerId = INVALID_ID;
+                mPollingCheckTimerId = INVALID_ID;
                 notifyLowMediaQuality(0);
             }
 
@@ -283,9 +293,10 @@ public class QnsCallStatusTracker {
                     int reason = thresholdBreached(mMediaQualityStatus);
                     if (reason > 0) {
                         notifyLowMediaQuality(thresholdBreached(mMediaQualityStatus));
-                    } else if (this.hasMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY)) {
+                    } else if (mHysteresisTimerId != INVALID_ID) {
                         // hysteresis time to be normal state is running. let's check after that.
-                        this.sendEmptyMessageDelayed(EVENT_POLLING_CHECK_LOW_QUALITY,
+                        mPollingCheckTimerId = mQnsTimer.registerTimer(
+                                Message.obtain(this, EVENT_POLLING_CHECK_LOW_QUALITY),
                                 HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
                     } else {
                         Log.w(mTag, "Unexpected case.");
@@ -296,19 +307,22 @@ public class QnsCallStatusTracker {
             void updateForHandover(int transportType) {
                 // restart timers that they need to be restarted on new transport type.
                 if (mState == STATE_SUSPECT_LOW_QUALITY) {
-                    this.removeMessages(EVENT_PACKET_LOSS_TIMER_EXPIRED);
+                    mQnsTimer.unregisterTimer(mPacketLossTimerId);
                     Message msg = this.obtainMessage(
                             EVENT_PACKET_LOSS_TIMER_EXPIRED, transportType, 0);
-                    this.sendMessageDelayed(msg, (mConfigManager.getRTPMetricsData()).mPktLossTime);
+                    mPacketLossTimerId = mQnsTimer.registerTimer(msg,
+                            (mConfigManager.getRTPMetricsData()).mPktLossTime);
                 }
-                if (this.hasMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY)) {
-                    this.removeMessages(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY);
-                    this.sendEmptyMessageDelayed(EVENT_HYSTERESIS_FOR_NORMAL_QUALITY,
+                if (mHysteresisTimerId != INVALID_ID) {
+                    mQnsTimer.unregisterTimer(mHysteresisTimerId);
+                    mHysteresisTimerId = mQnsTimer.registerTimer(
+                            Message.obtain(this, EVENT_HYSTERESIS_FOR_NORMAL_QUALITY),
                             HYSTERESIS_TIME_NORMAL_QUALITY_MILLIS);
                 }
                 if (mState == STATE_LOW_QUALITY) {
-                    this.removeMessages(EVENT_POLLING_CHECK_LOW_QUALITY);
-                    this.sendEmptyMessageDelayed(EVENT_POLLING_CHECK_LOW_QUALITY,
+                    mQnsTimer.unregisterTimer(mPollingCheckTimerId);
+                    mPollingCheckTimerId = mQnsTimer.registerTimer(
+                            Message.obtain(this, EVENT_POLLING_CHECK_LOW_QUALITY),
                             LOW_QUALITY_CHECK_AFTER_HO_MILLIS);
                 }
             }
@@ -702,19 +716,20 @@ public class QnsCallStatusTracker {
             }
         }
 
+        @VisibleForTesting
         int thresholdBreached(MediaQualityStatus status) {
             int breachedReason = 0;
             QnsCarrierConfigManager.RtpMetricsConfig rtpConfig = mConfigManager.getRTPMetricsData();
             if (status.getRtpPacketLossRate() > 0
-                    && status.getRtpPacketLossRate() > rtpConfig.mPktLossRate) {
+                    && status.getRtpPacketLossRate() >= rtpConfig.mPktLossRate) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_PACKET_LOSS;
             }
             if (status.getRtpJitterMillis() > 0
-                    && status.getRtpJitterMillis() > rtpConfig.mJitter) {
+                    && status.getRtpJitterMillis() >= rtpConfig.mJitter) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_JITTER;
             }
             if (status.getRtpInactivityMillis() > 0
-                    && status.getRtpInactivityMillis() > rtpConfig.mNoRtpInterval) {
+                    && status.getRtpInactivityMillis() >= rtpConfig.mNoRtpInterval) {
                 breachedReason |= 1 << QnsConstants.RTP_LOW_QUALITY_REASON_NO_RTP;
             }
             return breachedReason;
@@ -726,17 +741,19 @@ public class QnsCallStatusTracker {
     }
 
     QnsCallStatusTracker(QnsTelephonyListener telephonyListener,
-            QnsCarrierConfigManager configManager, int slotIndex) {
-        this(telephonyListener, configManager, slotIndex, null);
+            QnsCarrierConfigManager configManager, QnsTimer qnsTimer, int slotIndex) {
+        this(telephonyListener, configManager, qnsTimer, slotIndex, null);
     }
 
     /** Only for test */
     @VisibleForTesting
     QnsCallStatusTracker(QnsTelephonyListener telephonyListener,
-            QnsCarrierConfigManager configManager, int slotIndex, Looper looper) {
+            QnsCarrierConfigManager configManager, QnsTimer qnsTimer, int slotIndex,
+            Looper looper) {
         mLogTag = QnsCallStatusTracker.class.getSimpleName() + "_" + slotIndex;
         mTelephonyListener = telephonyListener;
         mConfigManager = configManager;
+        mQnsTimer = qnsTimer;
         mActiveCallTracker = new ActiveCallTracker(slotIndex, looper);
         mTelephonyListener.addCallStatesChangedCallback(mCallStatesConsumer);
         mTelephonyListener.addSrvccStateChangedCallback(mSrvccStateConsumer);
@@ -800,14 +817,18 @@ public class QnsCallStatusTracker {
                 }
             }
             //2. Notify a new ongoing call type
-            if (hasEmergencyCall() && mLastEmergencyCallType != QnsConstants.CALL_TYPE_EMERGENCY) {
-                mLastEmergencyCallType = QnsConstants.CALL_TYPE_EMERGENCY;
-                if (!isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_EIMS)
-                        && isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_IMS)) {
-                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS, mLastEmergencyCallType);
-                    mEmergencyOverIms = true;
-                } else {
-                    notifyCallType(NetworkCapabilities.NET_CAPABILITY_EIMS, mLastEmergencyCallType);
+            if (hasEmergencyCall()) {
+                if (mLastEmergencyCallType != QnsConstants.CALL_TYPE_EMERGENCY) {
+                    mLastEmergencyCallType = QnsConstants.CALL_TYPE_EMERGENCY;
+                    if (!isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_EIMS)
+                            && isDataNetworkConnected(NetworkCapabilities.NET_CAPABILITY_IMS)) {
+                        notifyCallType(NetworkCapabilities.NET_CAPABILITY_IMS,
+                                mLastEmergencyCallType);
+                        mEmergencyOverIms = true;
+                    } else {
+                        notifyCallType(NetworkCapabilities.NET_CAPABILITY_EIMS,
+                                mLastEmergencyCallType);
+                    }
                 }
             } else if (hasVideoCall()) {
                 if (mLastNormalCallType != QnsConstants.CALL_TYPE_VIDEO) {
@@ -841,10 +862,26 @@ public class QnsCallStatusTracker {
         } else {
             mActiveCallTracker.callStarted(callType, netCapability);
         }
+        mQnsTimer.updateCallState(callType);
     }
 
     boolean isCallIdle() {
         return mCallStates.size() == 0;
+    }
+
+    boolean isCallIdle(int netCapability) {
+        int callNum = mCallStates.size();
+        if (callNum == 0) {
+            return true;
+        }
+        if (netCapability == NetworkCapabilities.NET_CAPABILITY_IMS) {
+            return (mLastNormalCallType == QnsConstants.CALL_TYPE_IDLE)
+                    && (mLastEmergencyCallType != QnsConstants.CALL_TYPE_IDLE
+                    && !mEmergencyOverIms);
+        } else if (netCapability == NetworkCapabilities.NET_CAPABILITY_EIMS) {
+            return mLastEmergencyCallType == QnsConstants.CALL_TYPE_IDLE || mEmergencyOverIms;
+        }
+        return false;
     }
 
     boolean hasEmergencyCall() {
