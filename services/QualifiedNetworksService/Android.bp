@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
 genrule {
-  name: "statslog-qns-java-gen",
-  tools: ["stats-log-api-gen"],
-  cmd: "$(location stats-log-api-gen) --java $(out) --module qns --javaPackage com.android.telephony.qns.stats --javaClass QnsStatsLog --worksource",
-  out: ["com/android/telephony/qns/stats/QnsStatsLog.java"],
+    name: "statslog-qns-java-gen",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --java $(out) --module qns --javaPackage com.android.telephony.qns.stats --javaClass QnsStatsLog --worksource",
+    out: ["com/android/telephony/qns/stats/QnsStatsLog.java"],
 }
 
 android_app {
@@ -46,7 +45,7 @@ android_app {
         "ims-common",
         "framework-annotations-lib",
         "framework-connectivity",
-        "framework-wifi"
+        "framework-wifi",
     ],
 
     plugins: ["auto_value_plugin"],
@@ -73,7 +72,6 @@ prebuilt_etc {
     system_ext_specific: true,
 }
 
-
 android_test {
     name: "QualifiedNetworksServiceTests",
     manifest: "tests/AndroidManifest.xml",
@@ -88,7 +86,7 @@ android_test {
         "telephony-common",
         "ims-common",
         "android.test.mock",
-        "android.test.base"
+        "android.test.base",
     ],
     static_libs: [
         "androidx.appcompat_appcompat",
@@ -100,7 +98,7 @@ android_test {
         "frameworks-base-testutils",
         "mockito-target-extended-minus-junit4",
         "platform-test-annotations",
-        "truth-prebuilt",
+        "truth",
         "testables",
         "TelephonyStatsLib",
     ],
@@ -113,4 +111,3 @@ android_test {
     instrumentation_for: "QualifiedNetworksService",
     test_suites: ["device-tests"],
 }
-
